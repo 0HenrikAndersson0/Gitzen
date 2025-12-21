@@ -1,0 +1,50 @@
+{
+  "name": "git-gui",
+  "version": "1.0.0",
+  "description": "A GUI application built with Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder",
+    "build:linux": "electron-builder --linux",
+    "build:win": "electron-builder --win",
+    "compile": "tsc",
+    "compile:watch": "tsc --watch",
+    "example": "npm run compile && node dist/example.js"
+  },
+  "keywords": [
+    "electron",
+    "gui"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/nodegit": "^0.28.9",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.7.2"
+  },
+  "build": {
+    "appId": "com.example.git-gui",
+    "productName": "Git GUI",
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  },
+  "dependencies": {
+    "keytar": "^7.9.0",
+    "nodegit": "^0.27.0"
+  }
+}
