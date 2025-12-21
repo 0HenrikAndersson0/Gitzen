@@ -444,6 +444,37 @@ export async function hasCredentials(remoteUrl: string): Promise<{ success: bool
   }
 }
 
+export async function validateExistingCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!credentialManager) {
+      credentialManager = new CredentialManager();
+    }
+
+    const creds = await credentialManager.getRemoteCredentials(remoteUrl);
+    if (!creds || !creds.username || !creds.password) {
+      return { success: false, error: 'No credentials found' };
+    }
+
+    // Validate the existing credentials
+    return await validateCredentials(remoteUrl, creds.username, creds.password);
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function deleteCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!credentialManager) {
+      credentialManager = new CredentialManager();
+    }
+
+    await credentialManager.deleteRemoteCredentials(remoteUrl);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export function getRepoPath(): { success: boolean; path?: string; error?: string } {
   if (currentRepoPath) {
     return { success: true, path: currentRepoPath };

@@ -113,6 +113,68 @@ export class GitCommands {
   }
 
   /**
+   * Validates credentials for a remote URL by attempting a lightweight fetch
+   * @param remoteUrl - Remote URL to validate credentials for
+   * @param credentials - Credentials to validate
+   * @returns Promise<boolean> - True if credentials are valid, false otherwise
+   */
+  async validateCredentials(remoteUrl: string, credentials: GitCredentials): Promise<boolean> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      // Create a temporary remote to test credentials
+      const tempRemote = await Git.Remote.createAnonymous(this.repo!, remoteUrl);
+      
+      const fetchOptions: Git.FetchOptions = {
+        callbacks: {
+          credentials: (url: string, userName: string) => {
+            if (credentials.privateKey && credentials.publicKey) {
+              return Git.Cred.sshKeyNew(
+                userName,
+                credentials.publicKey,
+                credentials.privateKey,
+                credentials.passphrase || ''
+              );
+            } else if (credentials.username && credentials.password) {
+              return Git.Cred.userpassPlaintextNew(
+                credentials.username,
+                credentials.password
+              );
+            }
+            return Git.Cred.defaultNew();
+          }
+        }
+      };
+
+      // Try to fetch with an empty refspec list - this is lightweight and validates credentials
+      // We don't actually fetch anything, just validate the connection
+      await tempRemote.fetch([], fetchOptions, '');
+      
+      // Disconnect the remote
+      tempRemote.disconnect();
+      
+      // If we get here, credentials are valid
+      return true;
+    } catch (error) {
+      // Check if it's an authentication error
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('Authentication') || 
+          errorMsg.includes('401') ||
+          errorMsg.includes('403') ||
+          errorMsg.includes('Permission denied') ||
+          errorMsg.includes('could not read Username') ||
+          errorMsg.includes('could not read Password') ||
+          errorMsg.includes('authentication failed')) {
+        return false;
+      }
+      // For other errors (network, etc.), rethrow so caller can handle
+      throw error;
+    }
+  }
+
+  /**
    * Opens an existing repository
    * @returns Promise<Git.Repository>
    */

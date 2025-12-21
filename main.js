@@ -100,6 +100,14 @@ ipcMain.handle('git:hasCredentials', async (_, remoteUrl) => {
   return await gitService.hasCredentials(remoteUrl);
 });
 
+ipcMain.handle('git:validateExistingCredentials', async (_, remoteUrl) => {
+  return await gitService.validateExistingCredentials(remoteUrl);
+});
+
+ipcMain.handle('git:deleteCredentials', async (_, remoteUrl) => {
+  return await gitService.deleteCredentials(remoteUrl);
+});
+
 ipcMain.handle('git:getRepoPath', () => {
   return gitService.getRepoPath();
 });

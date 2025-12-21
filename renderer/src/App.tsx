@@ -52,6 +52,8 @@ declare global {
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
       saveCredentials: (remoteUrl: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
       hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
+      validateExistingCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
+      deleteCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
       getRemoteUrl: (remote?: string) => Promise<{ success: boolean; url?: string; error?: string }>;
@@ -356,15 +358,39 @@ export default function App() {
         addLog('success', `Repository opened successfully from ${path}`);
         toast.success('Repository opened successfully!');
         
-        // Get remote URL if available
+        // Get remote URL if available and validate credentials
         try {
           const remoteResult = await window.electronAPI.getRemoteUrl('origin');
           if (remoteResult.success && remoteResult.url) {
             setRemoteUrl(remoteResult.url);
-            // Check for credentials
-            const credResult = await window.electronAPI.hasCredentials(remoteResult.url);
+            const remoteUrlValue = remoteResult.url;
+            
+            // Check if credentials exist
+            const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
             if (credResult.success && credResult.hasCredentials) {
-              setHasCredentials(true);
+              // Validate existing credentials
+              addLog('info', 'Validating saved credentials...');
+              const validationResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
+              
+              if (validationResult.success) {
+                // Credentials are valid
+                setHasCredentials(true);
+                addLog('success', 'Credentials validated successfully');
+              } else {
+                // Credentials are invalid - delete them and prompt for new ones
+                addLog('warning', 'Saved credentials are invalid, removing from storage...');
+                await window.electronAPI.deleteCredentials(remoteUrlValue);
+                setHasCredentials(false);
+                
+                // Prompt for new credentials
+                setTimeout(() => {
+                  setShowCredentialsDialog(true);
+                  addLog('warning', 'Please enter new credentials');
+                }, 500);
+              }
+            } else {
+              // No credentials saved
+              setHasCredentials(false);
             }
           }
         } catch (error) {

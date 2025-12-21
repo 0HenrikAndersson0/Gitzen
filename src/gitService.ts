@@ -225,6 +225,28 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
 
 async function validateCredentials(remoteUrl: string, username: string, password: string): Promise<{ success: boolean; error?: string }> {
   try {
+    // If we have a repository open, use nodegit via GitCommands
+    if (gitCommands && currentRepoPath) {
+      try {
+        const isValid = await gitCommands.validateCredentials(remoteUrl, {
+          username,
+          password,
+        });
+        return { success: isValid };
+      } catch (error) {
+        // If nodegit validation fails, check if it's an auth error
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('Authentication') || 
+            errorMsg.includes('401') ||
+            errorMsg.includes('403') ||
+            errorMsg.includes('Permission denied')) {
+          return { success: false, error: 'Authentication failed: Invalid username or password' };
+        }
+        // For other errors, fall through to child_process method
+      }
+    }
+
+    // Fallback to child_process if no repo is open or nodegit fails
     const { exec } = require('child_process');
     const { promisify } = require('util');
     const execAsync = promisify(exec);
@@ -319,6 +341,58 @@ export async function hasCredentials(remoteUrl: string): Promise<{ success: bool
     return { success: true, hasCredentials: creds !== null };
   } catch (error) {
     return { success: false, hasCredentials: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function validateExistingCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!credentialManager) {
+      credentialManager = new CredentialManager();
+    }
+
+    const creds = await credentialManager.getRemoteCredentials(remoteUrl);
+    if (!creds || !creds.username || !creds.password) {
+      return { success: false, error: 'No credentials found' };
+    }
+
+    // If we have a repository open, use nodegit via GitCommands (preferred method)
+    if (gitCommands && currentRepoPath) {
+      try {
+        const isValid = await gitCommands.validateCredentials(remoteUrl, {
+          username: creds.username,
+          password: creds.password,
+        });
+        return { success: isValid };
+      } catch (error) {
+        // Check if it's an authentication error
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('Authentication') || 
+            errorMsg.includes('401') ||
+            errorMsg.includes('403') ||
+            errorMsg.includes('Permission denied')) {
+          return { success: false, error: 'Authentication failed: Invalid username or password' };
+        }
+        // For other errors, fall through to child_process method
+      }
+    }
+
+    // Fallback to child_process validation (used when no repo is open or nodegit fails)
+    return await validateCredentials(remoteUrl, creds.username, creds.password);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function deleteCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!credentialManager) {
+      credentialManager = new CredentialManager();
+    }
+
+    await credentialManager.deleteRemoteCredentials(remoteUrl);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
