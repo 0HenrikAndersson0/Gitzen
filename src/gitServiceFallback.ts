@@ -464,3 +464,17 @@ export async function getRepoName(): Promise<{ success: boolean; name?: string; 
   }
 }
 
+export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand(`remote get-url ${remote}`);
+    return { success: true, url: stdout.trim() };
+  } catch (error: any) {
+    // Remote might not exist, that's okay
+    return { success: false, error: error.message || 'Remote not found' };
+  }
+}
+

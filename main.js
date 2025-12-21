@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const recentReposService = require('./dist/recentReposService');
 
 // Try to use nodegit, fallback to git commands if it fails
 let gitService;
@@ -34,6 +35,9 @@ function createWindow() {
 
 // Initialize git service
 gitService.initializeGitService();
+
+// Initialize recent repos service
+recentReposService.setUserDataPath(app.getPath('userData'));
 
 // IPC handlers
 ipcMain.handle('git:clone', async (_, url, localPath, credentials) => {
@@ -102,6 +106,43 @@ ipcMain.handle('git:getRepoPath', () => {
 
 ipcMain.handle('git:getRepoName', async () => {
   return await gitService.getRepoName();
+});
+
+ipcMain.handle('git:getRemoteUrl', async (_, remote) => {
+  return await gitService.getRemoteUrl(remote);
+});
+
+// Dialog handlers
+ipcMain.handle('dialog:showOpenDialog', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Select Git Repository Folder',
+  });
+  
+  if (result.canceled || result.filePaths.length === 0) {
+    return { success: false };
+  }
+  
+  return { success: true, path: result.filePaths[0] };
+});
+
+// Recent repos handlers
+ipcMain.handle('repos:getRecent', () => {
+  try {
+    const repos = recentReposService.getRecentRepos();
+    return { success: true, repos };
+  } catch (error) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('repos:addRecent', (_, repoPath) => {
+  try {
+    recentReposService.addRecentRepo(repoPath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
 });
 
 // This method will be called when Electron has finished initialization

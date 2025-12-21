@@ -24,4 +24,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hasCredentials: (remoteUrl) => ipcRenderer.invoke('git:hasCredentials', remoteUrl),
   getRepoPath: () => ipcRenderer.invoke('git:getRepoPath'),
   getRepoName: () => ipcRenderer.invoke('git:getRepoName'),
+  getRemoteUrl: (remote) => ipcRenderer.invoke('git:getRemoteUrl', remote),
+  showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
+  getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
+  addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),
 });

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { CloneRepo } from './components/CloneRepo';
+import { OpenRepo } from './components/OpenRepo';
 import { CommitPanel } from './components/CommitPanel';
 import { ActivityLog } from './components/ActivityLog';
 import { RepoHeader } from './components/RepoHeader';
 import { CredentialsDialog } from './components/CredentialsDialog';
 import { CommitGraph } from './components/CommitGraph';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 
@@ -52,6 +54,10 @@ declare global {
       hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
+      getRemoteUrl: (remote?: string) => Promise<{ success: boolean; url?: string; error?: string }>;
+      showOpenDialog: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      getRecentRepos: () => Promise<{ success: boolean; repos?: Array<{ path: string; name: string; lastOpened: number }>; error?: string }>;
+      addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
     };
   }
 }
@@ -66,6 +72,7 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -332,6 +339,53 @@ export default function App() {
     // TODO: Implement merge
   };
 
+  const handleOpenRepo = async (path: string) => {
+    addLog('info', `Opening repository from ${path}...`);
+    
+    try {
+      const result = await window.electronAPI.gitOpen(path);
+      if (result.success) {
+        setRepoPath(path);
+        const nameResult = await window.electronAPI.getRepoName();
+        if (nameResult.success && nameResult.name) {
+          setRepoName(nameResult.name);
+        } else {
+          setRepoName(path.split(/[/\\]/).pop() || 'repository');
+        }
+        
+        addLog('success', `Repository opened successfully from ${path}`);
+        toast.success('Repository opened successfully!');
+        
+        // Get remote URL if available
+        try {
+          const remoteResult = await window.electronAPI.getRemoteUrl('origin');
+          if (remoteResult.success && remoteResult.url) {
+            setRemoteUrl(remoteResult.url);
+            // Check for credentials
+            const credResult = await window.electronAPI.hasCredentials(remoteResult.url);
+            if (credResult.success && credResult.hasCredentials) {
+              setHasCredentials(true);
+            }
+          }
+        } catch (error) {
+          // No remote configured, that's okay
+          console.log('No remote configured for this repository');
+        }
+        
+        await refreshStatus();
+        await refreshBranch();
+        await refreshHistory();
+      } else {
+        addLog('error', result.error || 'Failed to open repository');
+        toast.error(result.error || 'Failed to open repository');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      addLog('error', `Failed to open repository: ${errorMsg}`);
+      toast.error(`Failed to open repository: ${errorMsg}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -344,7 +398,30 @@ export default function App() {
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
             {!repoName ? (
-              <CloneRepo onClone={handleClone} />
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')}>
+                  <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 border-b border-zinc-800 rounded-none">
+                    <TabsTrigger 
+                      value="clone" 
+                      className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+                    >
+                      Clone Repository
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="open"
+                      className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+                    >
+                      Open Repository
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="clone" className="p-6 m-0">
+                    <CloneRepo onClone={handleClone} />
+                  </TabsContent>
+                  <TabsContent value="open" className="p-6 m-0">
+                    <OpenRepo onOpen={handleOpenRepo} />
+                  </TabsContent>
+                </Tabs>
+              </div>
             ) : (
               <CommitGraph 
                 commits={commits}
