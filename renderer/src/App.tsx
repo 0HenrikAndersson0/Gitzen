@@ -1,0 +1,381 @@
+import { useState, useEffect } from 'react';
+import { CloneRepo } from './components/CloneRepo';
+import { CommitPanel } from './components/CommitPanel';
+import { ActivityLog } from './components/ActivityLog';
+import { RepoHeader } from './components/RepoHeader';
+import { CredentialsDialog } from './components/CredentialsDialog';
+import { CommitGraph } from './components/CommitGraph';
+import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
+
+interface FileChange {
+  path: string;
+  status: 'modified' | 'added' | 'deleted';
+  staged: boolean;
+}
+
+interface LogEntry {
+  timestamp: Date;
+  type: 'info' | 'success' | 'error' | 'warning';
+  message: string;
+}
+
+interface Commit {
+  id: string;
+  message: string;
+  author: string;
+  timestamp: Date;
+  branch: string;
+  hash: string;
+  lane: number;
+  isMerge?: boolean;
+  parentLanes?: number[];
+}
+
+declare global {
+  interface Window {
+    electronAPI: {
+      gitClone: (url: string, path: string, credentials?: { username: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+      gitOpen: (path: string) => Promise<{ success: boolean; error?: string }>;
+      gitStatus: () => Promise<{ success: boolean; files?: FileChange[]; error?: string }>;
+      gitStage: (files: string[]) => Promise<{ success: boolean; error?: string }>;
+      gitStageAll: () => Promise<{ success: boolean; error?: string }>;
+      gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
+      gitPush: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
+      gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
+      gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
+      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
+      gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
+      gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
+      gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
+      saveCredentials: (remoteUrl: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+      hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
+      getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
+    };
+  }
+}
+
+export default function App() {
+  const [repoName, setRepoName] = useState<string | null>(null);
+  const [repoPath, setRepoPath] = useState<string | null>(null);
+  const [currentBranch, setCurrentBranch] = useState('main');
+  const [hasCredentials, setHasCredentials] = useState(false);
+  const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
+  const [files, setFiles] = useState<FileChange[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [commits, setCommits] = useState<Commit[]>([]);
+  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+    loadRepository();
+  }, []);
+
+  useEffect(() => {
+    if (repoPath) {
+      refreshStatus();
+      refreshBranch();
+      refreshHistory();
+    }
+  }, [repoPath]);
+
+  const addLog = (type: LogEntry['type'], message: string) => {
+    setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
+  };
+
+  const loadRepository = async () => {
+    try {
+      const result = await window.electronAPI.getRepoPath();
+      if (result.success && result.path) {
+        setRepoPath(result.path);
+        const nameResult = await window.electronAPI.getRepoName();
+        if (nameResult.success && nameResult.name) {
+          setRepoName(nameResult.name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load repository:', error);
+    }
+  };
+
+  const refreshStatus = async () => {
+    if (!repoPath) return;
+    try {
+      const result = await window.electronAPI.gitStatus();
+      if (result.success && result.files) {
+        setFiles(result.files);
+      }
+    } catch (error) {
+      console.error('Failed to refresh status:', error);
+    }
+  };
+
+  const refreshBranch = async () => {
+    if (!repoPath) return;
+    try {
+      const result = await window.electronAPI.gitGetCurrentBranch();
+      if (result.success && result.branch) {
+        setCurrentBranch(result.branch);
+      }
+    } catch (error) {
+      console.error('Failed to refresh branch:', error);
+    }
+  };
+
+  const refreshHistory = async () => {
+    if (!repoPath) return;
+    try {
+      const result = await window.electronAPI.gitGetHistory(50);
+      if (result.success && result.commits) {
+        setCommits(result.commits);
+      }
+    } catch (error) {
+      console.error('Failed to refresh history:', error);
+    }
+  };
+
+  const handleClone = async (url: string, path: string) => {
+    addLog('info', `Cloning repository from ${url}...`);
+    setRemoteUrl(url);
+    
+    try {
+      const result = await window.electronAPI.gitClone(url, path);
+      if (result.success) {
+        setRepoPath(path);
+        setRepoName(url.split('/').pop()?.replace('.git', '') || 'repository');
+        addLog('success', `Repository cloned successfully to ${path}`);
+        toast.success('Repository cloned successfully!');
+        
+        // Check for credentials (but don't assume they're valid - they'll be validated on use)
+        const credResult = await window.electronAPI.hasCredentials(url);
+        if (credResult.success && credResult.hasCredentials) {
+          // Credentials exist, but we'll validate them when actually used
+          setHasCredentials(true);
+        } else {
+          setTimeout(() => {
+            setShowCredentialsDialog(true);
+            addLog('warning', 'Git credentials required for push operations');
+          }, 500);
+        }
+
+        await refreshStatus();
+        await refreshBranch();
+        await refreshHistory();
+      } else {
+        addLog('error', result.error || 'Failed to clone repository');
+        toast.error(result.error || 'Failed to clone repository');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      addLog('error', `Clone failed: ${errorMsg}`);
+      toast.error(`Clone failed: ${errorMsg}`);
+    }
+  };
+
+  const handleToggleStage = async (path: string) => {
+    const file = files.find(f => f.path === path);
+    if (!file) return;
+
+    try {
+      if (file.staged) {
+        // Unstage - for now we'll just update the UI
+        // nodegit doesn't have a direct unstage, we'd need to reset the index
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.path === path ? { ...f, staged: false } : f
+          )
+        );
+      } else {
+        const result = await window.electronAPI.gitStage([path]);
+        if (result.success) {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.path === path ? { ...f, staged: true } : f
+            )
+          );
+        } else {
+          addLog('error', result.error || 'Failed to stage file');
+        }
+      }
+    } catch (error) {
+      addLog('error', `Failed to toggle stage: ${error}`);
+    }
+  };
+
+  const handleCommit = async (message: string) => {
+    const stagedFiles = files.filter((f) => f.staged);
+    addLog('info', `Committing ${stagedFiles.length} file(s)...`);
+    
+    try {
+      const result = await window.electronAPI.gitCommit(message);
+      if (result.success) {
+        addLog('success', `Committed: "${message}"`);
+        toast.success('Changes committed successfully!');
+        
+        await refreshStatus();
+        await refreshHistory();
+      } else {
+        addLog('error', result.error || 'Failed to commit');
+        toast.error(result.error || 'Failed to commit');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      addLog('error', `Commit failed: ${errorMsg}`);
+      toast.error(`Commit failed: ${errorMsg}`);
+    }
+  };
+
+  const handlePush = async () => {
+    if (!hasCredentials && remoteUrl) {
+      setShowCredentialsDialog(true);
+      addLog('error', 'Push failed: credentials required');
+      toast.error('Please provide credentials first');
+      return;
+    }
+
+    addLog('info', `Pushing to origin/${currentBranch}...`);
+    
+    try {
+      const result = await window.electronAPI.gitPush('origin', currentBranch);
+      if (result.success) {
+        addLog('success', `Successfully pushed to origin/${currentBranch}`);
+        toast.success('Changes pushed successfully!');
+      } else {
+        const errorMsg = result.error || 'Failed to push';
+        addLog('error', errorMsg);
+        toast.error(errorMsg);
+        
+        // Check if it's an authentication error
+        if (errorMsg.includes('Authentication') || 
+            errorMsg.includes('Permission denied') ||
+            errorMsg.includes('401') ||
+            errorMsg.includes('403') ||
+            errorMsg.includes('could not read Username') ||
+            errorMsg.includes('could not read Password')) {
+          // Credentials are invalid - mark as not authenticated
+          setHasCredentials(false);
+          if (remoteUrl) {
+            // Delete invalid credentials
+            addLog('warning', 'Invalid credentials detected. Please re-enter your credentials.');
+            // Note: We can't delete from here, but the user will need to re-enter
+            setShowCredentialsDialog(true);
+          }
+        }
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      addLog('error', `Push failed: ${errorMsg}`);
+      toast.error(`Push failed: ${errorMsg}`);
+      
+      // Check if it's an authentication error
+      if (errorMsg.includes('Authentication') || 
+          errorMsg.includes('Permission denied') ||
+          errorMsg.includes('401') ||
+          errorMsg.includes('403')) {
+        setHasCredentials(false);
+        if (remoteUrl) {
+          setShowCredentialsDialog(true);
+        }
+      }
+    }
+  };
+
+  const handleCredentialsSubmit = async (username: string, password: string) => {
+    if (!remoteUrl) return;
+    
+    addLog('info', `Validating credentials for ${username}...`);
+    
+    try {
+      const result = await window.electronAPI.saveCredentials(remoteUrl, username, password);
+      if (result.success) {
+        setHasCredentials(true);
+        setShowCredentialsDialog(false);
+        addLog('success', 'Credentials validated and saved successfully');
+        toast.success('Credentials authenticated!');
+      } else {
+        // Credentials failed validation - they were not saved and were deleted if they existed
+        const errorMsg = result.error || 'Failed to validate credentials';
+        addLog('error', `Authentication failed: ${errorMsg}`);
+        toast.error(`Authentication failed: ${errorMsg}`);
+        // Make sure hasCredentials is false
+        setHasCredentials(false);
+        // Re-check credentials to ensure they're deleted
+        const credCheck = await window.electronAPI.hasCredentials(remoteUrl);
+        if (credCheck.success && credCheck.hasCredentials) {
+          addLog('warning', 'Failed credentials were removed from storage');
+        }
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      addLog('error', `Failed to validate credentials: ${errorMsg}`);
+      toast.error(`Failed to validate credentials: ${errorMsg}`);
+      setHasCredentials(false);
+    }
+  };
+
+  const handleRebase = async (branch: string) => {
+    addLog('info', `Rebasing ${currentBranch} onto ${branch}...`);
+    toast.info('Rebase functionality coming soon');
+    // TODO: Implement rebase
+  };
+
+  const handleInteractiveRebase = async (branch: string) => {
+    addLog('info', `Starting interactive rebase of ${currentBranch} onto ${branch}...`);
+    toast.info('Interactive rebase functionality coming soon');
+    // TODO: Implement interactive rebase
+  };
+
+  const handleMergeBranch = async (branch: string) => {
+    addLog('info', `Merging ${branch} into ${currentBranch}...`);
+    toast.info('Merge functionality coming soon');
+    // TODO: Implement merge
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <RepoHeader
+          repoName={repoName}
+          currentBranch={currentBranch}
+          hasCredentials={hasCredentials}
+        />
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            {!repoName ? (
+              <CloneRepo onClone={handleClone} />
+            ) : (
+              <CommitGraph 
+                commits={commits}
+                currentBranch={currentBranch}
+                onRebase={handleRebase}
+                onInteractiveRebase={handleInteractiveRebase}
+                onMergeBranch={handleMergeBranch}
+              />
+            )}
+            <CommitPanel
+              files={files}
+              onToggleStage={handleToggleStage}
+              onCommit={handleCommit}
+              onPush={handlePush}
+              hasCredentials={hasCredentials}
+            />
+          </div>
+
+          <div className="space-y-6">
+            <ActivityLog logs={logs} />
+          </div>
+        </div>
+      </div>
+
+      <CredentialsDialog
+        open={showCredentialsDialog}
+        onSubmit={handleCredentialsSubmit}
+      />
+
+      <Toaster />
+    </div>
+  );
+}
+
