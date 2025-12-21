@@ -1,7 +1,7 @@
 {
-  "name": "git-gui",
+  "name": "gitzen",
   "version": "1.0.0",
-  "description": "A GUI application built with Electron",
+  "description": "Gitzen - A modern Git GUI application",
   "main": "main.js",
   "scripts": {
     "start": "npm run build:renderer && electron .",
@@ -35,20 +35,26 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "com.example.git-gui",
-    "productName": "Git GUI",
+    "appId": "com.gitzen.app",
+    "productName": "Gitzen",
+    "icon": "icon.png",
     "linux": {
       "target": [
         "AppImage",
         "deb",
         "rpm"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "icon": "icon.png"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "icon.png"
+    },
+    "mac": {
+      "icon": "icon.png"
     }
   },
   "dependencies": {

@@ -1,6 +1,6 @@
-# Git GUI
+# Gitzen
 
-An Electron-based GUI application for Linux and Windows.
+A modern Git GUI application built with Electron for Linux and Windows.
 
 ## Prerequisites
 

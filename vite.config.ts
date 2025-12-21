@@ -5,9 +5,11 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   root: './renderer',
+  publicDir: 'public',
   build: {
     outDir: '../dist/renderer',
     emptyOutDir: true,
+    assetsDir: 'assets',
   },
   base: './',
   server: {
