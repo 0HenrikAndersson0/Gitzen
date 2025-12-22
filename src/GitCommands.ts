@@ -160,13 +160,22 @@ export class GitCommands {
     } catch (error) {
       // Check if it's an authentication error
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes('Authentication') || 
+      const errorCode = (error as any).code || (error as any).errno;
+      
+      // Check for authentication-related errors
+      if (errorCode === 401 || 
+          errorCode === 403 ||
+          errorMsg.includes('Authentication') || 
           errorMsg.includes('401') ||
           errorMsg.includes('403') ||
           errorMsg.includes('Permission denied') ||
           errorMsg.includes('could not read Username') ||
           errorMsg.includes('could not read Password') ||
-          errorMsg.includes('authentication failed')) {
+          errorMsg.includes('authentication failed') ||
+          errorMsg.includes('Unauthorized') ||
+          errorMsg.includes('Invalid username or password') ||
+          errorMsg.includes('remote: Invalid username or password') ||
+          errorMsg.includes('remote: Authentication failed')) {
         return false;
       }
       // For other errors (network, etc.), rethrow so caller can handle

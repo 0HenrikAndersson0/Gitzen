@@ -232,17 +232,25 @@ async function validateCredentials(remoteUrl: string, username: string, password
           username,
           password,
         });
-        return { success: isValid };
+        if (!isValid) {
+          return { success: false, error: 'Authentication failed: Invalid username or password' };
+        }
+        return { success: true };
       } catch (error) {
-        // If nodegit validation fails, check if it's an auth error
+        // If nodegit validation throws an error, it's likely an auth failure
         const errorMsg = error instanceof Error ? error.message : String(error);
         if (errorMsg.includes('Authentication') || 
             errorMsg.includes('401') ||
             errorMsg.includes('403') ||
-            errorMsg.includes('Permission denied')) {
+            errorMsg.includes('Permission denied') ||
+            errorMsg.includes('could not read Username') ||
+            errorMsg.includes('could not read Password') ||
+            errorMsg.includes('authentication failed') ||
+            errorMsg.includes('Unauthorized')) {
           return { success: false, error: 'Authentication failed: Invalid username or password' };
         }
-        // For other errors, fall through to child_process method
+        // For other errors (network, etc.), fall through to child_process method
+        console.log('Nodegit validation error (non-auth), falling back to child_process:', errorMsg);
       }
     }
 
@@ -260,30 +268,52 @@ async function validateCredentials(remoteUrl: string, username: string, password
         .replace(/:([^\/]+)\//, '/$1/');
     }
 
-    // Create URL with credentials
-    const urlObj = new URL(testUrl);
-    urlObj.username = username;
-    urlObj.password = password;
-    const urlWithCreds = urlObj.toString();
-
-    // Test credentials by attempting to list remote refs
+    // Create URL with credentials - escape special characters in username/password
     try {
-      await execAsync(`git ls-remote ${urlWithCreds}`, {
-        timeout: 10000, // 10 second timeout
-        maxBuffer: 1024 * 1024, // 1MB
-      });
-      return { success: true };
-    } catch (error: any) {
-      const errorMsg = error.message || '';
-      if (errorMsg.includes('Authentication failed') || 
-          errorMsg.includes('fatal: could not read Username') ||
-          errorMsg.includes('fatal: could not read Password') ||
-          errorMsg.includes('Permission denied') ||
-          errorMsg.includes('401') ||
-          errorMsg.includes('403')) {
-        return { success: false, error: 'Authentication failed: Invalid username or password' };
+      const urlObj = new URL(testUrl);
+      urlObj.username = encodeURIComponent(username);
+      urlObj.password = encodeURIComponent(password);
+      const urlWithCreds = urlObj.toString();
+
+      // Test credentials by attempting to list remote refs
+      // Use --exit-code to ensure git returns non-zero on failure
+      try {
+        const result = await execAsync(`git ls-remote --exit-code "${urlWithCreds}"`, {
+          timeout: 10000, // 10 second timeout
+          maxBuffer: 1024 * 1024, // 1MB
+        });
+        
+        // Check if we got any output (empty output might indicate auth failure)
+        if (!result.stdout || result.stdout.trim().length === 0) {
+          return { success: false, error: 'Authentication failed: No access to repository' };
+        }
+        
+        return { success: true };
+      } catch (error: any) {
+        const errorMsg = error.message || error.stderr || String(error);
+        const errorCode = error.code;
+        
+        // Check for authentication-related errors
+        if (errorCode === 128 || // Git error code for authentication failures
+            errorMsg.includes('Authentication failed') || 
+            errorMsg.includes('fatal: could not read Username') ||
+            errorMsg.includes('fatal: could not read Password') ||
+            errorMsg.includes('Permission denied') ||
+            errorMsg.includes('401') ||
+            errorMsg.includes('403') ||
+            errorMsg.includes('Unauthorized') ||
+            errorMsg.includes('authentication failed') ||
+            errorMsg.includes('Invalid username or password') ||
+            errorMsg.includes('remote: Invalid username or password') ||
+            errorMsg.includes('remote: Authentication failed')) {
+          return { success: false, error: 'Authentication failed: Invalid username or password' };
+        }
+        
+        // For other errors, still fail but with more context
+        return { success: false, error: `Failed to validate credentials: ${errorMsg}` };
       }
-      return { success: false, error: `Failed to validate credentials: ${errorMsg}` };
+    } catch (urlError) {
+      return { success: false, error: `Invalid remote URL: ${urlError instanceof Error ? urlError.message : String(urlError)}` };
     }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error during validation' };
