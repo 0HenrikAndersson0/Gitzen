@@ -1,0 +1,382 @@
+import { X, FileText, FilePlus, FileX, Copy, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+
+interface FileChange {
+  path: string;
+  status: 'modified' | 'added' | 'deleted';
+  additions: number;
+  deletions: number;
+  diff?: {
+    oldContent: string[];
+    newContent: string[];
+    hunks: DiffHunk[];
+  };
+}
+
+interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+}
+
+interface DiffLine {
+  type: 'add' | 'remove' | 'context';
+  oldLineNumber?: number;
+  newLineNumber?: number;
+  content: string;
+}
+
+interface CommitDetailsProps {
+  commit: {
+    id: string;
+    hash: string;
+    message: string;
+    author: string;
+    timestamp: Date;
+    branch: string;
+  };
+  onClose: () => void;
+}
+
+// Parse diff string into structured format
+function parseDiff(diffText: string, path: string): FileChange['diff'] {
+  const lines = diffText.split('\n');
+  const hunks: DiffHunk[] = [];
+  let currentHunk: DiffHunk | null = null;
+  let oldLineNum = 0;
+  let newLineNum = 0;
+  const oldContent: string[] = [];
+  const newContent: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith('@@')) {
+      // New hunk
+      if (currentHunk) {
+        hunks.push(currentHunk);
+      }
+      
+      const match = line.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+      if (match) {
+        oldLineNum = parseInt(match[1]) || 0;
+        newLineNum = parseInt(match[3]) || 0;
+        const oldLines = parseInt(match[2]) || 0;
+        const newLines = parseInt(match[4]) || 0;
+        
+        currentHunk = {
+          oldStart: oldLineNum,
+          oldLines,
+          newStart: newLineNum,
+          newLines,
+          lines: [],
+        };
+      }
+    } else if (currentHunk) {
+      const type = line[0] === '+' ? 'add' : line[0] === '-' ? 'remove' : 'context';
+      const content = line.substring(1);
+      
+      let oldLine: number | undefined;
+      let newLine: number | undefined;
+      
+      if (type === 'remove') {
+        oldLine = oldLineNum++;
+        oldContent.push(content);
+      } else if (type === 'add') {
+        newLine = newLineNum++;
+        newContent.push(content);
+      } else {
+        oldLine = oldLineNum++;
+        newLine = newLineNum++;
+        oldContent.push(content);
+        newContent.push(content);
+      }
+      
+      currentHunk.lines.push({
+        type,
+        oldLineNumber: oldLine,
+        newLineNumber: newLine,
+        content,
+      });
+    }
+  }
+  
+  if (currentHunk) {
+    hunks.push(currentHunk);
+  }
+
+  return { oldContent, newContent, hunks };
+}
+
+export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
+  const [files, setFiles] = useState<FileChange[]>([]);
+  const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDiff = async () => {
+      setLoading(true);
+      try {
+        const result = await window.electronAPI.getCommitDiff(commit.hash);
+        if (result.success && result.files) {
+          const parsedFiles = result.files.map((file) => {
+            const diff = file.diff ? parseDiff(file.diff, file.path) : undefined;
+            return {
+              ...file,
+              diff,
+            };
+          });
+          setFiles(parsedFiles);
+          if (parsedFiles.length > 0) {
+            setSelectedFile(parsedFiles[0]);
+          }
+        } else {
+          toast.error(result.error || 'Failed to load commit diff');
+        }
+      } catch (error) {
+        console.error('Failed to load diff:', error);
+        toast.error('Failed to load commit diff');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDiff();
+  }, [commit.hash]);
+
+  const handleCopyHash = () => {
+    navigator.clipboard.writeText(commit.hash);
+    setCopiedHash(true);
+    setTimeout(() => setCopiedHash(false), 2000);
+  };
+
+  const getFileIcon = (status: FileChange['status']) => {
+    switch (status) {
+      case 'added':
+        return <FilePlus className="h-4 w-4 text-emerald-400" />;
+      case 'deleted':
+        return <FileX className="h-4 w-4 text-red-400" />;
+      default:
+        return <FileText className="h-4 w-4 text-blue-400" />;
+    }
+  };
+
+  const getStatusColor = (status: FileChange['status']) => {
+    switch (status) {
+      case 'added':
+        return 'text-emerald-400';
+      case 'deleted':
+        return 'text-red-400';
+      default:
+        return 'text-blue-400';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-6">
+          <div className="text-zinc-100">Loading commit diff...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+      <div className="flex h-[90vh] w-full max-w-7xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-zinc-800 p-6">
+          <div className="min-w-0 flex-1">
+            <h2 className="mb-2 text-xl font-semibold text-zinc-100">
+              {commit.message}
+            </h2>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
+              <span>{commit.author}</span>
+              <span>•</span>
+              <span>{commit.branch}</span>
+              <span>•</span>
+              <button
+                onClick={handleCopyHash}
+                className="flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+              >
+                <code>{commit.hash}</code>
+                {copiedHash ? (
+                  <Check className="h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </button>
+              <span>•</span>
+              <span>{commit.timestamp.toLocaleString()}</span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          {/* File List Sidebar */}
+          <div className="w-80 border-r border-zinc-800 bg-zinc-900/50">
+            <div className="border-b border-zinc-800 p-4">
+              <h3 className="font-medium text-zinc-200">
+                Changed Files ({files.length})
+              </h3>
+              <div className="mt-2 flex gap-4 text-xs text-zinc-500">
+                <span className="text-emerald-400">
+                  +{files.reduce((sum, f) => sum + f.additions, 0)}
+                </span>
+                <span className="text-red-400">
+                  -{files.reduce((sum, f) => sum + f.deletions, 0)}
+                </span>
+              </div>
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+              {files.map((file, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedFile(file)}
+                  className={`flex w-full items-start gap-3 border-b border-zinc-800 p-4 text-left transition-colors ${
+                    selectedFile?.path === file.path
+                      ? 'bg-zinc-800'
+                      : 'hover:bg-zinc-800/50'
+                  }`}
+                >
+                  {getFileIcon(file.status)}
+                  <div className="min-w-0 flex-1">
+                    <div className={`truncate text-sm font-medium ${getStatusColor(file.status)}`}>
+                      {file.path.split('/').pop()}
+                    </div>
+                    <div className="truncate text-xs text-zinc-500">{file.path}</div>
+                    <div className="mt-1 flex gap-3 text-xs">
+                      {file.additions > 0 && (
+                        <span className="text-emerald-400">+{file.additions}</span>
+                      )}
+                      {file.deletions > 0 && (
+                        <span className="text-red-400">-{file.deletions}</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Diff Viewer - Side by Side */}
+          <div className="flex min-w-0 flex-1 flex-col bg-zinc-950">
+            {selectedFile ? (
+              <>
+                <div className="border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {getFileIcon(selectedFile.status)}
+                    <span className="font-mono text-sm text-zinc-300">{selectedFile.path}</span>
+                  </div>
+                </div>
+                
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                  {/* Side-by-side diff */}
+                  <div className="grid min-h-0 flex-1 grid-cols-2">
+                    {/* Left pane - Old content */}
+                    <div className="flex min-h-0 flex-col border-r border-zinc-800">
+                      <div className="border-b border-zinc-800 bg-red-950/20 px-4 py-2">
+                        <span className="text-xs font-medium text-red-400">Original</span>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
+                        {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
+                          <div key={hunkIndex}>
+                            {hunk.lines.map((line, lineIndex) => {
+                              if (line.type === 'add') return null;
+                              return (
+                                <div
+                                  key={lineIndex}
+                                  className={`flex ${
+                                    line.type === 'remove'
+                                      ? 'bg-red-950/30'
+                                      : 'bg-transparent'
+                                  }`}
+                                >
+                                  <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600">
+                                    {line.oldLineNumber || ''}
+                                  </span>
+                                  <span
+                                    className={`flex-1 px-2 ${
+                                      line.type === 'remove'
+                                        ? 'bg-red-900/20 text-red-300'
+                                        : 'text-zinc-400'
+                                    }`}
+                                  >
+                                    {line.type === 'remove' && (
+                                      <span className="mr-1 text-red-400">-</span>
+                                    )}
+                                    {line.content || '\u00A0'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right pane - New content */}
+                    <div className="flex min-h-0 flex-col">
+                      <div className="border-b border-zinc-800 bg-emerald-950/20 px-4 py-2">
+                        <span className="text-xs font-medium text-emerald-400">Modified</span>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
+                        {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
+                          <div key={hunkIndex}>
+                            {hunk.lines.map((line, lineIndex) => {
+                              if (line.type === 'remove') return null;
+                              return (
+                                <div
+                                  key={lineIndex}
+                                  className={`flex ${
+                                    line.type === 'add'
+                                      ? 'bg-emerald-950/30'
+                                      : 'bg-transparent'
+                                  }`}
+                                >
+                                  <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600">
+                                    {line.newLineNumber || ''}
+                                  </span>
+                                  <span
+                                    className={`flex-1 px-2 ${
+                                      line.type === 'add'
+                                        ? 'bg-emerald-900/20 text-emerald-300'
+                                        : 'text-zinc-400'
+                                    }`}
+                                  >
+                                    {line.type === 'add' && (
+                                      <span className="mr-1 text-emerald-400">+</span>
+                                    )}
+                                    {line.content || '\u00A0'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-zinc-500">
+                No file selected
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

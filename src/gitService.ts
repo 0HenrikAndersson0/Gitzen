@@ -429,3 +429,81 @@ export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success
   }
 }
 
+export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }> {
+  try {
+    if (!gitCommands) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const branches = await gitCommands.listRemoteBranches();
+    return { success: true, branches };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }> {
+  try {
+    if (!gitCommands) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const tags = await gitCommands.listTags();
+    return { success: true, tags };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function getCommitDiff(commitHash: string): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }> {
+  try {
+    if (!gitCommands) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const files = await gitCommands.getCommitDiff(commitHash);
+    return { success: true, files };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function deleteBranch(branchName: string, force: boolean = false): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!gitCommands) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await gitCommands.deleteBranch(branchName, force);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function deleteTag(tagName: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!gitCommands) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await gitCommands.deleteTag(tagName);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function getTagsForCommit(commitHash: string): Promise<{ success: boolean; tags?: string[]; error?: string }> {
+  try {
+    if (!gitCommands) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const tags = await gitCommands.getTagsForCommit(commitHash);
+    return { success: true, tags };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+

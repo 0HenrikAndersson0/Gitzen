@@ -122,6 +122,30 @@ ipcMain.handle('git:getRemoteUrl', async (_, remote) => {
   return await gitService.getRemoteUrl(remote);
 });
 
+ipcMain.handle('git:getRemoteBranches', async () => {
+  return await gitService.getRemoteBranches();
+});
+
+ipcMain.handle('git:getTags', async () => {
+  return await gitService.getTags();
+});
+
+ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
+  return await gitService.getCommitDiff(commitHash);
+});
+
+ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {
+  return await gitService.deleteBranch(branchName, force);
+});
+
+ipcMain.handle('git:deleteTag', async (_, tagName) => {
+  return await gitService.deleteTag(tagName);
+});
+
+ipcMain.handle('git:getTagsForCommit', async (_, commitHash) => {
+  return await gitService.getTagsForCommit(commitHash);
+});
+
 // Dialog handlers
 ipcMain.handle('dialog:showOpenDialog', async () => {
   const result = await dialog.showOpenDialog({

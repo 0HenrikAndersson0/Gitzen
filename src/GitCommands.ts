@@ -593,6 +593,288 @@ export class GitCommands {
   }
 
   /**
+   * Lists all remote branches
+   * @returns Promise<Array<{ name: string; remote: string }>>
+   */
+  async listRemoteBranches(): Promise<Array<{ name: string; remote: string }>> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      const references = await this.repo!.getReferences();
+      const remoteBranches = references
+        .filter((ref: Git.Reference) => ref.isRemote())
+        .map((ref: Git.Reference) => {
+          const name = ref.name();
+          // Extract remote name and branch name from refs/remotes/origin/branch
+          const match = name.match(/^refs\/remotes\/([^/]+)\/(.+)$/);
+          if (match) {
+            return { name: match[2], remote: match[1] };
+          }
+          return { name: ref.shorthand(), remote: 'origin' };
+        });
+
+      return remoteBranches;
+    } catch (error) {
+      throw new Error(`Failed to list remote branches: ${error}`);
+    }
+  }
+
+  /**
+   * Lists all tags in the repository
+   * @returns Promise<Array<{ name: string; commit: string; date: Date }>>
+   */
+  async listTags(): Promise<Array<{ name: string; commit: string; date: Date }>> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      const references = await this.repo!.getReferences();
+      const tags = references.filter((ref: Git.Reference) => ref.isTag());
+
+      const tagInfo = await Promise.all(
+        tags.map(async (ref: Git.Reference) => {
+          const name = ref.shorthand();
+          let commit: string;
+          let date: Date;
+
+          try {
+            // Resolve the reference to get the Oid
+            const resolvedRef = await ref.resolve();
+            const targetOid = (resolvedRef.target() as any) as Git.Oid;
+            
+            // Try to get the tag object (for annotated tags)
+            try {
+              const tagObj = await this.repo!.getTag(targetOid);
+              const target = tagObj.target();
+              // @ts-expect-error - nodegit types are incorrect, target() returns Oid not Promise
+              commit = target.tostrS().substring(0, 7);
+              
+              // Get the commit to get the date
+              try {
+                // @ts-expect-error - nodegit types are incorrect
+                const commitObj = await this.repo!.getCommit(target);
+                date = commitObj.date();
+              } catch {
+                date = new Date();
+              }
+            } catch {
+              // If it's a lightweight tag, get the commit directly
+              try {
+                const commitObj = await this.repo!.getCommit(targetOid);
+                commit = commitObj.sha().substring(0, 7);
+                date = commitObj.date();
+              } catch {
+                commit = targetOid.tostrS().substring(0, 7);
+                date = new Date();
+              }
+            }
+          } catch {
+            // Fallback: use the reference name to extract info
+            commit = 'unknown';
+            date = new Date();
+          }
+
+          return { name, commit, date };
+        })
+      );
+
+      // Sort by date, newest first
+      tagInfo.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+      return tagInfo;
+    } catch (error) {
+      throw new Error(`Failed to list tags: ${error}`);
+    }
+  }
+
+  /**
+   * Gets the diff for a specific commit
+   * @param commitHash - The commit hash (can be short or full)
+   * @returns Promise<Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>>
+   */
+  async getCommitDiff(commitHash: string): Promise<Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      // Find the commit
+      const commit = await this.repo!.getCommit(commitHash);
+      const tree = await commit.getTree();
+      
+      // Get parent commit if it exists
+      const parentCount = commit.parentcount();
+      let parentTree: Git.Tree | undefined = undefined;
+      if (parentCount > 0) {
+        const parentCommit = await commit.parent(0);
+        parentTree = await parentCommit.getTree();
+      }
+
+      // Get the diff
+      const diff = await Git.Diff.treeToTree(this.repo!, parentTree, tree, undefined);
+
+      const patches = await diff.patches();
+      const fileDiffs = await Promise.all(
+        patches.map(async (patch: Git.ConvenientPatch) => {
+          const oldFile = patch.oldFile();
+          const newFile = patch.newFile();
+          const path = newFile.path() || oldFile.path() || '';
+          
+          // Determine status
+          let status: 'modified' | 'added' | 'deleted';
+          if (oldFile.size() === 0 && newFile.size() > 0) {
+            status = 'added';
+          } else if (oldFile.size() > 0 && newFile.size() === 0) {
+            status = 'deleted';
+          } else {
+            status = 'modified';
+          }
+
+          // Count additions and deletions
+          const hunks = await patch.hunks();
+          let additions = 0;
+          let deletions = 0;
+          
+          for (const hunk of hunks) {
+            const lines = await hunk.lines();
+            for (const line of lines) {
+              const origin = line.origin();
+              if (origin === 43 || origin === '+'.charCodeAt(0)) { // '+'
+                additions++;
+              } else if (origin === 45 || origin === '-'.charCodeAt(0)) { // '-'
+                deletions++;
+              }
+            }
+          }
+
+          // Get the diff text by creating a diff for this single patch
+          // We'll build a simple text representation
+          let diffText = '';
+          for (const hunk of hunks) {
+            const lines = await hunk.lines();
+            for (const line of lines) {
+              const origin = String.fromCharCode(line.origin());
+              const content = line.content();
+              diffText += origin + content;
+            }
+          }
+
+          return {
+            path,
+            status,
+            additions,
+            deletions,
+            diff: diffText,
+          };
+        })
+      );
+
+      return fileDiffs;
+    } catch (error) {
+      throw new Error(`Failed to get commit diff: ${error}`);
+    }
+  }
+
+  /**
+   * Deletes a branch
+   * @param branchName - Name of the branch to delete
+   * @param force - Whether to force delete (default: false)
+   * @returns Promise<void>
+   */
+  async deleteBranch(branchName: string, force: boolean = false): Promise<void> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      const branch = await this.repo!.getBranch(branchName);
+      await branch.delete();
+    } catch (error) {
+      throw new Error(`Failed to delete branch: ${error}`);
+    }
+  }
+
+  /**
+   * Deletes a tag
+   * @param tagName - Name of the tag to delete
+   * @returns Promise<void>
+   */
+  async deleteTag(tagName: string): Promise<void> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      const references = await this.repo!.getReferences();
+      const tag = references.find((ref: Git.Reference) => 
+        ref.isTag() && ref.shorthand() === tagName
+      );
+
+      if (!tag) {
+        throw new Error(`Tag ${tagName} not found`);
+      }
+
+      await tag.delete();
+    } catch (error) {
+      throw new Error(`Failed to delete tag: ${error}`);
+    }
+  }
+
+  /**
+   * Gets tags associated with a specific commit
+   * @param commitHash - The commit hash
+   * @returns Promise<string[]> - Array of tag names
+   */
+  async getTagsForCommit(commitHash: string): Promise<string[]> {
+    try {
+      if (!this.repo) {
+        await this.openRepository();
+      }
+
+      const commit = await this.repo!.getCommit(commitHash);
+      const commitOid = commit.id();
+
+      const references = await this.repo!.getReferences();
+      const tags = references.filter((ref: Git.Reference) => ref.isTag());
+
+      const matchingTags: string[] = [];
+      
+      for (const tag of tags) {
+        try {
+          // Resolve the reference to get the Oid
+          const resolvedRef = await tag.resolve();
+          const tagTargetOid = (resolvedRef.target() as any) as Git.Oid;
+          
+          // Try to get the tag object (for annotated tags)
+          try {
+            const tagObj = await this.repo!.getTag(tagTargetOid);
+            const target = tagObj.target();
+            // @ts-expect-error - nodegit types are incorrect, target() returns Oid not Promise
+            if (target.equal(commitOid)) {
+              matchingTags.push(tag.shorthand());
+            }
+          } catch {
+            // If it's a lightweight tag, check the target directly
+            if ((tagTargetOid as any).equal(commitOid)) {
+              matchingTags.push(tag.shorthand());
+            }
+          }
+        } catch {
+          // Skip tags we can't resolve
+          continue;
+        }
+      }
+
+      return matchingTags;
+    } catch (error) {
+      throw new Error(`Failed to get tags for commit: ${error}`);
+    }
+  }
+
+  /**
    * Gets the repository instance
    * @returns Git.Repository | null
    */

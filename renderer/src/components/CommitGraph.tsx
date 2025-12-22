@@ -1,5 +1,6 @@
-import { GitCommit, GitBranch, User, Clock, GitMerge } from 'lucide-react';
+import { GitCommit, GitBranch, User, Clock, GitMerge, Tag } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { CommitDetails } from './CommitDetails';
 
 interface Commit {
   id: string;
@@ -11,6 +12,7 @@ interface Commit {
   lane: number;
   isMerge?: boolean;
   parentLanes?: number[];
+  tags?: string[];
 }
 
 interface CommitGraphProps {
@@ -23,7 +25,34 @@ interface CommitGraphProps {
 
 export function CommitGraph({ commits = [], currentBranch, onRebase, onInteractiveRebase, onMergeBranch }: CommitGraphProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
+  const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
+  const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Load tags for commits
+  useEffect(() => {
+    const loadTags = async () => {
+      const commitsWithTagsData = await Promise.all(
+        commits.map(async (commit) => {
+          try {
+            const result = await window.electronAPI.getTagsForCommit(commit.hash);
+            if (result.success && result.tags && result.tags.length > 0) {
+              return { ...commit, tags: result.tags };
+            }
+            return commit;
+          } catch (error) {
+            console.error(`Failed to load tags for commit ${commit.hash}:`, error);
+            return commit;
+          }
+        })
+      );
+      setCommitsWithTags(commitsWithTagsData);
+    };
+
+    if (commits.length > 0) {
+      loadTags();
+    }
+  }, [commits]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -111,7 +140,7 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
 
       <div className="overflow-y-auto max-h-[600px] p-6 pt-4">
         <div className="space-y-0">
-          {commits.map((commit, index) => {
+          {commitsWithTags.map((commit, index) => {
             const branchColors: Record<number, { border: string; bg: string; text: string }> = {
               0: { border: 'border-emerald-500', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
               1: { border: 'border-blue-500', bg: 'bg-blue-500/20', text: 'text-blue-400' },
@@ -203,6 +232,7 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
                   style={{ 
                     marginLeft: `${maxLanes * laneWidth + 8}px`,
                   }}
+                  onClick={() => setSelectedCommit(commit)}
                   onContextMenu={(e) => handleContextMenu(e, commit)}
                 >
                   <div className="min-w-0">
@@ -230,6 +260,12 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
                           <span className={colors.text}>{commit.branch}</span>
                         </span>
                       </div>
+                      {commit.tags && commit.tags.map(tag => (
+                        <div key={tag} className="flex items-center gap-1">
+                          <Tag className="h-3 w-3 text-amber-400" />
+                          <span className="text-zinc-400">{tag}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -264,6 +300,14 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
             Merge
           </div>
         </div>
+      )}
+
+      {/* Commit Details Overlay */}
+      {selectedCommit && (
+        <CommitDetails
+          commit={selectedCommit}
+          onClose={() => setSelectedCommit(null)}
+        />
       )}
     </div>
   );

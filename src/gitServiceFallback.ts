@@ -509,3 +509,152 @@ export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success
   }
 }
 
+export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('branch -r');
+    const branches = stdout
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => line && !line.includes('HEAD'))
+      .map((line: string) => {
+        const match = line.match(/^([^/]+)\/(.+)$/);
+        if (match) {
+          return { name: match[2], remote: match[1] };
+        }
+        return { name: line, remote: 'origin' };
+      });
+
+    return { success: true, branches };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('tag -l --format="%(refname:short)|%(objectname:short)|%(creatordate:iso8601)"');
+    const tags = stdout
+      .split('\n')
+      .filter((line: string) => line.trim())
+      .map((line: string) => {
+        const [name, commit, dateStr] = line.split('|');
+        return {
+          name: name || '',
+          commit: commit || '',
+          date: dateStr ? new Date(dateStr) : new Date(),
+        };
+      })
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    return { success: true, tags };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getCommitDiff(commitHash: string): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout: statOutput } = await runGitCommand(`show --stat --format="" ${commitHash}`);
+    const { stdout: fullDiff } = await runGitCommand(`show ${commitHash}`);
+
+    const diffLines = fullDiff.split('\n');
+    const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
+    
+    let currentFile: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string } | null = null;
+    let fileDiffStart = 0;
+
+    for (let i = 0; i < diffLines.length; i++) {
+      const line = diffLines[i];
+      if (line.startsWith('diff --git')) {
+        if (currentFile) {
+          currentFile.diff = diffLines.slice(fileDiffStart, i).join('\n');
+          files.push(currentFile);
+        }
+        fileDiffStart = i;
+        const match = line.match(/diff --git a\/(.+) b\/(.+)/);
+        if (match) {
+          const oldPath = match[1];
+          const newPath = match[2];
+          currentFile = {
+            path: newPath || oldPath,
+            status: oldPath === '/dev/null' ? 'added' : newPath === '/dev/null' ? 'deleted' : 'modified',
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        }
+      } else if (currentFile && (line.startsWith('+') && !line.startsWith('+++'))) {
+        currentFile.additions++;
+      } else if (currentFile && (line.startsWith('-') && !line.startsWith('---'))) {
+        currentFile.deletions++;
+      }
+    }
+
+    if (currentFile) {
+      currentFile.diff = diffLines.slice(fileDiffStart).join('\n');
+      files.push(currentFile);
+    }
+
+    return { success: true, files };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function deleteBranch(branchName: string, force: boolean = false): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const command = force ? `branch -D ${branchName}` : `branch -d ${branchName}`;
+    await runGitCommand(command);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function deleteTag(tagName: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await runGitCommand(`tag -d ${tagName}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getTagsForCommit(commitHash: string): Promise<{ success: boolean; tags?: string[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand(`tag --points-at ${commitHash}`);
+    const tags = stdout
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => line);
+
+    return { success: true, tags };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+

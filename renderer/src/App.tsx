@@ -6,6 +6,7 @@ import { ActivityLog } from './components/ActivityLog';
 import { RepoHeader } from './components/RepoHeader';
 import { CredentialsDialog } from './components/CredentialsDialog';
 import { CommitGraph } from './components/CommitGraph';
+import { BranchesPanel } from './components/BranchesPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
@@ -57,6 +58,12 @@ declare global {
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
       getRemoteUrl: (remote?: string) => Promise<{ success: boolean; url?: string; error?: string }>;
+      getRemoteBranches: () => Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }>;
+      getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }>;
+      getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }>;
+      deleteBranch: (branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
+      deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string }>;
+      getTagsForCommit: (commitHash: string) => Promise<{ success: boolean; tags?: string[]; error?: string }>;
       showOpenDialog: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRecentRepos: () => Promise<{ success: boolean; repos?: Array<{ path: string; name: string; lastOpened: number }>; error?: string }>;
       addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
@@ -341,6 +348,40 @@ export default function App() {
     // TODO: Implement merge
   };
 
+  const handleSwitchRepo = async (name: string, path: string) => {
+    await handleOpenRepo(path);
+  };
+
+  const handleOpenNewRepo = () => {
+    setRepoName(null);
+    setRepoPath(null);
+    setFiles([]);
+    setCommits([]);
+    setHasCredentials(false);
+    setRemoteUrl(null);
+    setActiveTab('clone');
+    addLog('info', 'Ready to open a new repository');
+  };
+
+  const handleCheckout = async (branch: string) => {
+    await refreshBranch();
+    await refreshStatus();
+    await refreshHistory();
+  };
+
+  const handleCreateBranch = async (name: string) => {
+    await refreshBranch();
+    await refreshStatus();
+  };
+
+  const handleDeleteBranch = async (branch: string) => {
+    await refreshBranch();
+  };
+
+  const handleDeleteTag = async (tag: string) => {
+    // Tags are refreshed when the tags tab is opened
+  };
+
   const handleOpenRepo = async (path: string) => {
     addLog('info', `Opening repository from ${path}...`);
     
@@ -419,6 +460,8 @@ export default function App() {
           repoName={repoName}
           currentBranch={currentBranch}
           hasCredentials={hasCredentials}
+          onSwitchRepo={handleSwitchRepo}
+          onOpenNew={handleOpenNewRepo}
         />
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -468,6 +511,15 @@ export default function App() {
 
           <div className="space-y-6">
             <ActivityLog logs={logs} />
+            {repoName && (
+              <BranchesPanel
+                currentBranch={currentBranch}
+                onCheckout={handleCheckout}
+                onCreateBranch={handleCreateBranch}
+                onDeleteBranch={handleDeleteBranch}
+                onDeleteTag={handleDeleteTag}
+              />
+            )}
           </div>
         </div>
       </div>
