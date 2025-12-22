@@ -1,15 +1,20 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
-const path = require('path');
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import * as path from 'path';
+import * as recentReposService from './recentReposService';
+
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const recentReposService = require('./dist/recentReposService');
 
 // Try to use nodegit, fallback to git commands if it fails
-let gitService;
+let gitService: any;
 try {
-  gitService = require('./dist/gitService');
-} catch (error) {
-  console.warn('nodegit failed to load, using fallback git command implementation:', error.message);
-  gitService = require('./dist/gitServiceFallback');
+  gitService = require('./gitService');
+} catch (error: any) {
+  // nodegit may fail due to OpenSSL compatibility issues - this is expected
+  // The fallback implementation uses native git commands and works perfectly
+  if (isDev) {
+    console.info('ℹ️  Using fallback git implementation (nodegit unavailable):', error.message);
+  }
+  gitService = require('./gitServiceFallback');
 }
 
 function createWindow() {
@@ -18,9 +23,9 @@ function createWindow() {
     width: 1200,
     height: 800,
     title: 'Gitzen',
-    icon: path.join(__dirname, 'icon.png'),
+    icon: path.join(__dirname, '..', 'icon.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true
     }
@@ -31,7 +36,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist/renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   }
 }
 
@@ -169,7 +174,7 @@ ipcMain.handle('repos:getRecent', () => {
   try {
     const repos = recentReposService.getRecentRepos();
     return { success: true, repos };
-  } catch (error) {
+  } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
 });
@@ -178,7 +183,7 @@ ipcMain.handle('repos:addRecent', (_, repoPath) => {
   try {
     recentReposService.addRecentRepo(repoPath);
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
 });
@@ -201,3 +206,4 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+

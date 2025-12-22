@@ -2,41 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "🚀 Debug Gitzen (F5)",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}",
-      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
-      "windows": {
-        "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd"
-      },
-      "args": [
-        ".",
-        "--remote-debugging-port=9223",
-        "--inspect=5858"
-      ],
-      "outputCapture": "std",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
-      "preLaunchTask": "compile-and-start-dev",
-      "env": {
-        "NODE_ENV": "development"
-      },
-      "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/dist/**/*.js"
-      ],
-      "smartStep": true
-    },
-    {
-      "name": "Debug Main Process Only",
+      "name": "Debug Main Process",
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}",
@@ -48,16 +14,12 @@
         ".",
         "--remote-debugging-port=9223"
       ],
+      "preLaunchTask": "compile-typescript",
       "outputCapture": "std",
       "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
       "skipFiles": [
         "<node_internals>/**"
       ],
-      "preLaunchTask": "compile-typescript",
-      "env": {
-        "NODE_ENV": "development"
-      },
       "sourceMaps": true,
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
@@ -66,41 +28,9 @@
       "outFiles": [
         "${workspaceFolder}/dist/**/*.js"
       ],
-      "smartStep": true
-    },
-    {
-      "name": "Attach to Renderer Process",
-      "type": "chrome",
-      "request": "attach",
-      "port": 9223,
-      "webRoot": "${workspaceFolder}/renderer",
-      "urlFilter": "http://localhost:5173/*",
-      "sourceMaps": true,
-      "sourceMapPathOverrides": {
-        "webpack:///./~/*": "${workspaceFolder}/node_modules/*",
-        "webpack:///./*": "${workspaceFolder}/renderer/*",
-        "webpack:///*": "*"
-      },
-      "pathMapping": {
-        "/": "${workspaceFolder}/renderer",
-        "/src": "${workspaceFolder}/renderer/src"
-      }
-    }
-  ],
-  "compounds": [
-    {
-      "name": "Debug All (Main + Renderer)",
-      "configurations": [
-        "🚀 Debug Gitzen (F5)",
-        "Attach to Renderer Process"
-      ],
-      "stopAll": true,
-      "presentation": {
-        "hidden": false,
-        "group": "",
-        "order": 1
+      "env": {
+        "NODE_ENV": "development"
       }
     }
   ]
 }
-
