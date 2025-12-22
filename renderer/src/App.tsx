@@ -388,8 +388,11 @@ export default function App() {
   };
 
   const handleCreateBranch = async (name: string) => {
+    // Branch was created and checked out in BranchesPanel
+    // Refresh to get the updated current branch
     await refreshBranch();
     await refreshStatus();
+    addLog('success', `Created and checked out branch: ${name}`);
   };
 
   const handleDeleteBranch = async (branch: string) => {

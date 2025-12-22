@@ -272,19 +272,60 @@ export async function getHistory(maxCount: number = 50): Promise<{ success: bool
       return { success: false, error: 'No repository open' };
     }
 
-    const currentBranch = await getCurrentBranch().then(r => r.branch || 'main');
-    const { stdout } = await runGitCommand(`log --max-count=${maxCount} --pretty=format:"%H|%s|%an|%ad" --date=iso`);
+    const currentBranchResult = await getCurrentBranch();
+    const currentBranch = currentBranchResult.branch || 'main';
+    
+    // Get commits with branch information using --decorate
+    // Format: %H|%s|%an|%ad|%D where %D shows refs (branches, tags)
+    // Use --all to see all branches, but we'll filter to show current branch's perspective
+    const { stdout } = await runGitCommand(`log --max-count=${maxCount} --pretty=format:"%H|%s|%an|%ad|%D" --date=iso --all --decorate`);
     
     const commits = stdout.trim().split('\n')
       .filter(line => line.trim())
-      .map((line, index) => {
-        const [hash, message, author, dateStr] = line.split('|');
+      .map((line) => {
+        const parts = line.split('|');
+        const hash = parts[0];
+        const message = parts[1] || 'No message';
+        const author = parts[2] || 'Unknown';
+        const dateStr = parts[3];
+        const refs = (parts[4] || '').trim(); // Branch/tag information
+        
+        // Extract branch name from refs
+        // Refs format: "HEAD -> branch-name, origin/branch-name, tag: v1.0"
+        let branchName = currentBranch; // Default to current branch
+        
+        if (refs) {
+          // Parse refs to find local branch names
+          // Split by comma and process each ref
+          const refParts = refs.split(',').map(r => r.trim());
+          
+          for (const ref of refParts) {
+            // Skip remote branches and tags
+            if (ref.includes('/') || ref.startsWith('tag:')) {
+              continue;
+            }
+            
+            // Check for "HEAD -> branch-name" format
+            if (ref.includes('HEAD -> ')) {
+              const match = ref.match(/HEAD -> (.+)/);
+              if (match) {
+                branchName = match[1].trim();
+                break;
+              }
+            } else {
+              // Direct branch name
+              branchName = ref;
+              break;
+            }
+          }
+        }
+        
         return {
           id: hash.substr(0, 7),
           message: message || 'No message',
           author: author || 'Unknown',
           timestamp: new Date(dateStr),
-          branch: currentBranch,
+          branch: branchName,
           hash: hash.substr(0, 7),
           lane: 0,
         };

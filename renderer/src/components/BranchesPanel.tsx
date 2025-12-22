@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { GitBranch, GitMerge, Tag, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
 
 interface Branch {
   name: string;
@@ -35,6 +38,8 @@ export function BranchesPanel({
   const [remoteBranches, setRemoteBranches] = useState<Branch[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
 
   const loadBranches = async () => {
     setLoading(true);
@@ -99,21 +104,38 @@ export function BranchesPanel({
     }
   }, [activeTab, currentBranch]);
 
+  const handleCreateBranchClick = () => {
+    setNewBranchName('');
+    setShowCreateDialog(true);
+  };
+
   const handleCreateBranch = async () => {
-    const name = prompt('Enter new branch name:');
-    if (name && name.trim()) {
-      try {
-        const result = await window.electronAPI.gitCreateBranch(name.trim(), true);
-        if (result.success) {
-          toast.success(`Created and checked out branch ${name}`);
-          onCreateBranch?.(name.trim());
-          await loadBranches();
-        } else {
-          toast.error(result.error || 'Failed to create branch');
-        }
-      } catch (error) {
-        toast.error('Failed to create branch');
+    const name = newBranchName.trim();
+    if (!name) {
+      toast.error('Branch name cannot be empty');
+      return;
+    }
+
+    // Validate branch name (basic validation)
+    if (!/^[a-zA-Z0-9/_-]+$/.test(name)) {
+      toast.error('Branch name contains invalid characters');
+      return;
+    }
+
+    try {
+      const result = await window.electronAPI.gitCreateBranch(name, true);
+      if (result.success) {
+        toast.success(`Created and checked out branch ${name}`);
+        onCreateBranch?.(name);
+        setShowCreateDialog(false);
+        setNewBranchName('');
+        await loadBranches();
+      } else {
+        toast.error(result.error || 'Failed to create branch');
       }
+    } catch (error) {
+      toast.error('Failed to create branch');
+      console.error('Create branch error:', error);
     }
   };
 
@@ -177,7 +199,7 @@ export function BranchesPanel({
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-zinc-100">Branches & Tags</h3>
           <button
-            onClick={handleCreateBranch}
+            onClick={handleCreateBranchClick}
             className="flex items-center gap-1.5 rounded-md bg-emerald-600/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-600/20"
           >
             <Plus className="size-3.5" />
@@ -339,6 +361,51 @@ export function BranchesPanel({
           </div>
         )}
       </div>
+
+      {/* Create Branch Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Create New Branch</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Enter a name for the new branch. It will be created and checked out.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              placeholder="branch-name"
+              className="bg-zinc-800 border-zinc-700 text-zinc-100"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleCreateBranch();
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setNewBranchName('');
+                }}
+                className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateBranch}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!newBranchName.trim()}
+              >
+                Create Branch
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
