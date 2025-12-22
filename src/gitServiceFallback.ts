@@ -674,3 +674,44 @@ export async function getTagsForCommit(commitHash: string): Promise<{ success: b
   }
 }
 
+/**
+ * Tests if Git can authenticate to a remote using built-in credential mechanisms
+ * (credential helper, SSH keys, etc.) without explicit credentials
+ */
+export async function testGitCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Try git ls-remote without explicit credentials
+    // Git will use credential helper, SSH keys, or other built-in mechanisms
+    try {
+      // Try git ls-remote without explicit credentials
+      // Git will use credential helper, SSH keys, or prompt
+      await runGitCommand(`ls-remote "${remoteUrl}"`);
+      return { success: true };
+    } catch (error: any) {
+      const errorMsg = error.message || error.stderr || String(error);
+      const errorCode = error.code;
+      
+      // Check for authentication-related errors
+      if (errorCode === 128 || 
+          errorMsg.includes('Authentication failed') || 
+          errorMsg.includes('fatal: could not read Username') ||
+          errorMsg.includes('fatal: could not read Password') ||
+          errorMsg.includes('Permission denied') ||
+          errorMsg.includes('401') ||
+          errorMsg.includes('403') ||
+          errorMsg.includes('Unauthorized')) {
+        return { success: false, error: 'Git credential system could not authenticate' };
+      }
+      
+      // For other errors, return failure but don't assume it's auth-related
+      return { success: false, error: errorMsg };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+

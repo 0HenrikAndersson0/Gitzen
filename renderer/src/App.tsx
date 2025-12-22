@@ -64,6 +64,7 @@ declare global {
       deleteBranch: (branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
       deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string }>;
       getTagsForCommit: (commitHash: string) => Promise<{ success: boolean; tags?: string[]; error?: string }>;
+      testGitCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
       showOpenDialog: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRecentRepos: () => Promise<{ success: boolean; repos?: Array<{ path: string; name: string; lastOpened: number }>; error?: string }>;
       addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
@@ -349,6 +350,14 @@ export default function App() {
   };
 
   const handleSwitchRepo = async (name: string, path: string) => {
+    // Reset state before switching
+    setHasCredentials(false);
+    setRemoteUrl(null);
+    setFiles([]);
+    setCommits([]);
+    addLog('info', `Switching to repository: ${name}...`);
+    
+    // Open the new repository (this will validate credentials)
     await handleOpenRepo(path);
   };
 
@@ -406,32 +415,45 @@ export default function App() {
             setRemoteUrl(remoteResult.url);
             const remoteUrlValue = remoteResult.url;
             
-            // Check if credentials exist
-            const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
-            if (credResult.success && credResult.hasCredentials) {
-              // Validate existing credentials
-              addLog('info', 'Validating saved credentials...');
-              const validationResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
-              
-              if (validationResult.success) {
-                // Credentials are valid
-                setHasCredentials(true);
-                addLog('success', 'Credentials validated successfully');
-              } else {
-                // Credentials are invalid - delete them and prompt for new ones
-                addLog('warning', 'Saved credentials are invalid, removing from storage...');
-                await window.electronAPI.deleteCredentials(remoteUrlValue);
-                setHasCredentials(false);
-                
-                // Prompt for new credentials
-                setTimeout(() => {
-                  setShowCredentialsDialog(true);
-                  addLog('warning', 'Please enter new credentials');
-                }, 500);
-              }
+            // First, test if Git's built-in credential system can authenticate
+            // This checks SSH keys, credential helper, and other Git credential mechanisms
+            addLog('info', 'Testing Git credential system...');
+            const gitCredTest = await window.electronAPI.testGitCredentials(remoteUrlValue);
+            
+            if (gitCredTest.success) {
+              // Git's credential system works (SSH keys, credential helper, etc.)
+              setHasCredentials(true);
+              addLog('success', 'Git credential system authenticated successfully');
             } else {
-              // No credentials saved
-              setHasCredentials(false);
+              // Git's credential system couldn't authenticate, check for stored credentials
+              const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
+              if (credResult.success && credResult.hasCredentials) {
+                // Validate existing stored credentials
+                addLog('info', 'Validating saved credentials...');
+                const validationResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
+                
+                if (validationResult.success) {
+                  // Stored credentials are valid
+                  setHasCredentials(true);
+                  addLog('success', 'Saved credentials validated successfully');
+                } else {
+                  // Stored credentials are invalid - delete them and prompt for new ones
+                  addLog('warning', 'Saved credentials are invalid, removing from storage...');
+                  await window.electronAPI.deleteCredentials(remoteUrlValue);
+                  setHasCredentials(false);
+                  
+                  // Prompt for new credentials
+                  setTimeout(() => {
+                    setShowCredentialsDialog(true);
+                    addLog('warning', 'Please enter new credentials');
+                  }, 500);
+                }
+              } else {
+                // No credentials saved and Git credential system doesn't work
+                // Don't prompt immediately - user might not need to push/pull
+                setHasCredentials(false);
+                addLog('info', 'No credentials configured. You may be prompted when performing push/pull operations.');
+              }
             }
           }
         } catch (error) {

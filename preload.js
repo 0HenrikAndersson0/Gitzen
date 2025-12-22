@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteBranch: (branchName, force) => ipcRenderer.invoke('git:deleteBranch', branchName, force),
   deleteTag: (tagName) => ipcRenderer.invoke('git:deleteTag', tagName),
   getTagsForCommit: (commitHash) => ipcRenderer.invoke('git:getTagsForCommit', commitHash),
+  testGitCredentials: (remoteUrl) => ipcRenderer.invoke('git:testGitCredentials', remoteUrl),
   showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),

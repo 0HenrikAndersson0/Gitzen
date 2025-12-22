@@ -2,6 +2,7 @@ import { GitCommands } from './GitCommands';
 import { CredentialManager } from './CredentialManager';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as Git from 'nodegit';
 
 let gitCommands: GitCommands | null = null;
 let credentialManager: CredentialManager | null = null;
@@ -392,17 +393,23 @@ export async function validateExistingCredentials(remoteUrl: string): Promise<{ 
           username: creds.username,
           password: creds.password,
         });
-        return { success: isValid };
+        if (!isValid) {
+          return { success: false, error: 'Authentication failed: Invalid username or password' };
+        }
+        return { success: true };
       } catch (error) {
         // Check if it's an authentication error
         const errorMsg = error instanceof Error ? error.message : String(error);
         if (errorMsg.includes('Authentication') || 
             errorMsg.includes('401') ||
             errorMsg.includes('403') ||
-            errorMsg.includes('Permission denied')) {
+            errorMsg.includes('Permission denied') ||
+            errorMsg.includes('Unauthorized') ||
+            errorMsg.includes('authentication failed')) {
           return { success: false, error: 'Authentication failed: Invalid username or password' };
         }
         // For other errors, fall through to child_process method
+        console.log('Nodegit validation error (non-auth), falling back to child_process:', errorMsg);
       }
     }
 
@@ -532,6 +539,98 @@ export async function getTagsForCommit(commitHash: string): Promise<{ success: b
 
     const tags = await gitCommands.getTagsForCommit(commitHash);
     return { success: true, tags };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+/**
+ * Tests if Git can authenticate to a remote using built-in credential mechanisms
+ * (credential helper, SSH keys, etc.) without explicit credentials
+ */
+export async function testGitCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Try to use nodegit without explicit credentials - it will use Git's credential helper
+    if (gitCommands) {
+      try {
+        // Create a temporary remote and try to fetch without credentials
+        // This will use Git's built-in credential system
+        const tempRemote = await Git.Remote.createAnonymous(gitCommands.getRepository()!, remoteUrl);
+        
+        const fetchOptions: Git.FetchOptions = {
+          callbacks: {
+            credentials: () => {
+              // Return default credentials - this will use Git's credential helper
+              return Git.Cred.defaultNew();
+            }
+          }
+        };
+
+        // Try a lightweight fetch operation
+        await tempRemote.fetch([], fetchOptions, '');
+        tempRemote.disconnect();
+        
+        return { success: true };
+      } catch (error) {
+        // If it fails, Git's credential system couldn't authenticate
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        // Don't treat network errors as auth failures
+        if (errorMsg.includes('Authentication') || 
+            errorMsg.includes('401') ||
+            errorMsg.includes('403') ||
+            errorMsg.includes('Permission denied') ||
+            errorMsg.includes('Unauthorized')) {
+          return { success: false, error: 'Git credential system could not authenticate' };
+        }
+        // For other errors (network, etc.), assume credentials might work
+        return { success: false, error: errorMsg };
+      }
+    }
+
+    // Fallback to child_process - try git ls-remote without credentials
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
+    // Convert SSH URL to HTTPS if needed
+    let testUrl = remoteUrl;
+    if (testUrl.startsWith('git@') || testUrl.startsWith('ssh://')) {
+      // For SSH, Git will use SSH keys automatically
+      testUrl = testUrl;
+    }
+
+    try {
+      // Try git ls-remote without explicit credentials
+      // Git will use credential helper, SSH keys, or prompt
+      await execAsync(`git ls-remote "${testUrl}"`, {
+        cwd: currentRepoPath,
+        timeout: 10000,
+        maxBuffer: 1024 * 1024,
+      });
+      return { success: true };
+    } catch (error: any) {
+      const errorMsg = error.message || error.stderr || String(error);
+      const errorCode = error.code;
+      
+      // Check for authentication-related errors
+      if (errorCode === 128 || 
+          errorMsg.includes('Authentication failed') || 
+          errorMsg.includes('fatal: could not read Username') ||
+          errorMsg.includes('fatal: could not read Password') ||
+          errorMsg.includes('Permission denied') ||
+          errorMsg.includes('401') ||
+          errorMsg.includes('403') ||
+          errorMsg.includes('Unauthorized')) {
+        return { success: false, error: 'Git credential system could not authenticate' };
+      }
+      
+      // For other errors, return failure but don't assume it's auth-related
+      return { success: false, error: errorMsg };
+    }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
