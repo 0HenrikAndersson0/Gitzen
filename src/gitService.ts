@@ -1,265 +1,350 @@
-import { GitCommands } from './GitCommands';
-import { CredentialManager } from './CredentialManager';
+import { exec, execSync } from 'child_process';
+import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as Git from 'nodegit';
+import { CredentialManager } from './CredentialManager';
 
-let gitCommands: GitCommands | null = null;
-let credentialManager: CredentialManager | null = null;
+const execAsync = promisify(exec);
+
 let currentRepoPath: string | null = null;
+let credentialManager: CredentialManager | null = null;
 
 export function initializeGitService() {
   credentialManager = new CredentialManager();
 }
 
+async function runGitCommand(command: string, cwd?: string, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
+  const repoPath = cwd || currentRepoPath;
+  if (!repoPath) {
+    throw new Error('No repository open');
+  }
+  
+  return await execAsync(`git ${command}`, {
+    cwd: repoPath,
+    maxBuffer: 10 * 1024 * 1024, // 10MB
+    env: { ...process.env, ...env },
+  });
+}
+
 export async function cloneRepository(url: string, localPath: string, credentials?: { username: string; password: string }): Promise<{ success: boolean; error?: string }> {
   try {
-    // Ensure directory exists
     const dir = path.dirname(localPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    gitCommands = new GitCommands(localPath, credentialManager || undefined);
-    
-    await gitCommands.clone({
-      url,
-      localPath,
-      credentials: credentials ? {
-        username: credentials.username,
-        password: credentials.password,
-      } : undefined,
+    let cloneUrl = url;
+    if (credentials) {
+      // Embed credentials in URL
+      const urlObj = new URL(url);
+      urlObj.username = credentials.username;
+      urlObj.password = credentials.password;
+      cloneUrl = urlObj.toString();
+    }
+
+    await execAsync(`git clone ${cloneUrl} ${localPath}`, {
+      maxBuffer: 10 * 1024 * 1024,
     });
 
     currentRepoPath = localPath;
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function openRepository(repoPath: string): Promise<{ success: boolean; error?: string }> {
   try {
-    gitCommands = new GitCommands(repoPath, credentialManager || undefined);
-    await gitCommands.openRepository();
+    if (!fs.existsSync(path.join(repoPath, '.git'))) {
+      return { success: false, error: 'Not a git repository' };
+    }
     currentRepoPath = repoPath;
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getStatus(): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; staged: boolean }>; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const statuses = await gitCommands.getStatus();
-    const files = statuses.map((status) => {
-      let statusType: 'modified' | 'added' | 'deleted' = 'modified';
-      if (status.isNew()) {
-        statusType = 'added';
-      } else if (status.isDeleted()) {
-        statusType = 'deleted';
-      } else if (status.isModified()) {
-        statusType = 'modified';
-      }
+    const { stdout } = await runGitCommand('status --porcelain');
+    const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; staged: boolean }> = [];
 
-      return {
-        path: status.path(),
-        status: statusType,
-        staged: status.inIndex(),
-      };
-    });
+    for (const line of stdout.trim().split('\n').filter(l => l)) {
+      const match = line.match(/^(.{2})\s+(.+)$/);
+      if (match) {
+        const [, status, filePath] = match;
+        const indexStatus = status[0];
+        const worktreeStatus = status[1];
+
+        let statusType: 'modified' | 'added' | 'deleted' = 'modified';
+        if (indexStatus === 'A' || worktreeStatus === 'A') {
+          statusType = 'added';
+        } else if (indexStatus === 'D' || worktreeStatus === 'D') {
+          statusType = 'deleted';
+        } else if (indexStatus === 'M' || worktreeStatus === 'M') {
+          statusType = 'modified';
+        }
+
+        files.push({
+          path: filePath,
+          status: statusType,
+          staged: indexStatus !== ' ' && indexStatus !== '?',
+        });
+      }
+    }
 
     return { success: true, files };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function stageFiles(filePaths: string[]): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.stageFiles(filePaths);
+    for (const filePath of filePaths) {
+      await runGitCommand(`add "${filePath}"`);
+    }
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function stageAll(): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.stageAll();
+    await runGitCommand('add -A');
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function commit(message: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.commit({ message });
+    const escapedMessage = message.replace(/"/g, '\\"');
+    await runGitCommand(`commit -m "${escapedMessage}"`);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function push(remote: string = 'origin', branch?: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.push(remote, branch);
+    // Get remote URL to check for credentials
+    const { stdout: remoteUrl } = await runGitCommand(`remote get-url ${remote}`);
+    const url = remoteUrl.trim();
+    
+    // Try to get credentials
+    if (credentialManager) {
+      const creds = await credentialManager.getRemoteCredentials(url);
+      if (creds?.username && creds?.password) {
+        // Convert SSH URL to HTTPS if needed, or embed credentials
+        let urlWithCreds = url;
+        if (url.startsWith('git@') || url.startsWith('ssh://')) {
+          // Convert SSH to HTTPS
+          urlWithCreds = url
+            .replace(/^git@/, 'https://')
+            .replace(/^ssh:\/\//, 'https://')
+            .replace(/:([^\/]+)\//, '/$1/');
+        }
+        
+        try {
+          const urlObj = new URL(urlWithCreds);
+          urlObj.username = creds.username;
+          urlObj.password = creds.password;
+          // Temporarily update remote URL with credentials
+          await runGitCommand(`remote set-url ${remote} ${urlObj.toString()}`);
+          try {
+            const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
+            await runGitCommand(`push ${remote} ${branchName}`);
+            // Restore original URL
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            return { success: true };
+          } catch (error) {
+            // Restore original URL on error
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            throw error;
+          }
+        } catch (urlError) {
+          // If URL parsing fails, try without credentials
+          console.warn('Failed to parse URL with credentials, trying without:', urlError);
+        }
+      }
+    }
+
+    const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
+    await runGitCommand(`push ${remote} ${branchName}`);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function pull(remote: string = 'origin', branch?: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.pull(remote, branch);
+    // Get remote URL to check for credentials
+    const { stdout: remoteUrl } = await runGitCommand(`remote get-url ${remote}`);
+    const url = remoteUrl.trim();
+    
+    // Try to get credentials
+    if (credentialManager) {
+      const creds = await credentialManager.getRemoteCredentials(url);
+      if (creds?.username && creds?.password) {
+        // Convert SSH URL to HTTPS if needed
+        let urlWithCreds = url;
+        if (url.startsWith('git@') || url.startsWith('ssh://')) {
+          urlWithCreds = url
+            .replace(/^git@/, 'https://')
+            .replace(/^ssh:\/\//, 'https://')
+            .replace(/:([^\/]+)\//, '/$1/');
+        }
+        
+        try {
+          const urlObj = new URL(urlWithCreds);
+          urlObj.username = creds.username;
+          urlObj.password = creds.password;
+          await runGitCommand(`remote set-url ${remote} ${urlObj.toString()}`);
+          try {
+            const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
+            await runGitCommand(`pull ${remote} ${branchName}`);
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            return { success: true };
+          } catch (error) {
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            throw error;
+          }
+        } catch (urlError) {
+          console.warn('Failed to parse URL with credentials, trying without:', urlError);
+        }
+      }
+    }
+
+    const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
+    await runGitCommand(`pull ${remote} ${branchName}`);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getCurrentBranch(): Promise<{ success: boolean; branch?: string; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const branch = await gitCommands.getCurrentBranch();
-    return { success: true, branch };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    const { stdout } = await runGitCommand('branch --show-current');
+    return { success: true, branch: stdout.trim() };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getHistory(maxCount: number = 50): Promise<{ success: boolean; commits?: Array<{ id: string; message: string; author: string; timestamp: Date; branch: string; hash: string; lane: number }>; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const gitCommits = await gitCommands.getHistory(maxCount);
-    const currentBranch = await gitCommands.getCurrentBranch().catch(() => 'main');
+    const currentBranch = await getCurrentBranch().then(r => r.branch || 'main');
+    const { stdout } = await runGitCommand(`log --max-count=${maxCount} --pretty=format:"%H|%s|%an|%ad" --date=iso`);
     
-    const commits = await Promise.all(gitCommits.map(async (commit, index) => {
-      const author = commit.author();
-      return {
-        id: commit.sha().substr(0, 7),
-        message: commit.message().split('\n')[0],
-        author: author.name(),
-        timestamp: commit.date(),
-        branch: currentBranch,
-        hash: commit.sha().substr(0, 7),
-        lane: 0, // Simplified - in a real implementation, you'd calculate lanes based on branch structure
-      };
-    }));
+    const commits = stdout.trim().split('\n')
+      .filter(line => line.trim())
+      .map((line, index) => {
+        const [hash, message, author, dateStr] = line.split('|');
+        return {
+          id: hash.substr(0, 7),
+          message: message || 'No message',
+          author: author || 'Unknown',
+          timestamp: new Date(dateStr),
+          branch: currentBranch,
+          hash: hash.substr(0, 7),
+          lane: 0,
+        };
+      });
 
     return { success: true, commits };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getBranches(): Promise<{ success: boolean; branches?: string[]; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const branches = await gitCommands.listBranches();
+    const { stdout } = await runGitCommand('branch --list');
+    const branches = stdout.trim().split('\n')
+      .map(b => b.replace(/^\*\s*/, '').trim())
+      .filter(b => b);
+    
     return { success: true, branches };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function createBranch(name: string, checkout: boolean = true): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.createBranch(name, checkout);
+    if (checkout) {
+      await runGitCommand(`checkout -b ${name}`);
+    } else {
+      await runGitCommand(`branch ${name}`);
+    }
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function checkoutBranch(name: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.checkoutBranch(name);
+    await runGitCommand(`checkout ${name}`);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 async function validateCredentials(remoteUrl: string, username: string, password: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // If we have a repository open, use nodegit via GitCommands
-    if (gitCommands && currentRepoPath) {
-      try {
-        const isValid = await gitCommands.validateCredentials(remoteUrl, {
-          username,
-          password,
-        });
-        if (!isValid) {
-          return { success: false, error: 'Authentication failed: Invalid username or password' };
-        }
-        return { success: true };
-      } catch (error) {
-        // If nodegit validation throws an error, it's likely an auth failure
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('Authentication') || 
-            errorMsg.includes('401') ||
-            errorMsg.includes('403') ||
-            errorMsg.includes('Permission denied') ||
-            errorMsg.includes('could not read Username') ||
-            errorMsg.includes('could not read Password') ||
-            errorMsg.includes('authentication failed') ||
-            errorMsg.includes('Unauthorized')) {
-          return { success: false, error: 'Authentication failed: Invalid username or password' };
-        }
-        // For other errors (network, etc.), fall through to child_process method
-        console.log('Nodegit validation error (non-auth), falling back to child_process:', errorMsg);
-      }
-    }
-
-    // Fallback to child_process if no repo is open or nodegit fails
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
     // Convert SSH URL to HTTPS if needed for credential testing
     let testUrl = remoteUrl;
     if (testUrl.startsWith('git@') || testUrl.startsWith('ssh://')) {
@@ -349,7 +434,7 @@ export async function saveCredentials(remoteUrl: string, username: string, passw
     });
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     // If saving fails, make sure credentials are deleted
     try {
       if (credentialManager) {
@@ -358,7 +443,7 @@ export async function saveCredentials(remoteUrl: string, username: string, passw
     } catch (deleteError) {
       // Ignore delete errors
     }
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
@@ -370,8 +455,8 @@ export async function hasCredentials(remoteUrl: string): Promise<{ success: bool
 
     const creds = await credentialManager.getRemoteCredentials(remoteUrl);
     return { success: true, hasCredentials: creds !== null };
-  } catch (error) {
-    return { success: false, hasCredentials: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, hasCredentials: false, error: error.message || 'Unknown error' };
   }
 }
 
@@ -386,37 +471,10 @@ export async function validateExistingCredentials(remoteUrl: string): Promise<{ 
       return { success: false, error: 'No credentials found' };
     }
 
-    // If we have a repository open, use nodegit via GitCommands (preferred method)
-    if (gitCommands && currentRepoPath) {
-      try {
-        const isValid = await gitCommands.validateCredentials(remoteUrl, {
-          username: creds.username,
-          password: creds.password,
-        });
-        if (!isValid) {
-          return { success: false, error: 'Authentication failed: Invalid username or password' };
-        }
-        return { success: true };
-      } catch (error) {
-        // Check if it's an authentication error
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('Authentication') || 
-            errorMsg.includes('401') ||
-            errorMsg.includes('403') ||
-            errorMsg.includes('Permission denied') ||
-            errorMsg.includes('Unauthorized') ||
-            errorMsg.includes('authentication failed')) {
-          return { success: false, error: 'Authentication failed: Invalid username or password' };
-        }
-        // For other errors, fall through to child_process method
-        console.log('Nodegit validation error (non-auth), falling back to child_process:', errorMsg);
-      }
-    }
-
-    // Fallback to child_process validation (used when no repo is open or nodegit fails)
+    // Validate the existing credentials
     return await validateCredentials(remoteUrl, creds.username, creds.password);
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
@@ -428,8 +486,8 @@ export async function deleteCredentials(remoteUrl: string): Promise<{ success: b
 
     await credentialManager.deleteRemoteCredentials(remoteUrl);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
@@ -448,99 +506,171 @@ export async function getRepoName(): Promise<{ success: boolean; name?: string; 
   try {
     const name = path.basename(currentRepoPath);
     return { success: true, name };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success: boolean; url?: string; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const url = await gitCommands.getRemoteUrl(remote);
-    return { success: true, url };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Remote not found' };
+    const { stdout } = await runGitCommand(`remote get-url ${remote}`);
+    return { success: true, url: stdout.trim() };
+  } catch (error: any) {
+    // Remote might not exist, that's okay
+    return { success: false, error: error.message || 'Remote not found' };
   }
 }
 
 export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const branches = await gitCommands.listRemoteBranches();
+    const { stdout } = await runGitCommand('branch -r');
+    const branches = stdout
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => line && !line.includes('HEAD'))
+      .map((line: string) => {
+        const match = line.match(/^([^/]+)\/(.+)$/);
+        if (match) {
+          return { name: match[2], remote: match[1] };
+        }
+        return { name: line, remote: 'origin' };
+      });
+
     return { success: true, branches };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const tags = await gitCommands.listTags();
+    const { stdout } = await runGitCommand('tag -l --format="%(refname:short)|%(objectname:short)|%(creatordate:iso8601)"');
+    const tags = stdout
+      .split('\n')
+      .filter((line: string) => line.trim())
+      .map((line: string) => {
+        const [name, commit, dateStr] = line.split('|');
+        return {
+          name: name || '',
+          commit: commit || '',
+          date: dateStr ? new Date(dateStr) : new Date(),
+        };
+      })
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
     return { success: true, tags };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getCommitDiff(commitHash: string): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const files = await gitCommands.getCommitDiff(commitHash);
+    const { stdout: statOutput } = await runGitCommand(`show --stat --format="" ${commitHash}`);
+    const { stdout: fullDiff } = await runGitCommand(`show ${commitHash}`);
+
+    const diffLines = fullDiff.split('\n');
+    const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
+    
+    let currentFile: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string } | null = null;
+    let fileDiffStart = 0;
+
+    for (let i = 0; i < diffLines.length; i++) {
+      const line = diffLines[i];
+      if (line.startsWith('diff --git')) {
+        if (currentFile) {
+          currentFile.diff = diffLines.slice(fileDiffStart, i).join('\n');
+          files.push(currentFile);
+        }
+        fileDiffStart = i;
+        const match = line.match(/diff --git a\/(.+) b\/(.+)/);
+        if (match) {
+          const oldPath = match[1];
+          const newPath = match[2];
+          currentFile = {
+            path: newPath || oldPath,
+            status: oldPath === '/dev/null' ? 'added' : newPath === '/dev/null' ? 'deleted' : 'modified',
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        }
+      } else if (currentFile && (line.startsWith('+') && !line.startsWith('+++'))) {
+        currentFile.additions++;
+      } else if (currentFile && (line.startsWith('-') && !line.startsWith('---'))) {
+        currentFile.deletions++;
+      }
+    }
+
+    if (currentFile) {
+      currentFile.diff = diffLines.slice(fileDiffStart).join('\n');
+      files.push(currentFile);
+    }
+
     return { success: true, files };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function deleteBranch(branchName: string, force: boolean = false): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.deleteBranch(branchName, force);
+    const command = force ? `branch -D ${branchName}` : `branch -d ${branchName}`;
+    await runGitCommand(command);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function deleteTag(tagName: string): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    await gitCommands.deleteTag(tagName);
+    await runGitCommand(`tag -d ${tagName}`);
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
 export async function getTagsForCommit(commitHash: string): Promise<{ success: boolean; tags?: string[]; error?: string }> {
   try {
-    if (!gitCommands) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
-    const tags = await gitCommands.getTagsForCommit(commitHash);
+    const { stdout } = await runGitCommand(`tag --points-at ${commitHash}`);
+    const tags = stdout
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => line);
+
     return { success: true, tags };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
@@ -554,63 +684,12 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
       return { success: false, error: 'No repository open' };
     }
 
-    // Try to use nodegit without explicit credentials - it will use Git's credential helper
-    if (gitCommands) {
-      try {
-        // Create a temporary remote and try to fetch without credentials
-        // This will use Git's built-in credential system
-        const tempRemote = await Git.Remote.createAnonymous(gitCommands.getRepository()!, remoteUrl);
-        
-        const fetchOptions: Git.FetchOptions = {
-          callbacks: {
-            credentials: () => {
-              // Return default credentials - this will use Git's credential helper
-              return Git.Cred.defaultNew();
-            }
-          }
-        };
-
-        // Try a lightweight fetch operation
-        await tempRemote.fetch([], fetchOptions, '');
-        tempRemote.disconnect();
-        
-        return { success: true };
-      } catch (error) {
-        // If it fails, Git's credential system couldn't authenticate
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        // Don't treat network errors as auth failures
-        if (errorMsg.includes('Authentication') || 
-            errorMsg.includes('401') ||
-            errorMsg.includes('403') ||
-            errorMsg.includes('Permission denied') ||
-            errorMsg.includes('Unauthorized')) {
-          return { success: false, error: 'Git credential system could not authenticate' };
-        }
-        // For other errors (network, etc.), assume credentials might work
-        return { success: false, error: errorMsg };
-      }
-    }
-
-    // Fallback to child_process - try git ls-remote without credentials
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    // Convert SSH URL to HTTPS if needed
-    let testUrl = remoteUrl;
-    if (testUrl.startsWith('git@') || testUrl.startsWith('ssh://')) {
-      // For SSH, Git will use SSH keys automatically
-      testUrl = testUrl;
-    }
-
+    // Try git ls-remote without explicit credentials
+    // Git will use credential helper, SSH keys, or other built-in mechanisms
     try {
       // Try git ls-remote without explicit credentials
       // Git will use credential helper, SSH keys, or prompt
-      await execAsync(`git ls-remote "${testUrl}"`, {
-        cwd: currentRepoPath,
-        timeout: 10000,
-        maxBuffer: 1024 * 1024,
-      });
+      await runGitCommand(`ls-remote "${remoteUrl}"`);
       return { success: true };
     } catch (error: any) {
       const errorMsg = error.message || error.stderr || String(error);
@@ -631,8 +710,8 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
       // For other errors, return failure but don't assume it's auth-related
       return { success: false, error: errorMsg };
     }
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 

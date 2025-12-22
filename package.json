@@ -12,8 +12,7 @@
     "build:linux": "npm run compile && npm run build:renderer && electron-builder --linux",
     "build:win": "npm run compile && npm run build:renderer && electron-builder --win",
     "compile": "tsc",
-    "compile:watch": "tsc --watch",
-    "example": "npm run compile && node dist/example.js"
+    "compile:watch": "tsc --watch"
   },
   "keywords": [
     "electron",
@@ -23,7 +22,6 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "@types/nodegit": "^0.28.9",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
@@ -72,7 +70,6 @@
     "clsx": "^2.1.1",
     "keytar": "^7.9.0",
     "lucide-react": "^0.487.0",
-    "nodegit": "^0.27.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sonner": "^2.0.3",

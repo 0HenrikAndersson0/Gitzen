@@ -4,18 +4,8 @@ import * as recentReposService from './recentReposService';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
-// Try to use nodegit, fallback to git commands if it fails
-let gitService: any;
-try {
-  gitService = require('./gitService');
-} catch (error: any) {
-  // nodegit may fail due to OpenSSL compatibility issues - this is expected
-  // The fallback implementation uses native git commands and works perfectly
-  if (isDev) {
-    console.info('ℹ️  Using fallback git implementation (nodegit unavailable):', error.message);
-  }
-  gitService = require('./gitServiceFallback');
-}
+// Use git command implementation (native git commands via child_process)
+const gitService = require('./gitService');
 
 function createWindow() {
   // Create the browser window
