@@ -5,11 +5,15 @@
       "<node_internals>/**"
     ]
   },
+  "debug.javascript.usePreview": true,
+  "debug.javascript.breakOnConditionalError": true,
+  "debug.javascript.unmapMissingSources": true,
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "files.exclude": {
     "**/node_modules": true,
     "**/dist": false
-  }
+  },
+  "debug.allowBreakpointsEverywhere": true
 }
 

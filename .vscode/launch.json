@@ -24,7 +24,16 @@
       "preLaunchTask": "compile-and-start-dev",
       "env": {
         "NODE_ENV": "development"
-      }
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "smartStep": true
     },
     {
       "name": "Debug Main Process Only",
@@ -48,7 +57,16 @@
       "preLaunchTask": "compile-typescript",
       "env": {
         "NODE_ENV": "development"
-      }
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "smartStep": true
     },
     {
       "name": "Attach to Renderer Process",
@@ -62,6 +80,25 @@
         "webpack:///./~/*": "${workspaceFolder}/node_modules/*",
         "webpack:///./*": "${workspaceFolder}/renderer/*",
         "webpack:///*": "*"
+      },
+      "pathMapping": {
+        "/": "${workspaceFolder}/renderer",
+        "/src": "${workspaceFolder}/renderer/src"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug All (Main + Renderer)",
+      "configurations": [
+        "🚀 Debug Gitzen (F5)",
+        "Attach to Renderer Process"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 1
       }
     }
   ]

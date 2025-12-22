@@ -10,11 +10,13 @@ export default defineConfig({
     outDir: '../dist/renderer',
     emptyOutDir: true,
     assetsDir: 'assets',
+    sourcemap: true,
   },
   base: './',
   server: {
     port: 5173,
     strictPort: true,
+    sourcemapIgnoreList: false,
   },
   resolve: {
     alias: {
