@@ -164,16 +164,25 @@ export default function App() {
         addLog('success', `Repository cloned successfully to ${path}`);
         toast.success('Repository cloned successfully!');
         
-        // Check for credentials (but don't assume they're valid - they'll be validated on use)
-        const credResult = await window.electronAPI.hasCredentials(url);
-        if (credResult.success && credResult.hasCredentials) {
-          // Credentials exist, but we'll validate them when actually used
+        // Check if user already has access via Git's built-in credential system
+        const testResult = await window.electronAPI.testGitCredentials(url);
+        if (testResult.success) {
+          // User already has access via SSH keys, credential helper, etc.
           setHasCredentials(true);
+          addLog('info', 'Git credentials verified - access available');
         } else {
-          setTimeout(() => {
-            setShowCredentialsDialog(true);
-            addLog('warning', 'Git credentials required for push operations');
-          }, 500);
+          // Check for stored credentials
+          const credResult = await window.electronAPI.hasCredentials(url);
+          if (credResult.success && credResult.hasCredentials) {
+            // Credentials exist, but we'll validate them when actually used
+            setHasCredentials(true);
+          } else {
+            // No access and no stored credentials - show dialog
+            setTimeout(() => {
+              setShowCredentialsDialog(true);
+              addLog('warning', 'Git credentials required for push operations');
+            }, 500);
+          }
         }
 
         await refreshStatus();
