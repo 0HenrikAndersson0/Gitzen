@@ -1,10 +1,11 @@
-import { exec, execSync } from 'child_process';
+import { exec, execSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { CredentialManager } from './CredentialManager';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 let currentRepoPath: string | null = null;
 let credentialManager: CredentialManager | null = null;
@@ -75,13 +76,30 @@ export async function getStatus(): Promise<{ success: boolean; files?: Array<{ p
     const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; staged: boolean }> = [];
 
     for (const line of stdout.trim().split('\n').filter(l => l)) {
-      const match = line.match(/^(.{2})\s+(.+)$/);
+      // Git porcelain format: XY filename
+      // X = index status, Y = worktree status
+      // Format is always 2 chars, then space(s), then filename
+      // Handle cases where there might be extra spaces or the format varies slightly
+      const match = line.match(/^(.{1,2})\s+(.+)$/);
       if (match) {
-        const [, status, filePath] = match;
+        let status = match[1];
+        let filePath = match[2];
+        
+        // Git may quote filenames with special characters - remove surrounding quotes
+        if ((filePath.startsWith('"') && filePath.endsWith('"')) ||
+            (filePath.startsWith("'") && filePath.endsWith("'"))) {
+          filePath = filePath.slice(1, -1);
+        }
+        
+        // Ensure status is always 2 characters (pad with space if needed)
+        if (status.length === 1) {
+          status = ' ' + status;
+        }
+        
         const indexStatus = status[0];
         const worktreeStatus = status[1];
 
-        let statusType: 'modified' | 'added' | 'deleted' = 'modified';
+        let statusType: 'modified' | 'added' | 'deleted' = 'added';
         if (indexStatus === 'A' || worktreeStatus === 'A') {
           statusType = 'added';
         } else if (indexStatus === 'D' || worktreeStatus === 'D') {
@@ -110,8 +128,32 @@ export async function stageFiles(filePaths: string[]): Promise<{ success: boolea
       return { success: false, error: 'No repository open' };
     }
 
+    // Get current status to check which files are deleted
+    const statusResult = await getStatus();
+    const statusFiles = statusResult.files || [];
+    const fileStatusMap = new Map<string, 'modified' | 'added' | 'deleted'>();
+    statusFiles.forEach(f => fileStatusMap.set(f.path, f.status));
+
+    // Use execFile with argument array to avoid shell quoting issues with special characters
+    // The -- separator tells git that everything after is a file path
     for (const filePath of filePaths) {
-      await runGitCommand(`add "${filePath}"`);
+      const fileStatus = fileStatusMap.get(filePath);
+      
+      // For deleted files that were previously tracked, use git rm to stage the deletion
+      // For new files or modified files, use git add
+      if (fileStatus === 'deleted') {
+        // Use git rm for deleted files - this stages the deletion
+        await execFileAsync('git', ['rm', '--', filePath], {
+          cwd: currentRepoPath,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+      } else {
+        // Use git add for new or modified files
+        await execFileAsync('git', ['add', '--', filePath], {
+          cwd: currentRepoPath,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+      }
     }
     return { success: true };
   } catch (error: any) {
@@ -138,8 +180,13 @@ export async function unstageFiles(filePaths: string[]): Promise<{ success: bool
       return { success: false, error: 'No repository open' };
     }
 
+    // Use execFile with argument array to avoid shell quoting issues with special characters
+    // The -- separator tells git that everything after is a file path
     for (const filePath of filePaths) {
-      await runGitCommand(`reset HEAD -- "${filePath}"`);
+      await execFileAsync('git', ['reset', 'HEAD', '--', filePath], {
+        cwd: currentRepoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
     }
     return { success: true };
   } catch (error: any) {
