@@ -53,6 +53,10 @@ ipcMain.handle('git:stage', async (_, files) => {
   return await gitService.stageFiles(files);
 });
 
+ipcMain.handle('git:unstage', async (_, files) => {
+  return await gitService.unstageFiles(files);
+});
+
 ipcMain.handle('git:stageAll', async () => {
   return await gitService.stageAll();
 });

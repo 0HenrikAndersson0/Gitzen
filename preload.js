@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitOpen: (path) => ipcRenderer.invoke('git:open', path),
   gitStatus: () => ipcRenderer.invoke('git:status'),
   gitStage: (files) => ipcRenderer.invoke('git:stage', files),
+  gitUnstage: (files) => ipcRenderer.invoke('git:unstage', files),
   gitStageAll: () => ipcRenderer.invoke('git:stageAll'),
   gitCommit: (message) => ipcRenderer.invoke('git:commit', message),
   gitPush: (remote, branch) => ipcRenderer.invoke('git:push', remote, branch),

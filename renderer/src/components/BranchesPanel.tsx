@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { GitBranch, GitMerge, Tag, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 interface Branch {
   name: string;
@@ -41,68 +42,132 @@ export function BranchesPanel({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
 
-  const loadBranches = async () => {
-    setLoading(true);
+  const loadBranches = useCallback(async (showLoading: boolean = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       // Load local branches
       const localResult = await window.electronAPI.gitGetBranches();
       if (localResult.success && localResult.branches) {
-        setLocalBranches(
-          localResult.branches.map((name) => ({
-            name,
-            isRemote: false,
-            isCurrent: name === currentBranch,
-          }))
-        );
+        const newLocalBranches = localResult.branches.map((name) => ({
+          name,
+          isRemote: false,
+          isCurrent: name === currentBranch,
+        }));
+        
+        // Only update state if branches actually changed
+        setLocalBranches((prev) => {
+          const prevNames = prev.map(b => b.name).sort().join(',');
+          const newNames = newLocalBranches.map(b => b.name).sort().join(',');
+          const prevCurrent = prev.find(b => b.isCurrent)?.name;
+          const newCurrent = newLocalBranches.find(b => b.isCurrent)?.name;
+          
+          // Update if branch list changed or current branch changed
+          if (prevNames !== newNames || prevCurrent !== newCurrent) {
+            return newLocalBranches;
+          }
+          return prev;
+        });
       }
 
       // Load remote branches
       const remoteResult = await window.electronAPI.getRemoteBranches();
       if (remoteResult.success && remoteResult.branches) {
-        setRemoteBranches(
-          remoteResult.branches.map((branch) => ({
-            name: `${branch.remote}/${branch.name}`,
-            isRemote: true,
-            isCurrent: false,
-          }))
-        );
+        const newRemoteBranches = remoteResult.branches.map((branch) => ({
+          name: `${branch.remote}/${branch.name}`,
+          isRemote: true,
+          isCurrent: false,
+        }));
+        
+        // Only update state if branches actually changed
+        setRemoteBranches((prev) => {
+          const prevNames = prev.map(b => b.name).sort().join(',');
+          const newNames = newRemoteBranches.map(b => b.name).sort().join(',');
+          
+          if (prevNames !== newNames) {
+            return newRemoteBranches;
+          }
+          return prev;
+        });
       }
     } catch (error) {
       console.error('Failed to load branches:', error);
-      toast.error('Failed to load branches');
+      if (showLoading) {
+        toast.error('Failed to load branches');
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  };
+  }, [currentBranch]);
 
-  const loadTags = async () => {
-    setLoading(true);
+  const loadTags = useCallback(async (showLoading: boolean = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const result = await window.electronAPI.getTags();
       if (result.success && result.tags) {
-        setTags(
-          result.tags.map((tag) => ({
-            name: tag.name,
-            commit: tag.commit,
-            date: new Date(tag.date),
-          }))
-        );
+        const newTags = result.tags.map((tag) => ({
+          name: tag.name,
+          commit: tag.commit,
+          date: new Date(tag.date),
+        }));
+        
+        // Only update state if tags actually changed
+        setTags((prev) => {
+          const prevNames = prev.map(t => t.name).sort().join(',');
+          const newNames = newTags.map(t => t.name).sort().join(',');
+          
+          if (prevNames !== newNames) {
+            return newTags;
+          }
+          return prev;
+        });
       }
     } catch (error) {
       console.error('Failed to load tags:', error);
-      toast.error('Failed to load tags');
+      if (showLoading) {
+        toast.error('Failed to load tags');
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'local' || activeTab === 'remote') {
-      loadBranches();
+      loadBranches(true); // Show loading on initial load or tab switch
     } else if (activeTab === 'tags') {
-      loadTags();
+      loadTags(true); // Show loading on initial load or tab switch
     }
+    // Only depend on activeTab and currentBranch - the functions are stable via useCallback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, currentBranch]);
+
+  // Memoize the refresh function to avoid recreating it on every render
+  const refreshCurrentTab = useCallback(async () => {
+    // Refresh branches if on local or remote tab (silent refresh, no loading indicator)
+    if (activeTab === 'local' || activeTab === 'remote') {
+      await loadBranches(false);
+    }
+    // Refresh tags if on tags tab (silent refresh, no loading indicator)
+    if (activeTab === 'tags') {
+      await loadTags(false);
+    }
+  }, [activeTab, loadBranches, loadTags]);
+
+  // Auto-refresh branches and tags every 10 seconds
+  // Refresh based on the currently active tab
+  useAutoRefresh({
+    enabled: true, // Always enabled when component is mounted
+    intervalMs: 10000, // 10 seconds
+    refreshFunctions: [refreshCurrentTab],
+  });
 
   const handleCreateBranchClick = () => {
     setNewBranchName('');
@@ -129,7 +194,7 @@ export function BranchesPanel({
         onCreateBranch?.(name);
         setShowCreateDialog(false);
         setNewBranchName('');
-        await loadBranches();
+        await loadBranches(true);
       } else {
         toast.error(result.error || 'Failed to create branch');
       }
@@ -149,7 +214,7 @@ export function BranchesPanel({
       if (result.success) {
         toast.success(`Deleted branch ${branchName}`);
         onDeleteBranch?.(branchName);
-        await loadBranches();
+        await loadBranches(true);
       } else {
         toast.error(result.error || 'Failed to delete branch');
       }
@@ -168,7 +233,7 @@ export function BranchesPanel({
       if (result.success) {
         toast.success(`Deleted tag ${tagName}`);
         onDeleteTag?.(tagName);
-        await loadTags();
+        await loadTags(true);
       } else {
         toast.error(result.error || 'Failed to delete tag');
       }
@@ -183,7 +248,7 @@ export function BranchesPanel({
       if (result.success) {
         toast.success(`Switched to branch ${branchName}`);
         onCheckout?.(branchName);
-        await loadBranches();
+        await loadBranches(true);
       } else {
         toast.error(result.error || 'Failed to checkout branch');
       }

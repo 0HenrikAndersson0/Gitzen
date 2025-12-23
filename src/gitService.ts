@@ -132,6 +132,21 @@ export async function stageAll(): Promise<{ success: boolean; error?: string }> 
   }
 }
 
+export async function unstageFiles(filePaths: string[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    for (const filePath of filePaths) {
+      await runGitCommand(`reset HEAD -- "${filePath}"`);
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function commit(message: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {

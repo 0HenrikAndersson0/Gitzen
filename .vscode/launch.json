@@ -14,7 +14,7 @@
         ".",
         "--remote-debugging-port=9223"
       ],
-      "preLaunchTask": "compile-typescript",
+      "preLaunchTask": "start-vite-and-compile",
       "outputCapture": "std",
       "console": "integratedTerminal",
       "skipFiles": [
@@ -32,5 +32,5 @@
         "NODE_ENV": "development"
       }
     }
-  ]
+  ],
 }

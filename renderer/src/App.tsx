@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CloneRepo } from './components/CloneRepo';
 import { OpenRepo } from './components/OpenRepo';
 import { CommitPanel } from './components/CommitPanel';
@@ -10,6 +10,7 @@ import { BranchesPanel } from './components/BranchesPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
+import { useAutoRefresh } from './hooks/useAutoRefresh';
 
 interface FileChange {
   path: string;
@@ -42,6 +43,7 @@ declare global {
       gitOpen: (path: string) => Promise<{ success: boolean; error?: string }>;
       gitStatus: () => Promise<{ success: boolean; files?: FileChange[]; error?: string }>;
       gitStage: (files: string[]) => Promise<{ success: boolean; error?: string }>;
+      gitUnstage: (files: string[]) => Promise<{ success: boolean; error?: string }>;
       gitStageAll: () => Promise<{ success: boolean; error?: string }>;
       gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
       gitPush: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
@@ -89,14 +91,6 @@ export default function App() {
     loadRepository();
   }, []);
 
-  useEffect(() => {
-    if (repoPath) {
-      refreshStatus();
-      refreshBranch();
-      refreshHistory();
-    }
-  }, [repoPath]);
-
   const addLog = (type: LogEntry['type'], message: string) => {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
   };
@@ -116,7 +110,7 @@ export default function App() {
     }
   };
 
-  const refreshStatus = async () => {
+  const refreshStatus = useCallback(async () => {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitStatus();
@@ -126,21 +120,31 @@ export default function App() {
     } catch (error) {
       console.error('Failed to refresh status:', error);
     }
-  };
+  }, [repoPath]);
 
-  const refreshBranch = async () => {
+  const refreshBranch = useCallback(async () => {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitGetCurrentBranch();
-      if (result.success && result.branch) {
-        setCurrentBranch(result.branch);
+      if (result.success && result.branch && result.branch.trim()) {
+        const newBranch = result.branch.trim();
+        // Only update if the branch actually changed to avoid unnecessary re-renders
+        // and to prevent resetting to a default value
+        setCurrentBranch((prevBranch) => {
+          // Only update if different from current state
+          // This prevents resetting to "main" if the branch is already set correctly
+          return newBranch !== prevBranch ? newBranch : prevBranch;
+        });
       }
+      // If result.branch is empty (detached HEAD), don't update the state
+      // This preserves the current branch name in the UI
     } catch (error) {
       console.error('Failed to refresh branch:', error);
+      // Don't update state on error - preserve current branch
     }
-  };
+  }, [repoPath]);
 
-  const refreshHistory = async () => {
+  const refreshHistory = useCallback(async () => {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitGetHistory(50);
@@ -150,7 +154,22 @@ export default function App() {
     } catch (error) {
       console.error('Failed to refresh history:', error);
     }
-  };
+  }, [repoPath]);
+
+  useEffect(() => {
+    if (repoPath) {
+      refreshStatus();
+      refreshBranch();
+      refreshHistory();
+    }
+  }, [repoPath, refreshStatus, refreshBranch, refreshHistory]);
+
+  // Auto-refresh every 10 seconds when repository is open
+  useAutoRefresh({
+    enabled: !!repoPath,
+    intervalMs: 10000, // 10 seconds
+    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory],
+  });
 
   const handleClone = async (url: string, path: string) => {
     addLog('info', `Cloning repository from ${url}...`);
@@ -205,21 +224,20 @@ export default function App() {
 
     try {
       if (file.staged) {
-        // Unstage - for now we'll just update the UI
-        // nodegit doesn't have a direct unstage, we'd need to reset the index
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.path === path ? { ...f, staged: false } : f
-          )
-        );
+        // Unstage the file
+        const result = await window.electronAPI.gitUnstage([path]);
+        if (result.success) {
+          // Refresh status to get the actual state from git
+          await refreshStatus();
+        } else {
+          addLog('error', result.error || 'Failed to unstage file');
+        }
       } else {
+        // Stage the file - this works for both new and modified files
         const result = await window.electronAPI.gitStage([path]);
         if (result.success) {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.path === path ? { ...f, staged: true } : f
-            )
-          );
+          // Refresh status to get the actual state from git
+          await refreshStatus();
         } else {
           addLog('error', result.error || 'Failed to stage file');
         }
@@ -382,15 +400,18 @@ export default function App() {
   };
 
   const handleCheckout = async (branch: string) => {
-    await refreshBranch();
+    // Immediately update the branch state to avoid race conditions
+    setCurrentBranch(branch);
+    await refreshBranch(); // This will verify and update if needed
     await refreshStatus();
     await refreshHistory();
   };
 
   const handleCreateBranch = async (name: string) => {
     // Branch was created and checked out in BranchesPanel
-    // Refresh to get the updated current branch
-    await refreshBranch();
+    // Immediately update the branch state to avoid race conditions
+    setCurrentBranch(name);
+    await refreshBranch(); // This will verify and update if needed
     await refreshStatus();
     addLog('success', `Created and checked out branch: ${name}`);
   };
