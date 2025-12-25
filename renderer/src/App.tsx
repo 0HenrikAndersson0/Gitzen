@@ -29,7 +29,7 @@ interface Commit {
   message: string;
   author: string;
   timestamp: Date;
-  branch: string;
+  branch?: string;
   hash: string;
   lane: number;
   isMerge?: boolean;

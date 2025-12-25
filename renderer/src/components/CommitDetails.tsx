@@ -36,7 +36,7 @@ interface CommitDetailsProps {
     message: string;
     author: string;
     timestamp: Date;
-    branch: string;
+    branch?: string;
   };
   onClose: () => void;
 }
@@ -195,8 +195,12 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
             </h2>
             <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
               <span>{commit.author}</span>
-              <span>•</span>
-              <span>{commit.branch}</span>
+              {commit.branch && (
+                <>
+                  <span>•</span>
+                  <span>{commit.branch}</span>
+                </>
+              )}
               <span>•</span>
               <button
                 onClick={handleCopyHash}

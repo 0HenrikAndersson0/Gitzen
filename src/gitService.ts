@@ -328,7 +328,7 @@ export async function getCurrentBranch(): Promise<{ success: boolean; branch?: s
   }
 }
 
-export async function getHistory(maxCount: number = 50): Promise<{ success: boolean; commits?: Array<{ id: string; message: string; author: string; timestamp: Date; branch: string; hash: string; lane: number }>; error?: string }> {
+export async function getHistory(maxCount: number = 50): Promise<{ success: boolean; commits?: Array<{ id: string; message: string; author: string; timestamp: Date; branch?: string; hash: string; lane: number; isMerge?: boolean; parentLanes?: number[] }>; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -337,61 +337,110 @@ export async function getHistory(maxCount: number = 50): Promise<{ success: bool
     const currentBranchResult = await getCurrentBranch();
     const currentBranch = currentBranchResult.branch || 'main';
     
-    // Get commits with branch information using --decorate
-    // Format: %H|%s|%an|%ad|%D where %D shows refs (branches, tags)
-    // Use --all to see all branches, but we'll filter to show current branch's perspective
-    const { stdout } = await runGitCommand(`log --max-count=${maxCount} --pretty=format:"%H|%s|%an|%ad|%D" --date=iso --all --decorate`);
+    // Get commits with graph and branch information
+    // Format: graph_chars %H|%s|%an|%ad|%D where %D shows refs (branches, tags)
+    // Use --all to see all branches
+    const { stdout } = await runGitCommand(`log --max-count=${maxCount} --graph --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso --all --decorate`);
     
-    const commits = stdout.trim().split('\n')
-      .filter(line => line.trim())
-      .map((line) => {
-        const parts = line.split('|');
-        const hash = parts[0];
-        const message = parts[1] || 'No message';
-        const author = parts[2] || 'Unknown';
-        const dateStr = parts[3];
-        const refs = (parts[4] || '').trim(); // Branch/tag information
-        
-        // Extract branch name from refs
-        // Refs format: "HEAD -> branch-name, origin/branch-name, tag: v1.0"
-        let branchName = currentBranch; // Default to current branch
-        
-        if (refs) {
-          // Parse refs to find local branch names
-          // Split by comma and process each ref
-          const refParts = refs.split(',').map(r => r.trim());
-          
-          for (const ref of refParts) {
-            // Skip remote branches and tags
-            if (ref.includes('/') || ref.startsWith('tag:')) {
-              continue;
+    const lines = stdout.trim().split('\n').filter(line => line.trim());
+    const commits: Array<{ id: string; message: string; author: string; timestamp: Date; branch?: string; hash: string; lane: number; isMerge?: boolean; parentLanes?: number[] }> = [];
+    
+    // Track lane assignments and merge information (hash -> lane)
+    const laneTracker = new Map<string, number>();
+    
+    for (const line of lines) {
+      // Parse graph line: graph_chars commit_data
+      // Git graph format uses * to mark commits, with graph characters (|, /, \) for connections
+      // Find the commit marker (*) - this identifies commit lines
+      const commitMarkerIndex = line.indexOf('*');
+      if (commitMarkerIndex === -1) {
+        continue; // Skip non-commit lines (continuation lines with just graph chars like |\ , |/ , | )
+      }
+      
+      // Calculate lane from the visual position of *
+      // Git graph uses 2 characters per lane column (* + space, or | + space, etc.)
+      // Count the visual columns before the * - each column is 2 characters wide
+      // Example: "* " = lane 0, "| *" = lane 1 (2 chars before *), "  *" = lane 1
+      const graphPrefix = line.substring(0, commitMarkerIndex);
+      const lane = Math.floor(graphPrefix.length / 2);
+      
+      // Extract commit data after the graph part (skip the * and following space)
+      const commitData = line.substring(commitMarkerIndex + 1).trim();
+      const parts = commitData.split('|');
+      
+      if (parts.length < 5) continue;
+      
+      const hash = parts[0].trim();
+      const message = parts[1] || 'No message';
+      const author = parts[2] || 'Unknown';
+      const dateStr = parts[3];
+      const refs = (parts[4] || '').trim();
+      const parents = (parts.length > 5 ? parts[5] : '').trim(); // Parent commits
+      
+      // Check if this is a merge commit (has multiple parents)
+      const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
+      const isMerge = parentHashes.length > 1;
+      
+      // Extract branch name from refs - only set if it's HEAD -> <branch> or a direct branch name
+      let branchName: string | undefined = undefined;
+      if (refs) {
+        const refParts = refs.split(',').map(r => r.trim());
+        for (const ref of refParts) {
+          // tags
+          if (ref.startsWith('tag:')) {
+            continue;
+          }
+          // Only set branch name if it's HEAD -> <branch> (checked out branch)
+          if (ref.includes('HEAD -> ')) {
+            const match = ref.match(/HEAD -> (.+)/);
+            if (match) {
+              branchName = match[1].trim();
+              break;
             }
-            
-            // Check for "HEAD -> branch-name" format
-            if (ref.includes('HEAD -> ')) {
-              const match = ref.match(/HEAD -> (.+)/);
-              if (match) {
-                branchName = match[1].trim();
-                break;
-              }
-            } else {
-              // Direct branch name
-              branchName = ref;
+          } else {
+            console.log('ref', ref);
+            // Only set branch name if it's a direct branch name (like "main")
+            // Don't set for empty refs
+            if (ref && ref.trim()) {
+              branchName = ref.trim();
               break;
             }
           }
         }
-        
-        return {
-          id: hash.substr(0, 7),
-          message: message || 'No message',
-          author: author || 'Unknown',
-          timestamp: new Date(dateStr),
-          branch: branchName,
-          hash: hash.substr(0, 7),
-          lane: 0,
-        };
+      }
+      
+      // Track lane assignment for this commit (use full hash for tracking)
+      laneTracker.set(hash, lane);
+      
+      // Determine parent lanes for merge visualization
+      // We need to look ahead/behind to find parent commits, but since we process in order,
+      // we can only find parents that we've already processed (which come after in reverse log)
+      // So we'll calculate parent lanes after processing all commits
+      const parentLanes: number[] = [];
+      if (isMerge && parentHashes.length > 0) {
+        for (const parentHash of parentHashes) {
+          const parentLane = laneTracker.get(parentHash);
+          if (parentLane !== undefined && parentLane !== lane) {
+            parentLanes.push(parentLane);
+          }
+        }
+      }
+      
+      commits.push({
+        id: hash.substr(0, 7),
+        message: message || 'No message',
+        author: author || 'Unknown',
+        timestamp: new Date(dateStr),
+        branch: branchName,
+        hash: hash.substr(0, 7),
+        lane: lane,
+        isMerge: isMerge,
+        parentLanes: parentLanes.length > 0 ? parentLanes : undefined,
       });
+    }
+    
+    // Parent lanes are already calculated above since git log is reverse chronological
+    // (parents come after their children, so they're already in laneTracker when we process the child)
 
     return { success: true, commits };
   } catch (error: any) {
