@@ -18,9 +18,6 @@ interface CommitGraphProps {
   commits?: Commit[];
   mermaidDiagram?: string;
   currentBranch: string;
-  onRebase?: (branch: string) => void;
-  onInteractiveRebase?: (branch: string) => void;
-  onMergeBranch?: (branch: string) => void;
 }
 
 // Initialize mermaid with base theme and TB orientation
@@ -58,18 +55,13 @@ mermaid.initialize({
 export function CommitGraph({ 
   commits = [], 
   mermaidDiagram = '', 
-  currentBranch, 
-  onRebase, 
-  onInteractiveRebase, 
-  onMergeBranch 
+  currentBranch
 }: CommitGraphProps) {
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [diagramSvg, setDiagramSvg] = useState<string>('');
   const [diagramError, setDiagramError] = useState<string>('');
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
 
   // Highlight node in diagram when hovering commit in list
@@ -174,49 +166,6 @@ export function CommitGraph({
     renderDiagram();
   }, [mermaidDiagram]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-
-    if (contextMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [contextMenu]);
-
-  const handleContextMenu = (e: React.MouseEvent, commit: Commit) => {
-    if (commit.branch && commit.branch !== currentBranch) {
-      e.preventDefault();
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        commit,
-      });
-    }
-  };
-
-  const handleMenuAction = (action: 'rebase' | 'interactive-rebase' | 'merge') => {
-    if (!contextMenu || !contextMenu.commit.branch) return;
-
-    const branch = contextMenu.commit.branch;
-    
-    switch (action) {
-      case 'rebase':
-        onRebase?.(branch);
-        break;
-      case 'interactive-rebase':
-        onInteractiveRebase?.(branch);
-        break;
-      case 'merge':
-        onMergeBranch?.(branch);
-        break;
-    }
-
-    setContextMenu(null);
-  };
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -293,7 +242,6 @@ export function CommitGraph({
                   : 'bg-zinc-800/30 hover:bg-zinc-800/60 border-transparent hover:border-zinc-700'
               }`}
               onClick={() => setSelectedCommit(commit)}
-              onContextMenu={(e) => handleContextMenu(e, commit)}
               onMouseEnter={() => setHoveredCommitId(commit.id)}
               onMouseLeave={() => setHoveredCommitId(null)}
             >
@@ -339,34 +287,6 @@ export function CommitGraph({
             ))}
           </div>
         </div>
-
-      {/* Context Menu */}
-      {contextMenu && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('rebase')}
-          >
-            Rebase
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('interactive-rebase')}
-          >
-            Interactive Rebase
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('merge')}
-          >
-            Merge Branch
-          </div>
-        </div>
-      )}
 
       {/* Commit Details Overlay */}
       {selectedCommit && (

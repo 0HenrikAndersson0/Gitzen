@@ -328,6 +328,51 @@ export async function getCurrentBranch(): Promise<{ success: boolean; branch?: s
   }
 }
 
+export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Get current branch to verify we're merging into the right branch
+    const currentBranchResult = await getCurrentBranch();
+    if (!currentBranchResult.success || !currentBranchResult.branch) {
+      return { success: false, error: 'Could not determine current branch' };
+    }
+
+    // Check if there are uncommitted changes
+    const { stdout: statusOut } = await runGitCommand('status --porcelain');
+    if (statusOut.trim()) {
+      return { success: false, error: 'You have uncommitted changes. Please commit or stash them before merging.' };
+    }
+
+    // Perform the merge
+    try {
+      const currentBranch = currentBranchResult.branch;
+      // Use --no-ff to always create a merge commit, and -m to set a proper merge message
+      const mergeMessage = currentBranch === branchToMerge 
+        ? `Merge branch '${branchToMerge}'` 
+        : `Merge branch '${branchToMerge}' into ${currentBranch}`;
+      
+      // Use execFile to avoid shell quoting issues
+      await execFileAsync('git', ['merge', branchToMerge, '--no-ff', '-m', mergeMessage], {
+        cwd: currentRepoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { success: true };
+    } catch (mergeError: any) {
+      // Check if it's a merge conflict
+      const errorMessage = mergeError.message || mergeError.stderr || 'Unknown merge error';
+      if (errorMessage.includes('conflict') || errorMessage.includes('CONFLICT')) {
+        return { success: false, error: `Merge conflict occurred while merging ${branchToMerge}. Please resolve conflicts manually.` };
+      }
+      return { success: false, error: errorMessage };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function getHistory(maxCount: number = 50): Promise<{ 
   success: boolean; 
   commits?: Array<{ id: string; message: string; author: string; timestamp: Date; branch?: string; hash: string; isMerge?: boolean }>; 

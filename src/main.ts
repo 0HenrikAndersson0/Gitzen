@@ -93,6 +93,10 @@ ipcMain.handle('git:checkoutBranch', async (_, name) => {
   return await gitService.checkoutBranch(name);
 });
 
+ipcMain.handle('git:mergeBranchToCurrent', async (_, branchToMerge) => {
+  return await gitService.mergeBranchToCurrent(branchToMerge);
+});
+
 ipcMain.handle('git:saveCredentials', async (_, remoteUrl, username, password) => {
   return await gitService.saveCredentials(remoteUrl, username, password);
 });

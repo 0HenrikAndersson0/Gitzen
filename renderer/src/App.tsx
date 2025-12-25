@@ -51,6 +51,7 @@ declare global {
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
+      gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; error?: string }>;
       saveCredentials: (remoteUrl: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
       hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
       validateExistingCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
@@ -375,9 +376,27 @@ export default function App() {
   };
 
   const handleMergeBranch = async (branch: string) => {
-    addLog('info', `Merging ${branch} into ${currentBranch}...`);
-    toast.info('Merge functionality coming soon');
-    // TODO: Implement merge
+    try {
+      addLog('info', `Merging ${branch} into ${currentBranch}...`);
+      const result = await window.electronAPI.gitMergeBranchToCurrent(branch);
+      
+      if (result.success) {
+        toast.success(`Successfully merged ${branch} into ${currentBranch}`);
+        addLog('success', `Merged ${branch} into ${currentBranch}`);
+        
+        // Refresh state after merge
+        await refreshStatus();
+        await refreshBranch();
+        await refreshHistory();
+      } else {
+        toast.error(result.error || 'Merge failed');
+        addLog('error', `Merge failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      toast.error(`Failed to merge: ${errorMessage}`);
+      addLog('error', `Merge error: ${errorMessage}`);
+    }
   };
 
   const handleSwitchRepo = async (name: string, path: string) => {
@@ -557,9 +576,6 @@ export default function App() {
                 commits={commits}
                 mermaidDiagram={mermaidDiagram}
                 currentBranch={currentBranch}
-                onRebase={handleRebase}
-                onInteractiveRebase={handleInteractiveRebase}
-                onMergeBranch={handleMergeBranch}
               />
             )}
             <CommitPanel
@@ -580,6 +596,7 @@ export default function App() {
                 onCreateBranch={handleCreateBranch}
                 onDeleteBranch={handleDeleteBranch}
                 onDeleteTag={handleDeleteTag}
+                onMergeBranch={handleMergeBranch}
               />
             )}
           </div>

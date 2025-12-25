@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitBranch, GitMerge, Tag, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -25,6 +25,7 @@ interface BranchesPanelProps {
   onCreateBranch?: (name: string) => void;
   onDeleteBranch?: (branch: string) => void;
   onDeleteTag?: (tag: string) => void;
+  onMergeBranch?: (branch: string) => void;
 }
 
 export function BranchesPanel({ 
@@ -32,7 +33,8 @@ export function BranchesPanel({
   onCheckout, 
   onCreateBranch,
   onDeleteBranch,
-  onDeleteTag 
+  onDeleteTag,
+  onMergeBranch
 }: BranchesPanelProps) {
   const [activeTab, setActiveTab] = useState<'local' | 'remote' | 'tags'>('local');
   const [localBranches, setLocalBranches] = useState<Branch[]>([]);
@@ -41,6 +43,8 @@ export function BranchesPanel({
   const [loading, setLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const loadBranches = useCallback(async (showLoading: boolean = false) => {
     if (showLoading) {
@@ -257,6 +261,45 @@ export function BranchesPanel({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent, branchName: string) => {
+    if (branchName !== currentBranch) {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        branch: branchName,
+      });
+    }
+  };
+
+  const handleMenuAction = (action: 'merge') => {
+    if (!contextMenu) return;
+
+    const branch = contextMenu.branch;
+    
+    switch (action) {
+      case 'merge':
+        onMergeBranch?.(branch);
+        break;
+    }
+
+    setContextMenu(null);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [contextMenu]);
+
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50">
       {/* Header */}
@@ -331,6 +374,7 @@ export function BranchesPanel({
                 <div
                   key={branch.name}
                   className="group flex items-center justify-between p-3 transition-colors hover:bg-zinc-800/50"
+                  onContextMenu={(e) => handleContextMenu(e, branch.name)}
                 >
                   <button
                     onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
@@ -471,6 +515,22 @@ export function BranchesPanel({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('merge')}
+          >
+            Merge to current
+          </div>
+        </div>
+      )}
     </div>
   );
 }

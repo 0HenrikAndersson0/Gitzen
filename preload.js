@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitGetBranches: () => ipcRenderer.invoke('git:getBranches'),
   gitCreateBranch: (name, checkout) => ipcRenderer.invoke('git:createBranch', name, checkout),
   gitCheckoutBranch: (name) => ipcRenderer.invoke('git:checkoutBranch', name),
+  gitMergeBranchToCurrent: (branchToMerge) => ipcRenderer.invoke('git:mergeBranchToCurrent', branchToMerge),
   saveCredentials: (remoteUrl, username, password) => ipcRenderer.invoke('git:saveCredentials', remoteUrl, username, password),
   hasCredentials: (remoteUrl) => ipcRenderer.invoke('git:hasCredentials', remoteUrl),
   validateExistingCredentials: (remoteUrl) => ipcRenderer.invoke('git:validateExistingCredentials', remoteUrl),
