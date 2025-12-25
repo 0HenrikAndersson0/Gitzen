@@ -339,10 +339,40 @@ export async function getHistory(maxCount: number = 50): Promise<{
       return { success: false, error: 'No repository open' };
     }
     
-    // Get commits for UI display (newest first)
-    const { stdout: displayLog } = await runGitCommand(`log --max-count=${maxCount} --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso --all --decorate`);
+    // Limit to 30 for Mermaid performance
+    const diagramMaxCount = Math.min(maxCount, 30);
     
-    const displayLines = displayLog.trim().split('\n').filter(line => line.trim());
+    // Use --all to show all branches regardless of which branch is checked out
+    // This ensures feature branches always appear in the graph
+    const { stdout } = await runGitCommand(`log -n ${diagramMaxCount} --all --date-order --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso`);
+    
+    const lines = stdout.trim().split('\n').filter(line => line.trim());
+    
+    // First, get branch info for all commits using git branch --contains
+    const commitBranches: Record<string, string> = {};
+    
+    // Get list of all local branches
+    const { stdout: branchList } = await runGitCommand('branch --list --format="%(refname:short)"');
+    const branches = branchList.trim().split('\n').filter(b => b.trim());
+    
+    // For each non-main branch, find commits that are only on that branch
+    for (const branch of branches) {
+      if (branch === 'main' || branch === 'master') continue;
+      
+      try {
+        // Get commits on this branch that are not on main
+        const { stdout: branchCommits } = await runGitCommand(`log ${branch} --not main --pretty=format:"%H"`);
+        const hashes = branchCommits.trim().split('\n').filter(h => h.trim());
+        for (const hash of hashes) {
+          if (!commitBranches[hash]) {
+            commitBranches[hash] = branch;
+          }
+        }
+      } catch (e) {
+        // Branch might not exist or have issues, skip
+      }
+    }
+    
     const commits: Array<{ 
       id: string; 
       message: string; 
@@ -353,8 +383,8 @@ export async function getHistory(maxCount: number = 50): Promise<{
       isMerge?: boolean;
     }> = [];
     
-    // Parse commits for display
-    for (const line of displayLines) {
+    // Parse commits
+    for (const line of lines) {
       const parts = line.split('|');
       if (parts.length < 5) continue;
       
@@ -368,21 +398,35 @@ export async function getHistory(maxCount: number = 50): Promise<{
       const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
       const isMerge = parentHashes.length > 1;
       
-      // Extract branch name from refs
+      // Determine branch name
       let branchName: string | undefined = undefined;
-      if (refs) {
+      
+      // First check if we identified this commit as belonging to a feature branch
+      if (commitBranches[hash]) {
+        branchName = commitBranches[hash];
+      }
+      // Check merge commit message for branch name
+      else if (isMerge) {
+        const mergeMatch = message.match(/Merge branch '([^']+)'/);
+        if (mergeMatch) {
+          branchName = mergeMatch[1];
+        }
+      }
+      // Check refs for branch info
+      else if (refs) {
         const refParts = refs.split(',').map(r => r.trim());
         for (const ref of refParts) {
           if (ref.startsWith('tag:') || ref.includes('origin/')) {
             continue;
           }
+          // Extract branch name from HEAD -> branch or direct ref
           if (ref.includes('HEAD -> ')) {
             const match = ref.match(/HEAD -> (.+)/);
-            if (match) {
+            if (match && match[1] !== 'main' && match[1] !== 'master') {
               branchName = match[1].trim();
               break;
             }
-          } else if (ref && ref.trim() && !ref.includes('/')) {
+          } else if (ref && ref.trim() && !ref.includes('/') && ref !== 'main' && ref !== 'master') {
             branchName = ref.trim();
             break;
           }
@@ -400,8 +444,8 @@ export async function getHistory(maxCount: number = 50): Promise<{
       });
     }
     
-    // Generate Mermaid diagram using separate optimized query
-    const mermaidDiagram = await generateMermaidDiagram(Math.min(maxCount, 30));
+    // Generate Mermaid diagram using the same data
+    const mermaidDiagram = await generateMermaidDiagram(diagramMaxCount);
 
     return { success: true, commits, mermaidDiagram };
   } catch (error: any) {
@@ -411,9 +455,11 @@ export async function getHistory(maxCount: number = 50): Promise<{
 
 async function generateMermaidDiagram(maxCount: number): Promise<string> {
   try {
-    // Use --reverse --topo-order to get commits in the correct order for Mermaid
+    // Use --all to show all branches, --reverse to get oldest first
+    // Mermaid BT orientation needs chronological order (oldest first) to build graph correctly
+    // but will render with newest at top
     // %H: Hash | %P: Parent Hashes | %D: Ref Names | %s: Subject
-    const { stdout } = await runGitCommand(`log -n ${maxCount} --reverse --topo-order --pretty=format:"%H|%P|%D|%s"`);
+    const { stdout } = await runGitCommand(`log -n ${maxCount} --all --date-order --reverse --pretty=format:"%H|%P|%D|%s"`);
     
     const lines = stdout.trim().split('\n').filter(line => line.trim());
     if (lines.length === 0) return '';
@@ -452,6 +498,7 @@ async function generateMermaidDiagram(maxCount: number): Promise<string> {
       allCommits.push(commit);
       commitByHash[hash] = commit;
     }
+  
     
     // Second pass: identify main line commits (first parent chain from each merge)
     const mainLineCommits = new Set<string>();
@@ -515,7 +562,7 @@ async function generateMermaidDiagram(maxCount: number): Promise<string> {
     // Fourth pass: generate Mermaid diagram
     const mermaid: string[] = [
       '%%{init: { \'logLevel\': \'debug\', \'theme\': \'base\', \'gitGraph\': { \'showBranches\': false } } }%%',
-      'gitGraph TB:'
+      'gitGraph BT:'
     ];
     
     const branches = new Set<string>(['main']);

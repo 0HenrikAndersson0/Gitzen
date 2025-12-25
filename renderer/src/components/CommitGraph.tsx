@@ -68,8 +68,62 @@ export function CommitGraph({
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [diagramSvg, setDiagramSvg] = useState<string>('');
   const [diagramError, setDiagramError] = useState<string>('');
+  const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
+
+  // Highlight node in diagram when hovering commit in list
+  const highlightNode = (commitId: string | null) => {
+    if (!diagramRef.current) return;
+    
+    // Reset all nodes first
+    const allNodes = diagramRef.current.querySelectorAll('.commit');
+    allNodes.forEach((node) => {
+      (node as SVGElement).style.filter = '';
+    });
+    
+    // Also reset circles
+    const allCircles = diagramRef.current.querySelectorAll('circle');
+    allCircles.forEach((circle) => {
+      circle.style.filter = '';
+    });
+    
+    if (!commitId) return;
+    
+    // Try to find and highlight the node
+    // Mermaid uses various selectors for commit nodes
+    const svg = diagramRef.current.querySelector('svg');
+    if (!svg) return;
+    
+    // Look for text elements containing the commit ID
+    const textElements = svg.querySelectorAll('text');
+    textElements.forEach((text) => {
+      if (text.textContent?.includes(commitId)) {
+        // Found the label, highlight the parent group or nearby circle
+        const parent = text.closest('g');
+        if (parent) {
+          const circle = parent.querySelector('circle');
+          if (circle) {
+            circle.style.filter = 'drop-shadow(0 0 8px #10b981) brightness(1.3)';
+          }
+        }
+      }
+    });
+    
+    // Also try to find by commit class or id
+    const commitNodes = svg.querySelectorAll(`[id*="${commitId}"], [class*="${commitId}"]`);
+    commitNodes.forEach((node) => {
+      const circle = node.querySelector('circle') || (node.tagName === 'circle' ? node : null);
+      if (circle) {
+        (circle as SVGElement).style.filter = 'drop-shadow(0 0 8px #10b981) brightness(1.3)';
+      }
+    });
+  };
+
+  // Update highlight when hovered commit changes
+  useEffect(() => {
+    highlightNode(hoveredCommitId);
+  }, [hoveredCommitId, diagramSvg]);
 
   // Load tags for commits
   useEffect(() => {
@@ -202,7 +256,7 @@ export function CommitGraph({
       </div>
 
       {/* Mermaid Diagram - Full Width */}
-      <div className="p-4 overflow-auto max-h-[600px]">
+      <div className="p-4 overflow-auto max-h-[300px]">
         {diagramError ? (
           <div className="text-red-400 text-sm p-4 bg-red-500/10 rounded">
             <p className="font-medium">Diagram Error:</p>
@@ -233,9 +287,15 @@ export function CommitGraph({
           {commitsWithTags.map((commit) => (
             <div
               key={commit.id}
-              className="group p-3 rounded-lg bg-zinc-800/30 hover:bg-zinc-800/60 cursor-pointer transition-colors border border-transparent hover:border-zinc-700"
+              className={`group p-3 rounded-lg cursor-pointer transition-all border ${
+                hoveredCommitId === commit.id 
+                  ? 'bg-emerald-500/20 border-emerald-500/50 ring-1 ring-emerald-500/30' 
+                  : 'bg-zinc-800/30 hover:bg-zinc-800/60 border-transparent hover:border-zinc-700'
+              }`}
               onClick={() => setSelectedCommit(commit)}
               onContextMenu={(e) => handleContextMenu(e, commit)}
+              onMouseEnter={() => setHoveredCommitId(commit.id)}
+              onMouseLeave={() => setHoveredCommitId(null)}
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="font-medium text-zinc-200 group-hover:text-zinc-100 line-clamp-2">
@@ -326,6 +386,12 @@ export function CommitGraph({
         }
         .mermaid-container .branch-label {
           font-size: 12px !important;
+        }
+        .mermaid-container circle {
+          transition: filter 0.2s ease;
+        }
+        .mermaid-container g {
+          transition: filter 0.2s ease;
         }
       `}</style>
     </div>
