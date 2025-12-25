@@ -328,46 +328,34 @@ export async function getCurrentBranch(): Promise<{ success: boolean; branch?: s
   }
 }
 
-export async function getHistory(maxCount: number = 50): Promise<{ success: boolean; commits?: Array<{ id: string; message: string; author: string; timestamp: Date; branch?: string; hash: string; lane: number; isMerge?: boolean; parentLanes?: number[] }>; error?: string }> {
+export async function getHistory(maxCount: number = 50): Promise<{ 
+  success: boolean; 
+  commits?: Array<{ id: string; message: string; author: string; timestamp: Date; branch?: string; hash: string; isMerge?: boolean }>; 
+  mermaidDiagram?: string;
+  error?: string 
+}> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-
-    const currentBranchResult = await getCurrentBranch();
-    const currentBranch = currentBranchResult.branch || 'main';
     
-    // Get commits with graph and branch information
-    // Format: graph_chars %H|%s|%an|%ad|%D where %D shows refs (branches, tags)
-    // Use --all to see all branches
-    const { stdout } = await runGitCommand(`log --max-count=${maxCount} --graph --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso --all --decorate`);
+    // Get commits for UI display (newest first)
+    const { stdout: displayLog } = await runGitCommand(`log --max-count=${maxCount} --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso --all --decorate`);
     
-    const lines = stdout.trim().split('\n').filter(line => line.trim());
-    const commits: Array<{ id: string; message: string; author: string; timestamp: Date; branch?: string; hash: string; lane: number; isMerge?: boolean; parentLanes?: number[] }> = [];
+    const displayLines = displayLog.trim().split('\n').filter(line => line.trim());
+    const commits: Array<{ 
+      id: string; 
+      message: string; 
+      author: string; 
+      timestamp: Date; 
+      branch?: string; 
+      hash: string; 
+      isMerge?: boolean;
+    }> = [];
     
-    // Track lane assignments and merge information (hash -> lane)
-    const laneTracker = new Map<string, number>();
-    
-    for (const line of lines) {
-      // Parse graph line: graph_chars commit_data
-      // Git graph format uses * to mark commits, with graph characters (|, /, \) for connections
-      // Find the commit marker (*) - this identifies commit lines
-      const commitMarkerIndex = line.indexOf('*');
-      if (commitMarkerIndex === -1) {
-        continue; // Skip non-commit lines (continuation lines with just graph chars like |\ , |/ , | )
-      }
-      
-      // Calculate lane from the visual position of *
-      // Git graph uses 2 characters per lane column (* + space, or | + space, etc.)
-      // Count the visual columns before the * - each column is 2 characters wide
-      // Example: "* " = lane 0, "| *" = lane 1 (2 chars before *), "  *" = lane 1
-      const graphPrefix = line.substring(0, commitMarkerIndex);
-      const lane = Math.floor(graphPrefix.length / 2);
-      
-      // Extract commit data after the graph part (skip the * and following space)
-      const commitData = line.substring(commitMarkerIndex + 1).trim();
-      const parts = commitData.split('|');
-      
+    // Parse commits for display
+    for (const line of displayLines) {
+      const parts = line.split('|');
       if (parts.length < 5) continue;
       
       const hash = parts[0].trim();
@@ -375,53 +363,28 @@ export async function getHistory(maxCount: number = 50): Promise<{ success: bool
       const author = parts[2] || 'Unknown';
       const dateStr = parts[3];
       const refs = (parts[4] || '').trim();
-      const parents = (parts.length > 5 ? parts[5] : '').trim(); // Parent commits
+      const parents = (parts.length > 5 ? parts[5] : '').trim();
       
-      // Check if this is a merge commit (has multiple parents)
       const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
       const isMerge = parentHashes.length > 1;
       
-      // Extract branch name from refs - only set if it's HEAD -> <branch> or a direct branch name
+      // Extract branch name from refs
       let branchName: string | undefined = undefined;
       if (refs) {
         const refParts = refs.split(',').map(r => r.trim());
         for (const ref of refParts) {
-          // tags
-          if (ref.startsWith('tag:')) {
+          if (ref.startsWith('tag:') || ref.includes('origin/')) {
             continue;
           }
-          // Only set branch name if it's HEAD -> <branch> (checked out branch)
           if (ref.includes('HEAD -> ')) {
             const match = ref.match(/HEAD -> (.+)/);
             if (match) {
               branchName = match[1].trim();
               break;
             }
-          } else {
-            console.log('ref', ref);
-            // Only set branch name if it's a direct branch name (like "main")
-            // Don't set for empty refs
-            if (ref && ref.trim()) {
-              branchName = ref.trim();
-              break;
-            }
-          }
-        }
-      }
-      
-      // Track lane assignment for this commit (use full hash for tracking)
-      laneTracker.set(hash, lane);
-      
-      // Determine parent lanes for merge visualization
-      // We need to look ahead/behind to find parent commits, but since we process in order,
-      // we can only find parents that we've already processed (which come after in reverse log)
-      // So we'll calculate parent lanes after processing all commits
-      const parentLanes: number[] = [];
-      if (isMerge && parentHashes.length > 0) {
-        for (const parentHash of parentHashes) {
-          const parentLane = laneTracker.get(parentHash);
-          if (parentLane !== undefined && parentLane !== lane) {
-            parentLanes.push(parentLane);
+          } else if (ref && ref.trim() && !ref.includes('/')) {
+            branchName = ref.trim();
+            break;
           }
         }
       }
@@ -433,18 +396,188 @@ export async function getHistory(maxCount: number = 50): Promise<{ success: bool
         timestamp: new Date(dateStr),
         branch: branchName,
         hash: hash.substr(0, 7),
-        lane: lane,
         isMerge: isMerge,
-        parentLanes: parentLanes.length > 0 ? parentLanes : undefined,
       });
     }
     
-    // Parent lanes are already calculated above since git log is reverse chronological
-    // (parents come after their children, so they're already in laneTracker when we process the child)
+    // Generate Mermaid diagram using separate optimized query
+    const mermaidDiagram = await generateMermaidDiagram(Math.min(maxCount, 30));
 
-    return { success: true, commits };
+    return { success: true, commits, mermaidDiagram };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+async function generateMermaidDiagram(maxCount: number): Promise<string> {
+  try {
+    // Use --reverse --topo-order to get commits in the correct order for Mermaid
+    // %H: Hash | %P: Parent Hashes | %D: Ref Names | %s: Subject
+    const { stdout } = await runGitCommand(`log -n ${maxCount} --reverse --topo-order --pretty=format:"%H|%P|%D|%s"`);
+    
+    const lines = stdout.trim().split('\n').filter(line => line.trim());
+    if (lines.length === 0) return '';
+    
+    // First pass: parse all commits
+    interface CommitInfo {
+      hash: string;
+      parents: string[];
+      refs: string;
+      msg: string;
+      mergeBranch?: string; // Branch being merged (from commit message)
+    }
+    
+    const allCommits: CommitInfo[] = [];
+    const commitByHash: Record<string, CommitInfo> = {};
+    
+    for (const line of lines) {
+      const parts = line.split('|');
+      if (parts.length < 4) continue;
+      
+      const hash = parts[0].trim();
+      const parents = parts[1].trim().split(' ').filter(p => p.trim());
+      const refs = parts[2].trim();
+      const msg = parts[3] || 'No message';
+      
+      // Check if this is a merge commit and extract branch name from message
+      let mergeBranch: string | undefined;
+      if (parents.length > 1) {
+        const mergeMatch = msg.match(/Merge branch '([^']+)'/);
+        if (mergeMatch) {
+          mergeBranch = mergeMatch[1];
+        }
+      }
+      
+      const commit = { hash, parents, refs, msg, mergeBranch };
+      allCommits.push(commit);
+      commitByHash[hash] = commit;
+    }
+    
+    // Second pass: identify main line commits (first parent chain from each merge)
+    const mainLineCommits = new Set<string>();
+    
+    // Trace first-parent lineage from all merge commits
+    for (const commit of allCommits) {
+      if (commit.parents.length > 1) {
+        // Trace back through first parents - these are main line
+        let current = commit.parents[0];
+        while (current && commitByHash[current]) {
+          mainLineCommits.add(current);
+          const c = commitByHash[current];
+          current = c.parents[0]; // Follow first parent
+        }
+      }
+    }
+    
+    // Also mark commits without parents as main line (initial commits)
+    for (const commit of allCommits) {
+      if (commit.parents.length === 0) {
+        mainLineCommits.add(commit.hash);
+      }
+    }
+    
+    // Third pass: assign non-main-line commits to their branches
+    const commitToBranch: Record<string, string> = {};
+    
+    for (const commit of allCommits) {
+      if (commit.mergeBranch && commit.parents.length > 1) {
+        // Trace second parent lineage - these belong to the feature branch
+        // Stop when we hit a main line commit
+        const toVisit = [commit.parents[1]];
+        const visited = new Set<string>();
+        
+        while (toVisit.length > 0) {
+          const current = toVisit.pop()!;
+          if (visited.has(current)) continue;
+          visited.add(current);
+          
+          // Stop if this is a main line commit (branch point)
+          if (mainLineCommits.has(current)) continue;
+          
+          // Assign to feature branch
+          if (!commitToBranch[current]) {
+            commitToBranch[current] = commit.mergeBranch;
+          }
+          
+          // Continue tracing parents
+          const currentCommit = commitByHash[current];
+          if (currentCommit) {
+            for (const parent of currentCommit.parents) {
+              if (!visited.has(parent) && !mainLineCommits.has(parent)) {
+                toVisit.push(parent);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Fourth pass: generate Mermaid diagram
+    const mermaid: string[] = [
+      '%%{init: { \'logLevel\': \'debug\', \'theme\': \'base\', \'gitGraph\': { \'showBranches\': false } } }%%',
+      'gitGraph TB:'
+    ];
+    
+    const branches = new Set<string>(['main']);
+    let currentBranch = 'main';
+    
+    for (const commit of allCommits) {
+      const shortHash = commit.hash.substring(0, 7);
+      
+      // Determine which branch this commit belongs to
+      let targetBranch = commitToBranch[commit.hash] || 'main';
+      
+      // Check refs for branch info (HEAD -> branch)
+      const branchMatch = commit.refs.match(/HEAD -> ([^,)]+)/);
+      if (branchMatch) {
+        const refBranch = branchMatch[1].trim();
+        // Only override if not a main-line commit
+        if (!mainLineCommits.has(commit.hash) || refBranch === 'main' || refBranch === 'master') {
+          targetBranch = refBranch;
+        }
+      }
+      
+      // Handle merge commits - they go on main
+      if (commit.parents.length > 1 && commit.mergeBranch) {
+        // Create branch if needed before merge
+        if (!branches.has(commit.mergeBranch)) {
+          const safeBranchName = commit.mergeBranch.replace(/[^a-zA-Z0-9_-]/g, '_');
+          mermaid.push(`    branch ${safeBranchName}`);
+          branches.add(commit.mergeBranch);
+        }
+        
+        // Switch to main for merge
+        if (currentBranch !== 'main') {
+          mermaid.push(`    checkout main`);
+          currentBranch = 'main';
+        }
+        
+        const safeMergeBranch = commit.mergeBranch.replace(/[^a-zA-Z0-9_-]/g, '_');
+        mermaid.push(`    merge ${safeMergeBranch} id: "${shortHash}"`);
+        continue;
+      }
+      
+      // Create branch if needed
+      if (targetBranch !== 'main' && !branches.has(targetBranch)) {
+        const safeBranchName = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '_');
+        mermaid.push(`    branch ${safeBranchName}`);
+        branches.add(targetBranch);
+      }
+      
+      // Switch branch if needed
+      if (targetBranch !== currentBranch) {
+        const safeBranchName = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '_');
+        mermaid.push(`    checkout ${safeBranchName}`);
+        currentBranch = targetBranch;
+      }
+      
+      mermaid.push(`    commit id: "${shortHash}"`);
+    }
+    
+    return mermaid.join('\n');
+  } catch (error: any) {
+    console.error('Failed to generate Mermaid diagram:', error);
+    return '';
   }
 }
 

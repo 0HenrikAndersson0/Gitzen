@@ -1,5 +1,6 @@
-import { GitCommit, GitBranch, User, Clock, GitMerge, Tag } from 'lucide-react';
+import { GitBranch, User, Clock, Tag } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import mermaid from 'mermaid';
 import { CommitDetails } from './CommitDetails';
 
 interface Commit {
@@ -9,25 +10,66 @@ interface Commit {
   timestamp: Date;
   branch?: string;
   hash: string;
-  lane: number;
   isMerge?: boolean;
-  parentLanes?: number[];
   tags?: string[];
 }
 
 interface CommitGraphProps {
   commits?: Commit[];
+  mermaidDiagram?: string;
   currentBranch: string;
   onRebase?: (branch: string) => void;
   onInteractiveRebase?: (branch: string) => void;
   onMergeBranch?: (branch: string) => void;
 }
 
-export function CommitGraph({ commits = [], currentBranch, onRebase, onInteractiveRebase, onMergeBranch }: CommitGraphProps) {
+// Initialize mermaid with base theme and TB orientation
+mermaid.initialize({
+  startOnLoad: false,
+  logLevel: 'debug',
+  theme: 'base',
+  gitGraph: {
+    showBranches: false,
+    showCommitLabel: true,
+    mainBranchName: 'main',
+    rotateCommitLabel: false,
+  },
+  themeVariables: {
+    git0: '#10b981', // emerald
+    git1: '#3b82f6', // blue
+    git2: '#a855f7', // purple
+    git3: '#f97316', // orange
+    git4: '#ec4899', // pink
+    git5: '#06b6d4', // cyan
+    git6: '#84cc16', // lime
+    git7: '#f43f5e', // rose
+    gitBranchLabel0: '#10b981',
+    gitBranchLabel1: '#3b82f6',
+    gitBranchLabel2: '#a855f7',
+    gitBranchLabel3: '#f97316',
+    commitLabelColor: '#e4e4e7',
+    commitLabelBackground: '#27272a',
+    tagLabelColor: '#fbbf24',
+    tagLabelBackground: '#422006',
+    tagLabelBorder: '#f59e0b',
+  },
+});
+
+export function CommitGraph({ 
+  commits = [], 
+  mermaidDiagram = '', 
+  currentBranch, 
+  onRebase, 
+  onInteractiveRebase, 
+  onMergeBranch 
+}: CommitGraphProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
+  const [diagramSvg, setDiagramSvg] = useState<string>('');
+  const [diagramError, setDiagramError] = useState<string>('');
   const menuRef = useRef<HTMLDivElement>(null);
+  const diagramRef = useRef<HTMLDivElement>(null);
 
   // Load tags for commits
   useEffect(() => {
@@ -54,9 +96,33 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
     }
   }, [commits]);
 
+  // Render Mermaid diagram
+  useEffect(() => {
+    const renderDiagram = async () => {
+      if (!mermaidDiagram) {
+        setDiagramSvg('');
+        return;
+      }
+
+      try {
+        // Generate unique ID for this render
+        const id = `mermaid-${Date.now()}`;
+        const { svg } = await mermaid.render(id, mermaidDiagram);
+        setDiagramSvg(svg);
+        setDiagramError('');
+      } catch (error: any) {
+        console.error('Mermaid render error:', error);
+        setDiagramError(error.message || 'Failed to render diagram');
+        setDiagramSvg('');
+      }
+    };
+
+    renderDiagram();
+  }, [mermaidDiagram]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as HTMLElement)) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setContextMenu(null);
       }
     };
@@ -125,17 +191,6 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
     );
   }
 
-  const maxLanes = Math.max(...commits.map((c) => c.lane)) + 1;
-  const laneWidth = 24;
-
-  // Color mapping for lanes
-  const laneColors: Record<number, { border: string; bg: string; text: string }> = {
-    0: { border: 'border-emerald-500', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-    1: { border: 'border-blue-500', bg: 'bg-blue-500/20', text: 'text-blue-400' },
-    2: { border: 'border-purple-500', bg: 'bg-purple-500/20', text: 'text-purple-400' },
-    3: { border: 'border-orange-500', bg: 'bg-orange-500/20', text: 'text-orange-400' },
-  };
-
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden flex flex-col">
       <div className="p-6 pb-4 flex items-center gap-2 border-b border-zinc-800">
@@ -146,166 +201,109 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
         </span>
       </div>
 
-      <div className="overflow-y-auto max-h-[600px] p-6">
-        <div className="space-y-0 font-mono text-sm">
-          {commitsWithTags.map((commit, index) => {
-            const colors = laneColors[commit.lane % 4] || laneColors[0];
-            const nextCommit = commits[index + 1];
-
-            return (
-              <div key={commit.id} className="relative">
-                <div className="flex items-start gap-2 py-2 group hover:bg-zinc-800/30 rounded px-2 -mx-2 transition-colors">
-                  {/* Graph visualization */}
-                  <div className="flex-shrink-0" style={{ width: `${maxLanes * laneWidth}px` }}>
-                    <div className="relative flex items-center" style={{ height: '32px' }}>
-                      {/* Vertical lines and commit nodes for each lane */}
-                      {Array.from({ length: maxLanes }).map((_, lane) => {
-                        const hasCommitInLane = commit.lane === lane;
-                        const nextHasCommitInLane = nextCommit?.lane === lane;
-                        const isParentLane = commit.isMerge && commit.parentLanes?.includes(lane);
-                        const shouldDrawLine = nextHasCommitInLane || isParentLane;
-                        
-                        if (!shouldDrawLine && !hasCommitInLane) return null;
-
-                        const laneColor = laneColors[lane % 4] || laneColors[0];
-                        const laneX = lane * laneWidth + laneWidth / 2 - 1;
-                        
-                        return (
-                          <div
-                            key={lane}
-                            className="absolute"
-                            style={{
-                              left: `${laneX}px`,
-                              height: '100%',
-                            }}
-                          >
-                            {/* Vertical line */}
-                            {shouldDrawLine && (
-                              <div
-                                className={`absolute top-4 w-0.5 ${
-                                  lane === 0 ? 'bg-emerald-500/50' :
-                                  lane === 1 ? 'bg-blue-500/50' :
-                                  lane === 2 ? 'bg-purple-500/50' :
-                                  'bg-orange-500/50'
-                                }`}
-                                style={{ 
-                                  height: index < commits.length - 1 ? 'calc(100% + 100%)' : '100%',
-                                  transform: 'translateX(-50%)',
-                                }}
-                              />
-                            )}
-                            
-                            {/* Commit node */}
-                            {hasCommitInLane && (
-                              <div
-                                className={`absolute top-0 left-1/2 -translate-x-1/2 flex h-6 w-6 items-center justify-center rounded-full border-2 ${laneColor.border} bg-zinc-900 z-10`}
-                              >
-                                {commit.isMerge ? (
-                                  <GitMerge className={`h-3 w-3 ${laneColor.text}`} />
-                                ) : (
-                                  <GitCommit className={`h-3 w-3 ${laneColor.text}`} />
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Horizontal merge line */}
-                            {isParentLane && lane !== commit.lane && (
-                              <svg
-                                className="absolute top-4"
-                                style={{
-                                  left: hasCommitInLane ? `${laneX}px` : `${commit.lane * laneWidth + laneWidth / 2}px`,
-                                  width: `${Math.abs(commit.lane - lane) * laneWidth}px`,
-                                  height: '2px',
-                                  transform: 'translateY(-50%)',
-                                }}
-                              >
-                                <line
-                                  x1="0"
-                                  y1="0"
-                                  x2={Math.abs(commit.lane - lane) * laneWidth}
-                                  y2="0"
-                                  stroke={lane === 1 ? '#3b82f6' : lane === 2 ? '#a855f7' : '#f97316'}
-                                  strokeWidth="2"
-                                  opacity="0.5"
-                                />
-                              </svg>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Commit info */}
-                  <div 
-                    className="flex-1 min-w-0 cursor-pointer"
-                    onClick={() => setSelectedCommit(commit)}
-                    onContextMenu={(e) => handleContextMenu(e, commit)}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-medium text-zinc-200 group-hover:text-zinc-100 text-base">
-                        {commit.message}
-                      </p>
-                      <code className="flex-shrink-0 rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                        {commit.hash}
-                      </code>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-                      <div className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        <span>{commit.author}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{formatTime(commit.timestamp)}</span>
-                      </div>
-                      {commit.branch && (
-                        <div className="flex items-center gap-1">
-                          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 ${colors.bg}`}>
-                            <GitBranch className="h-3 w-3" />
-                            <span className={colors.text}>{commit.branch}</span>
-                          </span>
-                        </div>
-                      )}
-                      {commit.tags && commit.tags.map(tag => (
-                        <div key={tag} className="flex items-center gap-1">
-                          <Tag className="h-3 w-3 text-amber-400" />
-                          <span className="text-zinc-400">{tag}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Mermaid Diagram - Full Width */}
+      <div className="p-4 overflow-auto max-h-[600px]">
+        {diagramError ? (
+          <div className="text-red-400 text-sm p-4 bg-red-500/10 rounded">
+            <p className="font-medium">Diagram Error:</p>
+            <p className="text-xs mt-1 opacity-75">{diagramError}</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-zinc-500">Show diagram source</summary>
+              <pre className="mt-2 text-xs bg-zinc-800 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                {mermaidDiagram}
+              </pre>
+            </details>
+          </div>
+        ) : diagramSvg ? (
+          <div 
+            ref={diagramRef}
+            className="mermaid-container w-full flex justify-center"
+            dangerouslySetInnerHTML={{ __html: diagramSvg }}
+          />
+        ) : (
+          <div className="text-zinc-500 text-center py-8">
+            Loading diagram...
+          </div>
+        )}
       </div>
 
+      {/* Commit List - Below the diagram */}
+      <div className="border-t border-zinc-800 overflow-y-auto max-h-[300px] p-4">
+        <div className="space-y-2">
+          {commitsWithTags.map((commit) => (
+            <div
+              key={commit.id}
+              className="group p-3 rounded-lg bg-zinc-800/30 hover:bg-zinc-800/60 cursor-pointer transition-colors border border-transparent hover:border-zinc-700"
+              onClick={() => setSelectedCommit(commit)}
+              onContextMenu={(e) => handleContextMenu(e, commit)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium text-zinc-200 group-hover:text-zinc-100 line-clamp-2">
+                  {commit.message}
+                </p>
+                <code className="flex-shrink-0 rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-400 font-mono">
+                  {commit.hash}
+                </code>
+              </div>
+
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {commit.branch && (
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-xs text-emerald-400 border border-emerald-500/30">
+                      <GitBranch className="h-3 w-3" />
+                      {commit.branch}
+                    </span>
+                  )}
+                  
+                  {commit.tags && commit.tags.map(tag => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400 border border-amber-500/20"
+                    >
+                      <Tag className="h-3 w-3" />
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
+                  <span className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {commit.author}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {formatTime(commit.timestamp)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      {/* Context Menu */}
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded shadow-lg"
+          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <div
-            className="px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer"
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
             onClick={() => handleMenuAction('rebase')}
           >
             Rebase
           </div>
           <div
-            className="px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer"
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
             onClick={() => handleMenuAction('interactive-rebase')}
           >
             Interactive Rebase
           </div>
           <div
-            className="px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer"
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
             onClick={() => handleMenuAction('merge')}
           >
-            Merge
+            Merge Branch
           </div>
         </div>
       )}
@@ -317,6 +315,19 @@ export function CommitGraph({ commits = [], currentBranch, onRebase, onInteracti
           onClose={() => setSelectedCommit(null)}
         />
       )}
+
+      <style>{`
+        .mermaid-container svg {
+          max-width: 100%;
+          height: auto;
+        }
+        .mermaid-container .commit-label {
+          font-size: 10px !important;
+        }
+        .mermaid-container .branch-label {
+          font-size: 12px !important;
+        }
+      `}</style>
     </div>
   );
 }
