@@ -17,6 +17,7 @@ interface CommitPanelProps {
   onCommit: (message: string) => void;
   onPush: () => void;
   hasCredentials: boolean;
+  unpushedCommitsCount?: number;
 }
 
 export function CommitPanel({
@@ -25,6 +26,7 @@ export function CommitPanel({
   onCommit,
   onPush,
   hasCredentials,
+  unpushedCommitsCount = 0,
 }: CommitPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
 
@@ -74,11 +76,16 @@ export function CommitPanel({
           </Button>
           <Button
             onClick={onPush}
-            disabled={!hasCredentials}
-            className="flex-1 bg-blue-600 hover:bg-blue-700"
+            disabled={!hasCredentials || unpushedCommitsCount === 0 }
+            className="flex-1 bg-blue-600 hover:bg-blue-700 relative"
           >
             <Upload className="mr-2 size-4" />
             Push
+            {unpushedCommitsCount > 0 && (
+              <span className="ml-2 flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-orange-400 text-white text-[10px] font-semibold">
+                {unpushedCommitsCount}
+              </span>
+            )}
           </Button>
         </div>
       </div>

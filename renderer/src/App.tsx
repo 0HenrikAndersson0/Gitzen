@@ -85,6 +85,7 @@ export default function App() {
   const [mermaidDiagram, setMermaidDiagram] = useState<string>('');
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
+  const [unpushedCommitsCount, setUnpushedCommitsCount] = useState(0);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -161,19 +162,32 @@ export default function App() {
     }
   }, [repoPath]);
 
+  const refreshUnpushedCommits = useCallback(async () => {
+    if (!repoPath) return;
+    try {
+      const result = await (window.electronAPI as any).hasUnpushedCommits();
+      if (result.success) {
+        setUnpushedCommitsCount(result.count || 0);
+      }
+    } catch (error) {
+      console.error('Failed to check unpushed commits:', error);
+    }
+  }, [repoPath]);
+
   useEffect(() => {
     if (repoPath) {
       refreshStatus();
       refreshBranch();
       refreshHistory();
+      refreshUnpushedCommits();
     }
-  }, [repoPath, refreshStatus, refreshBranch, refreshHistory]);
+  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory],
+    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -264,6 +278,7 @@ export default function App() {
         
         await refreshStatus();
         await refreshHistory();
+        await refreshUnpushedCommits();
       } else {
         addLog('error', result.error || 'Failed to commit');
         toast.error(result.error || 'Failed to commit');
@@ -290,6 +305,7 @@ export default function App() {
       if (result.success) {
         addLog('success', `Successfully pushed to origin/${currentBranch}`);
         toast.success('Changes pushed successfully!');
+        await refreshUnpushedCommits();
       } else {
         const errorMsg = result.error || 'Failed to push';
         addLog('error', errorMsg);
@@ -584,6 +600,7 @@ export default function App() {
               onCommit={handleCommit}
               onPush={handlePush}
               hasCredentials={hasCredentials}
+              unpushedCommitsCount={unpushedCommitsCount}
             />
           </div>
 

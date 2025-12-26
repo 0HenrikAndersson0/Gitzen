@@ -149,6 +149,10 @@ ipcMain.handle('git:getTagsForCommit', async (_, commitHash) => {
   return await gitService.getTagsForCommit(commitHash);
 });
 
+ipcMain.handle('git:hasUnpushedCommits', async () => {
+  return await gitService.hasUnpushedCommits();
+});
+
 ipcMain.handle('git:testGitCredentials', async (_, remoteUrl) => {
   return await gitService.testGitCredentials(remoteUrl);
 });

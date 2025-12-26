@@ -246,13 +246,33 @@ export function BranchesPanel({
     }
   };
 
+  // Helper function to extract branch name from remote/branch format
+  // Handles cases like: origin/feature/dev/something -> feature/dev/something
+  const extractBranchNameFromRemote = (remoteBranchName: string): string => {
+    const firstSlashIndex = remoteBranchName.indexOf('/');
+    if (firstSlashIndex === -1) {
+      return remoteBranchName; // No slash, it's already just the branch name
+    }
+    return remoteBranchName.substring(firstSlashIndex + 1);
+  };
+
   const handleCheckout = async (branchName: string) => {
     try {
+      // Check if this is a remote branch by checking if it exists in remoteBranches
+      const isRemoteBranch = remoteBranches.some(b => b.name === branchName);
+      
       const result = await window.electronAPI.gitCheckoutBranch(branchName);
       if (result.success) {
-        toast.success(`Switched to branch ${branchName}`);
+        // Extract just the branch name if it's a remote branch (removes remote/ prefix)
+        const displayName = isRemoteBranch ? extractBranchNameFromRemote(branchName) : branchName;
+        toast.success(`Switched to branch ${displayName}`);
         onCheckout?.(branchName);
         await loadBranches(true);
+        
+        // Switch to local tab if we checked out a remote branch
+        if (isRemoteBranch) {
+          setActiveTab('local');
+        }
       } else {
         toast.error(result.error || 'Failed to checkout branch');
       }
@@ -415,19 +435,31 @@ export function BranchesPanel({
             {remoteBranches.length === 0 ? (
               <div className="p-4 text-center text-sm text-zinc-500">No remote branches</div>
             ) : (
-              remoteBranches.map((branch) => (
-                <div
-                  key={branch.name}
-                  className="group flex items-center gap-3 p-3 transition-colors hover:bg-zinc-800/50"
-                >
-                  <GitMerge className="size-4 flex-shrink-0 text-purple-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-zinc-300">
-                      {branch.name}
+              remoteBranches.map((branch) => {
+                // Extract branch name from remote/branch format (e.g., origin/feature/dev/something -> feature/dev/something)
+                const branchName = extractBranchNameFromRemote(branch.name);
+                const isLocalBranch = localBranches.some(b => b.name === branchName);
+                
+                return (
+                  <div
+                    key={branch.name}
+                    className="group flex items-center gap-3 p-3 transition-colors hover:bg-zinc-800/50 cursor-pointer"
+                    onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                  >
+                    <GitMerge className="size-4 flex-shrink-0 text-purple-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-zinc-300">
+                        {branch.name}
+                      </div>
+                      {isLocalBranch && (
+                        <div className="text-xs text-zinc-500 mt-0.5">
+                          Local branch exists
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

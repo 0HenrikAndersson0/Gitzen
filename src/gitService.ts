@@ -328,6 +328,29 @@ export async function getCurrentBranch(): Promise<{ success: boolean; branch?: s
   }
 }
 
+export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpushed?: boolean; count?: number; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Try to count commits ahead of upstream
+    // This will fail if there's no upstream branch, which we handle
+    try {
+      const { stdout: countOutput } = await runGitCommand('rev-list --count @{upstream}..HEAD');
+      const count = parseInt(countOutput.trim(), 10);
+      
+      return { success: true, hasUnpushed: count > 0, count };
+    } catch (error: any) {
+      // No upstream branch configured, so no unpushed commits
+      // This is not an error - it just means the branch doesn't track a remote
+      return { success: true, hasUnpushed: false, count: 0 };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
@@ -679,10 +702,13 @@ export async function getBranches(): Promise<{ success: boolean; branches?: stri
       return { success: false, error: 'No repository open' };
     }
 
-    const { stdout } = await runGitCommand('branch --list');
+    // Use --format option to get just the branch names, which is more reliable
+    const { stdout } = await runGitCommand('branch --list --format="%(refname:short)"');
     const branches = stdout.trim().split('\n')
-      .map(b => b.replace(/^\*\s*/, '').trim())
-      .filter(b => b);
+      .map(b => b.trim())
+      .filter(b => b)
+      // Remove duplicates by converting to Set and back to array
+      .filter((b, index, self) => self.indexOf(b) === index);
     
     return { success: true, branches };
   } catch (error: any) {
@@ -713,10 +739,62 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
       return { success: false, error: 'No repository open' };
     }
 
-    await runGitCommand(`checkout ${name}`);
+    // Check if this is a remote branch (format: origin/branchName or remote/branchName)
+    // First, check if the first part is actually a remote name
+    if (name.includes('/')) {
+      const parts = name.split('/');
+      const possibleRemote = parts[0];
+      
+      // Check if the first part is actually a remote
+      let isRemoteBranch = false;
+      try {
+        const { stdout: remotes } = await runGitCommand('remote');
+        const remoteList = remotes.trim().split('\n').map(r => r.trim()).filter(r => r);
+        isRemoteBranch = remoteList.includes(possibleRemote);
+      } catch (e) {
+        // If we can't check remotes, assume it's not a remote branch
+        isRemoteBranch = false;
+      }
+      
+      if (isRemoteBranch) {
+        // This is a remote branch - extract branch name properly
+        const remoteName = parts[0];
+        const branchName = parts.slice(1).join('/'); // Handle branch names with slashes
+        
+        // Check if the local branch already exists by trying to check it out
+        // If it doesn't exist, Git will error, then we create it from remote
+        try {
+          // Try checkout first - if branch exists, this will work
+          await execFileAsync('git', ['checkout', branchName], {
+            cwd: currentRepoPath,
+            maxBuffer: 10 * 1024 * 1024,
+          });
+          return { success: true };
+        } catch (checkoutError: any) {
+          // If branch doesn't exist locally, create it from remote
+          // Use -b to create a new branch and set up tracking
+          await execFileAsync('git', ['checkout', '-b', branchName, `${remoteName}/${branchName}`], {
+            cwd: currentRepoPath,
+            maxBuffer: 10 * 1024 * 1024,
+          });
+          return { success: true };
+        }
+      }
+    }
+    
+    // Local branch checkout (either no slash, or slash but not a remote branch)
+    await execFileAsync('git', ['checkout', name], {
+      cwd: currentRepoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const errorMsg = error.message || error.stderr || 'Unknown error';
+    // Check for specific error about branch already existing
+    if (errorMsg.includes('already exists')) {
+      return { success: false, error: `Branch already exists. Please use the existing branch or delete it first.` };
+    }
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -907,7 +985,7 @@ export async function getRemoteBranches(): Promise<{ success: boolean; branches?
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-
+    await runGitCommand('fetch --all');
     const { stdout } = await runGitCommand('branch -r');
     const branches = stdout
       .split('\n')
