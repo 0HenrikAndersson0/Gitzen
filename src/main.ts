@@ -149,6 +149,14 @@ ipcMain.handle('git:deleteTag', async (_, tagName) => {
   return await gitService.deleteTag(tagName);
 });
 
+ipcMain.handle('git:revertFileChanges', async (_, filePath) => {
+  return await gitService.revertFileChanges(filePath);
+});
+
+ipcMain.handle('git:deleteFile', async (_, filePath) => {
+  return await gitService.deleteFile(filePath);
+});
+
 ipcMain.handle('git:getTagsForCommit', async (_, commitHash) => {
   return await gitService.getTagsForCommit(commitHash);
 });

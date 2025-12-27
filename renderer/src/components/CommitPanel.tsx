@@ -18,6 +18,8 @@ interface CommitPanelProps {
   onPush: () => void;
   hasCredentials: boolean;
   unpushedCommitsCount?: number;
+  onRevertFile?: (path: string) => void;
+  onDeleteFile?: (path: string) => void;
 }
 
 export function CommitPanel({
@@ -27,6 +29,8 @@ export function CommitPanel({
   onPush,
   hasCredentials,
   unpushedCommitsCount = 0,
+  onRevertFile,
+  onDeleteFile,
 }: CommitPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
 
@@ -51,7 +55,12 @@ export function CommitPanel({
 
       <div className="space-y-4">
         <div className="max-h-64 overflow-y-auto">
-          <FileStaging files={files} onToggleStage={onToggleStage} />
+          <FileStaging 
+            files={files} 
+            onToggleStage={onToggleStage}
+            onRevertFile={onRevertFile}
+            onDeleteFile={onDeleteFile}
+          />
         </div>
 
         <div className="space-y-2">

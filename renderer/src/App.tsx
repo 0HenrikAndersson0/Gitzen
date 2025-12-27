@@ -266,6 +266,40 @@ export default function App() {
     }
   };
 
+  const handleRevertFile = async (path: string) => {
+    try {
+      const result = await (window.electronAPI as any).revertFileChanges(path);
+      if (result.success) {
+        addLog('success', `Reverted changes to ${path}`);
+        toast.success(`Reverted changes to ${path}`);
+        await refreshStatus();
+      } else {
+        addLog('error', result.error || 'Failed to revert file changes');
+        toast.error(result.error || 'Failed to revert file changes');
+      }
+    } catch (error) {
+      addLog('error', `Failed to revert file: ${error}`);
+      toast.error('Failed to revert file');
+    }
+  };
+
+  const handleDeleteFile = async (path: string) => {
+    try {
+      const result = await (window.electronAPI as any).deleteFile(path);
+      if (result.success) {
+        addLog('success', `Deleted file ${path}`);
+        toast.success(`Deleted file ${path}`);
+        await refreshStatus();
+      } else {
+        addLog('error', result.error || 'Failed to delete file');
+        toast.error(result.error || 'Failed to delete file');
+      }
+    } catch (error) {
+      addLog('error', `Failed to delete file: ${error}`);
+      toast.error('Failed to delete file');
+    }
+  };
+
   const handleCommit = async (message: string) => {
     const stagedFiles = files.filter((f) => f.staged);
     addLog('info', `Committing ${stagedFiles.length} file(s)...`);
@@ -601,6 +635,8 @@ export default function App() {
               onPush={handlePush}
               hasCredentials={hasCredentials}
               unpushedCommitsCount={unpushedCommitsCount}
+              onRevertFile={handleRevertFile}
+              onDeleteFile={handleDeleteFile}
             />
           </div>
 

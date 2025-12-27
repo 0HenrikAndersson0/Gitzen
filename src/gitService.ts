@@ -1137,6 +1137,43 @@ export async function deleteTag(tagName: string): Promise<{ success: boolean; er
   }
 }
 
+export async function revertFileChanges(filePath: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Use git checkout to revert changes (works for both modified and deleted files)
+    // The -- flag tells git that everything after is a file path
+    await execFileAsync('git', ['checkout', '--', filePath], {
+      cwd: currentRepoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function deleteFile(filePath: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Delete the file from the filesystem
+    const fullPath = path.join(currentRepoPath, filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+      return { success: true };
+    } else {
+      return { success: false, error: 'File does not exist' };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function getTagsForCommit(commitHash: string): Promise<{ success: boolean; tags?: string[]; error?: string }> {
   try {
     if (!currentRepoPath) {
