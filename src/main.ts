@@ -141,6 +141,10 @@ ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {
   return await gitService.deleteBranch(branchName, force);
 });
 
+ipcMain.handle('git:deleteRemoteBranch', async (_, remoteBranchName) => {
+  return await gitService.deleteRemoteBranch(remoteBranchName);
+});
+
 ipcMain.handle('git:deleteTag', async (_, tagName) => {
   return await gitService.deleteTag(tagName);
 });

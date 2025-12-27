@@ -44,6 +44,7 @@ export function BranchesPanel({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch' | 'tag'; name: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const loadBranches = useCallback(async (showLoading: boolean = false) => {
@@ -209,40 +210,59 @@ export function BranchesPanel({
   };
 
   const handleDeleteBranch = async (branchName: string) => {
-    if (!confirm(`Are you sure you want to delete branch "${branchName}"?`)) {
-      return;
-    }
+    setDeleteDialog({ type: 'branch', name: branchName });
+  };
 
-    try {
-      const result = await window.electronAPI.deleteBranch(branchName, false);
-      if (result.success) {
-        toast.success(`Deleted branch ${branchName}`);
-        onDeleteBranch?.(branchName);
-        await loadBranches(true);
-      } else {
-        toast.error(result.error || 'Failed to delete branch');
-      }
-    } catch (error) {
-      toast.error('Failed to delete branch');
-    }
+  const handleDeleteRemoteBranch = async (remoteBranchName: string) => {
+    setDeleteDialog({ type: 'remoteBranch', name: remoteBranchName });
   };
 
   const handleDeleteTag = async (tagName: string) => {
-    if (!confirm(`Are you sure you want to delete tag "${tagName}"?`)) {
-      return;
-    }
+    setDeleteDialog({ type: 'tag', name: tagName });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog) return;
+
+    // Capture the dialog state to avoid stale closures
+    const dialogToDelete = deleteDialog;
+    
+    // Close dialog immediately to provide better UX
+    setDeleteDialog(null);
 
     try {
-      const result = await window.electronAPI.deleteTag(tagName);
-      if (result.success) {
-        toast.success(`Deleted tag ${tagName}`);
-        onDeleteTag?.(tagName);
-        await loadTags(true);
-      } else {
-        toast.error(result.error || 'Failed to delete tag');
+      let result;
+      if (dialogToDelete.type === 'branch') {
+        result = await (window.electronAPI as any).deleteBranch(dialogToDelete.name, false);
+        if (result.success) {
+          toast.success(`Deleted branch ${dialogToDelete.name}`);
+          onDeleteBranch?.(dialogToDelete.name);
+          await loadBranches(true);
+        } else {
+          toast.error(result.error || 'Failed to delete branch');
+        }
+      } else if (dialogToDelete.type === 'remoteBranch') {
+        result = await (window.electronAPI as any).deleteRemoteBranch(dialogToDelete.name);
+        if (result.success) {
+          const branchName = extractBranchNameFromRemote(dialogToDelete.name);
+          toast.success(`Deleted remote branch ${branchName}`);
+          await loadBranches(true);
+        } else {
+          toast.error(result.error || 'Failed to delete remote branch');
+        }
+      } else if (dialogToDelete.type === 'tag') {
+        result = await (window.electronAPI as any).deleteTag(dialogToDelete.name);
+        if (result.success) {
+          toast.success(`Deleted tag ${dialogToDelete.name}`);
+          onDeleteTag?.(dialogToDelete.name);
+          await loadTags(true);
+        } else {
+          toast.error(result.error || 'Failed to delete tag');
+        }
       }
     } catch (error) {
-      toast.error('Failed to delete tag');
+      const itemType = dialogToDelete.type === 'branch' ? 'branch' : dialogToDelete.type === 'remoteBranch' ? 'remote branch' : 'tag';
+      toast.error(`Failed to delete ${itemType}`);
     }
   };
 
@@ -443,20 +463,33 @@ export function BranchesPanel({
                 return (
                   <div
                     key={branch.name}
-                    className="group flex items-center gap-3 p-3 transition-colors hover:bg-zinc-800/50 cursor-pointer"
-                    onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                    className="group flex items-center justify-between p-3 transition-colors hover:bg-zinc-800/50"
                   >
-                    <GitMerge className="size-4 flex-shrink-0 text-purple-400" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-zinc-300">
-                        {branch.name}
-                      </div>
-                      {isLocalBranch && (
-                        <div className="text-xs text-zinc-500 mt-0.5">
-                          Local branch exists
+                    <div
+                      className="flex min-w-0 flex-1 items-start gap-3 cursor-pointer"
+                      onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                    >
+                      <GitMerge className="size-4 flex-shrink-0 text-purple-400" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-zinc-300">
+                          {branch.name}
                         </div>
-                      )}
+                        {isLocalBranch && (
+                          <div className="text-xs text-zinc-500 mt-0.5">
+                            Local branch exists
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteRemoteBranch(branch.name);
+                      }}
+                      className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Trash2 className="size-4 text-red-400 hover:text-red-300" />
+                    </button>
                   </div>
                 );
               })
@@ -502,6 +535,59 @@ export function BranchesPanel({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteDialog} onOpenChange={(open) => !open && setDeleteDialog(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-red-400 flex items-center gap-2">
+              <Trash2 className="size-5" />
+              {deleteDialog?.type === 'branch' && 'Delete Branch'}
+              {deleteDialog?.type === 'remoteBranch' && 'Delete Remote Branch'}
+              {deleteDialog?.type === 'tag' && 'Delete Tag'}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 mt-3 text-base">
+              {deleteDialog?.type === 'branch' && (
+                <>
+                  Are you sure you want to delete the branch <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
+                  <br />
+                  <span className="text-sm text-zinc-500 mt-2 block">This action cannot be undone.</span>
+                </>
+              )}
+              {deleteDialog?.type === 'remoteBranch' && (
+                <>
+                  Are you sure you want to delete the remote branch <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
+                  <br />
+                  <span className="text-sm text-zinc-500 mt-2 block">This will delete the branch on the remote repository.</span>
+                </>
+              )}
+              {deleteDialog?.type === 'tag' && (
+                <>
+                  Are you sure you want to delete the tag <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
+                  <br />
+                  <span className="text-sm text-zinc-500 mt-2 block">This action cannot be undone.</span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialog(null)}
+              className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium"
+            >
+              <Trash2 className="size-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Branch Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

@@ -1098,6 +1098,32 @@ export async function deleteBranch(branchName: string, force: boolean = false): 
   }
 }
 
+export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Extract remote and branch name from remote/branch format
+    const parts = remoteBranchName.split('/');
+    if (parts.length < 2) {
+      return { success: false, error: 'Invalid remote branch format. Expected format: remote/branch' };
+    }
+
+    const remoteName = parts[0];
+    const branchName = parts.slice(1).join('/'); // Handle branch names with slashes
+
+    // Delete remote branch using git push --delete
+    await execFileAsync('git', ['push', remoteName, '--delete', branchName], {
+      cwd: currentRepoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function deleteTag(tagName: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {

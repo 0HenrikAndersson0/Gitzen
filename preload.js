@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTags: () => ipcRenderer.invoke('git:getTags'),
   getCommitDiff: (commitHash) => ipcRenderer.invoke('git:getCommitDiff', commitHash),
   deleteBranch: (branchName, force) => ipcRenderer.invoke('git:deleteBranch', branchName, force),
+  deleteRemoteBranch: (remoteBranchName) => ipcRenderer.invoke('git:deleteRemoteBranch', remoteBranchName),
   deleteTag: (tagName) => ipcRenderer.invoke('git:deleteTag', tagName),
   getTagsForCommit: (commitHash) => ipcRenderer.invoke('git:getTagsForCommit', commitHash),
   hasUnpushedCommits: () => ipcRenderer.invoke('git:hasUnpushedCommits'),
