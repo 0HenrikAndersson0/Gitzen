@@ -1,4 +1,4 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef } from 'react';
 
@@ -8,9 +8,10 @@ interface RepoHeaderProps {
   hasCredentials: boolean;
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRepo, onOpenNew }: RepoHeaderProps) {
+export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRepo, onOpenNew, onOpenSettings }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -131,7 +132,14 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRe
           </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => onOpenSettings?.()}
+            className="p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 transition-colors"
+            title="Settings"
+          >
+            <Settings className="size-4 text-zinc-400 hover:text-zinc-200" />
+          </button>
           {hasCredentials ? (
             <Badge className="bg-green-600/10 text-green-400 border-green-600/20">
               Authenticated

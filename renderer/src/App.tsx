@@ -5,6 +5,8 @@ import { CommitPanel } from './components/CommitPanel';
 import { ActivityLog } from './components/ActivityLog';
 import { RepoHeader } from './components/RepoHeader';
 import { CredentialsDialog } from './components/CredentialsDialog';
+import { MergeConflictDialog } from './components/MergeConflictDialog';
+import { SettingsDialog } from './components/SettingsDialog';
 import { CommitGraph } from './components/CommitGraph';
 import { BranchesPanel } from './components/BranchesPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
@@ -51,7 +53,10 @@ declare global {
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
-      gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; error?: string }>;
+      gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: string[]; error?: string }>;
+      getConflictedFiles: () => Promise<{ success: boolean; files?: string[]; error?: string }>;
+      abortMerge: () => Promise<{ success: boolean; error?: string }>;
+      openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       saveCredentials: (remoteUrl: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
       hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
       validateExistingCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
@@ -66,9 +71,11 @@ declare global {
       deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string }>;
       getTagsForCommit: (commitHash: string) => Promise<{ success: boolean; tags?: string[]; error?: string }>;
       testGitCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
-      showOpenDialog: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      showOpenDialog: (options?: { properties?: string[]; title?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
       getRecentRepos: () => Promise<{ success: boolean; repos?: Array<{ path: string; name: string; lastOpened: number }>; error?: string }>;
       addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
+      getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;
+      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
     };
   }
 }
@@ -86,6 +93,9 @@ export default function App() {
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
   const [unpushedCommitsCount, setUnpushedCommitsCount] = useState(0);
+  const [showMergeConflictDialog, setShowMergeConflictDialog] = useState(false);
+  const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -438,6 +448,12 @@ export default function App() {
         await refreshStatus();
         await refreshBranch();
         await refreshHistory();
+      } else if (result.hasConflicts && result.conflictedFiles) {
+        // Show merge conflict dialog
+        setConflictedFiles(result.conflictedFiles);
+        setShowMergeConflictDialog(true);
+        toast.warning(`Merge conflict: ${result.conflictedFiles.length} file(s) have conflicts`);
+        addLog('warning', `Merge conflict: ${result.conflictedFiles.length} file(s) need to be resolved`);
       } else {
         toast.error(result.error || 'Merge failed');
         addLog('error', `Merge failed: ${result.error || 'Unknown error'}`);
@@ -446,6 +462,46 @@ export default function App() {
       const errorMessage = error.message || 'Unknown error';
       toast.error(`Failed to merge: ${errorMessage}`);
       addLog('error', `Merge error: ${errorMessage}`);
+    }
+  };
+
+  const handleOpenFileInMergeTool = async (filePath: string) => {
+    try {
+      const result = await window.electronAPI.openFileInMergeTool(filePath);
+      if (result.success) {
+        addLog('info', `Opened ${filePath} in merge tool`);
+      } else {
+        toast.error(`Failed to open file: ${result.error}`);
+        addLog('error', `Failed to open ${filePath}: ${result.error}`);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      toast.error(`Failed to open file: ${errorMessage}`);
+      addLog('error', `Failed to open ${filePath}: ${errorMessage}`);
+    }
+  };
+
+  const handleAbortMerge = async () => {
+    try {
+      const result = await window.electronAPI.abortMerge();
+      if (result.success) {
+        toast.success('Merge aborted successfully');
+        addLog('info', 'Merge aborted');
+        setShowMergeConflictDialog(false);
+        setConflictedFiles([]);
+        
+        // Refresh state after abort
+        await refreshStatus();
+        await refreshBranch();
+        await refreshHistory();
+      } else {
+        toast.error(result.error || 'Failed to abort merge');
+        addLog('error', `Failed to abort merge: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      toast.error(`Failed to abort merge: ${errorMessage}`);
+      addLog('error', `Failed to abort merge: ${errorMessage}`);
     }
   };
 
@@ -592,6 +648,7 @@ export default function App() {
           hasCredentials={hasCredentials}
           onSwitchRepo={handleSwitchRepo}
           onOpenNew={handleOpenNewRepo}
+          onOpenSettings={() => setShowSettingsDialog(true)}
         />
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -659,6 +716,19 @@ export default function App() {
       <CredentialsDialog
         open={showCredentialsDialog}
         onSubmit={handleCredentialsSubmit}
+      />
+
+      <MergeConflictDialog
+        open={showMergeConflictDialog}
+        conflictedFiles={conflictedFiles}
+        onOpenFile={handleOpenFileInMergeTool}
+        onAbortMerge={handleAbortMerge}
+        onClose={() => setShowMergeConflictDialog(false)}
+      />
+
+      <SettingsDialog
+        open={showSettingsDialog}
+        onClose={() => setShowSettingsDialog(false)}
       />
 
       <Toaster />

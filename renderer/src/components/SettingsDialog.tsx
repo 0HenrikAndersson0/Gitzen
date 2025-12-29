@@ -1,0 +1,151 @@
+import { useState, useEffect } from 'react';
+import { Settings, FolderOpen } from 'lucide-react';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
+
+interface SettingsDialogProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+declare global {
+  interface Window {
+    electronAPI: {
+      getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;
+      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
+      showOpenDialog: (options?: { properties?: string[]; title?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
+    };
+  }
+}
+
+export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+  const [mergeToolPath, setMergeToolPath] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      loadSettings();
+    }
+  }, [open]);
+
+  const loadSettings = async () => {
+    setLoading(true);
+    try {
+      const result = await window.electronAPI.getMergeToolPath();
+      if (result.success) {
+        setMergeToolPath(result.mergeToolPath || '');
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBrowse = async () => {
+    try {
+      // Note: We'll need to add a file picker dialog for executables
+      // For now, we'll use a simple input. In a real implementation,
+      // you'd want to use dialog.showOpenDialog with filters for executables
+      const result = await window.electronAPI.showOpenDialog({
+        properties: ['openFile'],
+        title: 'Select Merge Tool Executable',
+      });
+      if (result.success && result.path) {
+        setMergeToolPath(result.path);
+      }
+    } catch (error) {
+      console.error('Failed to browse for merge tool:', error);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await window.electronAPI.setMergeToolPath(mergeToolPath);
+      if (result.success) {
+        onClose();
+      } else {
+        console.error('Failed to save settings:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-2xl">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <Settings className="size-5 text-blue-400" />
+            <DialogTitle>Settings</DialogTitle>
+          </div>
+          <DialogDescription>
+            Configure your Git merge tool preferences.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-6 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="mergeToolPath">Merge Tool Path</Label>
+            <div className="flex gap-2">
+              <Input
+                id="mergeToolPath"
+                type="text"
+                placeholder="/usr/bin/meld or C:\\Program Files\\Meld\\meld.exe"
+                value={mergeToolPath}
+                onChange={(e) => setMergeToolPath(e.target.value)}
+                className="bg-zinc-950 border-zinc-700 flex-1"
+                disabled={loading}
+              />
+              <Button
+                onClick={handleBrowse}
+                variant="outline"
+                className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+                disabled={loading}
+              >
+                <FolderOpen className="size-4 mr-2" />
+                Browse
+              </Button>
+            </div>
+            <p className="text-xs text-zinc-500">
+              Path to your preferred merge tool executable. Leave empty to use Git's default mergetool or system default.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            onClick={onClose}
+            variant="outline"
+            className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={saving || loading}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

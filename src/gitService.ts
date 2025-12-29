@@ -2,7 +2,9 @@ import { exec, execSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import { shell } from 'electron';
 import { CredentialManager } from './CredentialManager';
+import * as settingsService from './settingsService';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -351,7 +353,7 @@ export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpus
   }
 }
 
-export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; error?: string }> {
+export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: string[]; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -384,11 +386,30 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
       });
       return { success: true };
     } catch (mergeError: any) {
-      // Check if it's a merge conflict
-      const errorMessage = mergeError.message || mergeError.stderr || 'Unknown merge error';
-      if (errorMessage.includes('conflict') || errorMessage.includes('CONFLICT')) {
-        return { success: false, error: `Merge conflict occurred while merging ${branchToMerge}. Please resolve conflicts manually.` };
+      // When git merge fails with conflicts, it leaves the repo in a merge state
+      // Check if we're in a merge state by checking for MERGE_HEAD
+      const mergeHeadPath = path.join(currentRepoPath!, '.git', 'MERGE_HEAD');
+      if (fs.existsSync(mergeHeadPath)) {
+        // We're in a merge state, check for conflicted files
+        const conflictedFilesResult = await getConflictedFiles();
+        if (conflictedFilesResult.success && conflictedFilesResult.files && conflictedFilesResult.files.length > 0) {
+          return { 
+            success: false, 
+            hasConflicts: true,
+            conflictedFiles: conflictedFilesResult.files,
+            error: `Merge conflict occurred while merging ${branchToMerge}` 
+          };
+        }
+        // In merge state but no conflicted files (shouldn't happen, but handle gracefully)
+        return { 
+          success: false, 
+          hasConflicts: true,
+          conflictedFiles: [],
+          error: `Merge conflict occurred while merging ${branchToMerge}` 
+        };
       }
+      // Not in merge state, so this is a different kind of error
+      const errorMessage = mergeError.message || mergeError.stderr || 'Unknown merge error';
       return { success: false, error: errorMessage };
     }
   } catch (error: any) {
@@ -1150,6 +1171,151 @@ export async function revertFileChanges(filePath: string): Promise<{ success: bo
       maxBuffer: 10 * 1024 * 1024,
     });
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getConflictedFiles(): Promise<{ success: boolean; files?: string[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Check if we're in a merge state
+    const mergeHeadPath = path.join(currentRepoPath, '.git', 'MERGE_HEAD');
+    if (!fs.existsSync(mergeHeadPath)) {
+      return { success: false, error: 'Not in a merge state' };
+    }
+
+    // Get conflicted files using git status --porcelain
+    // Conflicted files have status codes like: UU (both modified), AA (both added), DD (both deleted), AU, UA, DU, UD, etc.
+    const { stdout } = await runGitCommand('status --porcelain');
+    const conflictedFiles: string[] = [];
+
+    for (const line of stdout.trim().split('\n').filter(l => l)) {
+      const match = line.match(/^(.{1,2})\s+(.+)$/);
+      if (match) {
+        let status = match[1];
+        let filePath = match[2];
+        
+        // Remove quotes if present
+        if ((filePath.startsWith('"') && filePath.endsWith('"')) ||
+            (filePath.startsWith("'") && filePath.endsWith("'"))) {
+          filePath = filePath.slice(1, -1);
+        }
+        
+        // Ensure status is always 2 characters
+        if (status.length === 1) {
+          status = ' ' + status;
+        }
+
+        const indexStatus = status[0];
+        const worktreeStatus = status[1];
+
+        // Check if this is a conflicted file (unmerged)
+        // U = unmerged, A = added, D = deleted
+        // UU = both modified, AA = both added, DD = both deleted, AU/UA = one added one modified, etc.
+        if ((indexStatus === 'U' || indexStatus === 'A' || indexStatus === 'D') &&
+            (worktreeStatus === 'U' || worktreeStatus === 'A' || worktreeStatus === 'D')) {
+          // Skip if both are deleted (DD) as there's nothing to resolve
+          if (indexStatus !== 'D' || worktreeStatus !== 'D') {
+            conflictedFiles.push(filePath);
+          }
+        }
+      }
+    }
+
+    return { success: true, files: conflictedFiles };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function abortMerge(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Check if we're in a merge state
+    const mergeHeadPath = path.join(currentRepoPath, '.git', 'MERGE_HEAD');
+    if (!fs.existsSync(mergeHeadPath)) {
+      return { success: false, error: 'Not in a merge state' };
+    }
+
+    await execFileAsync('git', ['merge', '--abort'], {
+      cwd: currentRepoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const fullPath = path.join(currentRepoPath, filePath);
+    if (!fs.existsSync(fullPath)) {
+      return { success: false, error: 'File does not exist' };
+    }
+
+    // First, check if user has configured a custom merge tool path
+    const customMergeToolPath = settingsService.getMergeToolPath();
+    if (customMergeToolPath && fs.existsSync(customMergeToolPath)) {
+      try {
+        // Execute the custom merge tool with the file path
+        await execFileAsync(customMergeToolPath, [fullPath], {
+          cwd: currentRepoPath,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        return { success: true };
+      } catch (customToolError: any) {
+        // If custom tool fails, fall through to other options
+        console.warn('Custom merge tool failed, trying alternatives:', customToolError.message);
+      }
+    }
+
+    // Try to use git mergetool, which respects user's merge.tool configuration
+    try {
+      await execFileAsync('git', ['mergetool', '--', filePath], {
+        cwd: currentRepoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { success: true };
+    } catch (mergetoolError: any) {
+      // If mergetool fails (e.g., not configured), try to open the file with the system default application
+      try {
+        const error = await shell.openPath(fullPath);
+        if (error) {
+          throw new Error(error);
+        }
+        return { success: true };
+      } catch (openError: any) {
+        // Final fallback: try to use system commands
+        const platform = process.platform;
+        let command: string;
+        if (platform === 'win32') {
+          command = `start "" "${fullPath}"`;
+        } else if (platform === 'darwin') {
+          command = `open "${fullPath}"`;
+        } else {
+          command = `xdg-open "${fullPath}"`;
+        }
+
+        await execAsync(command, {
+          maxBuffer: 10 * 1024 * 1024,
+        });
+
+        return { success: true };
+      }
+    }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

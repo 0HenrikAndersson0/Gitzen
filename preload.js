@@ -40,7 +40,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTagsForCommit: (commitHash) => ipcRenderer.invoke('git:getTagsForCommit', commitHash),
   hasUnpushedCommits: () => ipcRenderer.invoke('git:hasUnpushedCommits'),
   testGitCredentials: (remoteUrl) => ipcRenderer.invoke('git:testGitCredentials', remoteUrl),
+  getConflictedFiles: () => ipcRenderer.invoke('git:getConflictedFiles'),
+  abortMerge: () => ipcRenderer.invoke('git:abortMerge'),
+  openFileInMergeTool: (filePath) => ipcRenderer.invoke('git:openFileInMergeTool', filePath),
   showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),
+  getMergeToolPath: () => ipcRenderer.invoke('settings:getMergeToolPath'),
+  setMergeToolPath: (path) => ipcRenderer.invoke('settings:setMergeToolPath', path),
 });

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as recentReposService from './recentReposService';
+import * as settingsService from './settingsService';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -35,6 +36,9 @@ gitService.initializeGitService();
 
 // Initialize recent repos service
 recentReposService.setUserDataPath(app.getPath('userData'));
+
+// Initialize settings service
+settingsService.setUserDataPath(app.getPath('userData'));
 
 // IPC handlers
 ipcMain.handle('git:clone', async (_, url, localPath, credentials) => {
@@ -169,12 +173,35 @@ ipcMain.handle('git:testGitCredentials', async (_, remoteUrl) => {
   return await gitService.testGitCredentials(remoteUrl);
 });
 
+ipcMain.handle('git:getConflictedFiles', async () => {
+  return await gitService.getConflictedFiles();
+});
+
+ipcMain.handle('git:abortMerge', async () => {
+  return await gitService.abortMerge();
+});
+
+ipcMain.handle('git:openFileInMergeTool', async (_, filePath) => {
+  return await gitService.openFileInMergeTool(filePath);
+});
+
 // Dialog handlers
-ipcMain.handle('dialog:showOpenDialog', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openDirectory'],
-    title: 'Select Git Repository Folder',
-  });
+ipcMain.handle('dialog:showOpenDialog', async (_, options?: { properties?: string[]; title?: string }) => {
+  const dialogOptions: Electron.OpenDialogOptions = {
+    properties: options?.properties as Electron.OpenDialogOptions['properties'] || ['openDirectory'],
+    title: options?.title || 'Select Git Repository Folder',
+  };
+  
+  // If selecting a file (for merge tool), add file filters
+  if (options?.properties?.includes('openFile')) {
+    dialogOptions.properties = ['openFile'];
+    dialogOptions.filters = [
+      { name: 'Executables', extensions: ['exe', 'app', ''] }, // Empty string allows all files on Linux
+      { name: 'All Files', extensions: ['*'] },
+    ];
+  }
+  
+  const result = await dialog.showOpenDialog(dialogOptions);
   
   if (result.canceled || result.filePaths.length === 0) {
     return { success: false };
@@ -196,6 +223,25 @@ ipcMain.handle('repos:getRecent', () => {
 ipcMain.handle('repos:addRecent', (_, repoPath) => {
   try {
     recentReposService.addRecentRepo(repoPath);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+// Settings handlers
+ipcMain.handle('settings:getMergeToolPath', () => {
+  try {
+    const mergeToolPath = settingsService.getMergeToolPath();
+    return { success: true, mergeToolPath };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setMergeToolPath', (_, mergeToolPath: string) => {
+  try {
+    settingsService.setMergeToolPath(mergeToolPath);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
