@@ -505,6 +505,39 @@ export default function App() {
     }
   };
 
+  const handleResolveFiles = async (filePaths: string[]) => {
+    try {
+      // Stage the resolved files (git add marks them as resolved)
+      const result = await window.electronAPI.gitStage(filePaths);
+      if (result.success) {
+        toast.success(`Marked ${filePaths.length} file(s) as resolved`);
+        addLog('success', `Resolved ${filePaths.length} conflicted file(s)`);
+        
+        // Refresh conflicted files list
+        const conflictedResult = await window.electronAPI.getConflictedFiles();
+        if (conflictedResult.success && conflictedResult.files) {
+          setConflictedFiles(conflictedResult.files);
+          
+          // If all conflicts are resolved, show success message
+          if (conflictedResult.files.length === 0) {
+            toast.success('All conflicts resolved! You can now complete the merge.');
+            addLog('success', 'All merge conflicts have been resolved');
+          }
+        }
+        
+        // Refresh status to update file staging area
+        await refreshStatus();
+      } else {
+        toast.error(result.error || 'Failed to mark files as resolved');
+        addLog('error', `Failed to resolve files: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      toast.error(`Failed to resolve files: ${errorMessage}`);
+      addLog('error', `Failed to resolve files: ${errorMessage}`);
+    }
+  };
+
   const handleSwitchRepo = async (name: string, path: string) => {
     // Reset state before switching
     setHasCredentials(false);
@@ -723,6 +756,7 @@ export default function App() {
         conflictedFiles={conflictedFiles}
         onOpenFile={handleOpenFileInMergeTool}
         onAbortMerge={handleAbortMerge}
+        onResolveFiles={handleResolveFiles}
         onClose={() => setShowMergeConflictDialog(false)}
       />
 
