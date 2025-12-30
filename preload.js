@@ -48,4 +48,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),
   getMergeToolPath: () => ipcRenderer.invoke('settings:getMergeToolPath'),
   setMergeToolPath: (path) => ipcRenderer.invoke('settings:setMergeToolPath', path),
+  getMaxCommits: () => ipcRenderer.invoke('settings:getMaxCommits'),
+  setMaxCommits: (maxCommits) => ipcRenderer.invoke('settings:setMaxCommits', maxCommits),
 });

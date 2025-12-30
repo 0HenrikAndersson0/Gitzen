@@ -248,6 +248,24 @@ ipcMain.handle('settings:setMergeToolPath', (_, mergeToolPath: string) => {
   }
 });
 
+ipcMain.handle('settings:getMaxCommits', () => {
+  try {
+    const maxCommits = settingsService.getMaxCommits();
+    return { success: true, maxCommits };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setMaxCommits', (_, maxCommits: number) => {
+  try {
+    settingsService.setMaxCommits(maxCommits);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
 // This method will be called when Electron has finished initialization
 app.whenReady().then(() => {
   createWindow();

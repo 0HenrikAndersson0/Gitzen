@@ -428,8 +428,9 @@ export async function getHistory(maxCount: number = 50): Promise<{
       return { success: false, error: 'No repository open' };
     }
     
-    // Limit to 30 for Mermaid performance
-    const diagramMaxCount = Math.min(maxCount, 30);
+    // Use configured max commits for Mermaid diagram (defaults to 30)
+    const configuredMaxCommits = settingsService.getMaxCommits();
+    const diagramMaxCount = Math.min(maxCount, configuredMaxCommits);
     
     // Use --all to show all branches regardless of which branch is checked out
     // This ensures feature branches always appear in the graph

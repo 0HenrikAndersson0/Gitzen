@@ -22,6 +22,8 @@ declare global {
     electronAPI: {
       getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;
       setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
+      getMaxCommits: () => Promise<{ success: boolean; maxCommits?: number; error?: string }>;
+      setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string }>;
       showOpenDialog: (options?: { properties?: string[]; title?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
     };
   }
@@ -29,6 +31,7 @@ declare global {
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [mergeToolPath, setMergeToolPath] = useState('');
+  const [maxCommits, setMaxCommits] = useState(30);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -41,9 +44,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const result = await window.electronAPI.getMergeToolPath();
-      if (result.success) {
-        setMergeToolPath(result.mergeToolPath || '');
+      const [mergeToolResult, maxCommitsResult] = await Promise.all([
+        window.electronAPI.getMergeToolPath(),
+        window.electronAPI.getMaxCommits(),
+      ]);
+      if (mergeToolResult.success) {
+        setMergeToolPath(mergeToolResult.mergeToolPath || '');
+      }
+      if (maxCommitsResult.success) {
+        setMaxCommits(maxCommitsResult.maxCommits || 30);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -72,11 +81,14 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const result = await window.electronAPI.setMergeToolPath(mergeToolPath);
-      if (result.success) {
+      const [mergeToolResult, maxCommitsResult] = await Promise.all([
+        window.electronAPI.setMergeToolPath(mergeToolPath),
+        window.electronAPI.setMaxCommits(maxCommits),
+      ]);
+      if (mergeToolResult.success && maxCommitsResult.success) {
         onClose();
       } else {
-        console.error('Failed to save settings:', result.error);
+        console.error('Failed to save settings:', mergeToolResult.error || maxCommitsResult.error);
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -123,6 +135,28 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </div>
             <p className="text-xs text-zinc-500">
               Path to your preferred merge tool executable. Leave empty to use Git's default mergetool or system default.
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="maxCommits">Max Commits in Graph</Label>
+            <Input
+              id="maxCommits"
+              type="number"
+              min="10"
+              max="200"
+              value={maxCommits}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10);
+                if (!isNaN(value) && value >= 10 && value <= 200) {
+                  setMaxCommits(value);
+                }
+              }}
+              className="bg-zinc-950 border-zinc-700"
+              disabled={loading}
+            />
+            <p className="text-xs text-zinc-500">
+              Maximum number of commits to display in the commit graph. Higher values may impact performance. (10-200)
             </p>
           </div>
         </div>

@@ -1,7 +1,8 @@
-import { GitBranch, User, Clock, Tag } from 'lucide-react';
+import { GitBranch, User, Clock, Tag, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
 import { CommitDetails } from './CommitDetails';
+import { Button } from './ui/button';
 
 interface Commit {
   id: string;
@@ -62,7 +63,13 @@ export function CommitGraph({
   const [diagramSvg, setDiagramSvg] = useState<string>('');
   const [diagramError, setDiagramError] = useState<string>('');
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const diagramRef = useRef<HTMLDivElement>(null);
+  const diagramContainerRef = useRef<HTMLDivElement>(null);
 
   // Highlight node in diagram when hovering commit in list
   const highlightNode = (commitId: string | null) => {
@@ -116,6 +123,105 @@ export function CommitGraph({
   useEffect(() => {
     highlightNode(hoveredCommitId);
   }, [hoveredCommitId, diagramSvg]);
+
+  // Apply zoom and pan transforms
+  useEffect(() => {
+    if (diagramContainerRef.current) {
+      const svg = diagramContainerRef.current.querySelector('svg');
+      if (svg) {
+        svg.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+        svg.style.transformOrigin = 'top left';
+      }
+    }
+  }, [zoomLevel, panX, panY, diagramSvg]);
+
+  // Handle mouse wheel zoom
+  useEffect(() => {
+    const container = diagramContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setZoomLevel(prev => Math.max(0.5, Math.min(3, prev + delta)));
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Handle panning (drag to move)
+  useEffect(() => {
+    const container = diagramContainerRef.current;
+    if (!container) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Only start dragging if clicking on the container or SVG, not on buttons
+      const target = e.target as HTMLElement;
+      if (target.closest('button')) return;
+      
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - panX, y: e.clientY - panY });
+      container.style.cursor = 'grabbing';
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      setPanX(e.clientX - dragStart.x);
+      setPanY(e.clientY - dragStart.y);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      if (container) {
+        container.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
+      }
+    };
+
+    const handleMouseLeave = () => {
+      setIsDragging(false);
+      if (container) {
+        container.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
+      }
+    };
+
+    container.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    container.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      container.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      container.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, [isDragging, dragStart, panX, panY, zoomLevel]);
+
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(3, prev + 0.2));
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(0.5, prev - 0.2));
+  };
+
+  const handleResetZoom = () => {
+    setZoomLevel(1);
+    setPanX(0);
+    setPanY(0);
+  };
+
+  // Update cursor style based on zoom level
+  useEffect(() => {
+    const container = diagramContainerRef.current;
+    if (container) {
+      container.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
+    }
+  }, [zoomLevel]);
 
   // Load tags for commits
   useEffect(() => {
@@ -204,30 +310,76 @@ export function CommitGraph({
         </span>
       </div>
 
-      {/* Mermaid Diagram - Full Width */}
-      <div className="p-4 overflow-auto max-h-[300px]">
-        {diagramError ? (
-          <div className="text-red-400 text-sm p-4 bg-red-500/10 rounded">
-            <p className="font-medium">Diagram Error:</p>
-            <p className="text-xs mt-1 opacity-75">{diagramError}</p>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-zinc-500">Show diagram source</summary>
-              <pre className="mt-2 text-xs bg-zinc-800 p-2 rounded overflow-x-auto whitespace-pre-wrap">
-                {mermaidDiagram}
-              </pre>
-            </details>
+      {/* Mermaid Diagram - Full Width with Zoom Controls */}
+      <div className="p-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-zinc-500">Commit Graph</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-500">{Math.round(zoomLevel * 100)}%</span>
+            <Button
+              onClick={handleZoomOut}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+              disabled={zoomLevel <= 0.5}
+            >
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <Button
+              onClick={handleResetZoom}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+              disabled={zoomLevel === 1 && panX === 0 && panY === 0}
+            >
+              <RotateCcw className="h-3 w-3" />
+            </Button>
+            <Button
+              onClick={handleZoomIn}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+              disabled={zoomLevel >= 3}
+            >
+              <ZoomIn className="h-3 w-3" />
+            </Button>
           </div>
-        ) : diagramSvg ? (
-          <div 
-            ref={diagramRef}
-            className="mermaid-container w-full flex justify-center"
-            dangerouslySetInnerHTML={{ __html: diagramSvg }}
-          />
-        ) : (
-          <div className="text-zinc-500 text-center py-8">
-            Loading diagram...
-          </div>
-        )}
+        </div>
+        <div 
+          ref={diagramContainerRef}
+          className="overflow-auto max-h-[400px] border border-zinc-800 rounded-lg bg-zinc-950 p-4"
+          style={{ 
+            cursor: isDragging ? 'grabbing' : (zoomLevel > 1 ? 'grab' : 'default'),
+            userSelect: 'none'
+          }}
+        >
+          {diagramError ? (
+            <div className="text-red-400 text-sm p-4 bg-red-500/10 rounded">
+              <p className="font-medium">Diagram Error:</p>
+              <p className="text-xs mt-1 opacity-75">{diagramError}</p>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-zinc-500">Show diagram source</summary>
+                <pre className="mt-2 text-xs bg-zinc-800 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                  {mermaidDiagram}
+                </pre>
+              </details>
+            </div>
+          ) : diagramSvg ? (
+            <div 
+              ref={diagramRef}
+              className="mermaid-container w-full"
+              style={{ minWidth: '100%' }}
+              dangerouslySetInnerHTML={{ __html: diagramSvg }}
+            />
+          ) : (
+            <div className="text-zinc-500 text-center py-8">
+              Loading diagram...
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-zinc-500 mt-2">
+          Use Ctrl/Cmd + Mouse Wheel to zoom, drag to pan, or use the zoom controls above
+        </p>
       </div>
 
       {/* Commit List - Below the diagram */}
@@ -298,8 +450,9 @@ export function CommitGraph({
 
       <style>{`
         .mermaid-container svg {
-          max-width: 100%;
+          width: 100%;
           height: auto;
+          transition: transform 0.2s ease;
         }
         .mermaid-container .commit-label {
           font-size: 10px !important;

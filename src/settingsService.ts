@@ -3,6 +3,7 @@ import * as path from 'path';
 
 interface AppSettings {
   mergeToolPath?: string;
+  maxCommits?: number;
 }
 
 let userDataPath: string | null = null;
@@ -54,6 +55,17 @@ export function getMergeToolPath(): string | undefined {
 export function setMergeToolPath(mergeToolPath: string): void {
   const settings = loadSettings();
   settings.mergeToolPath = mergeToolPath;
+  saveSettings(settings);
+}
+
+export function getMaxCommits(): number {
+  const settings = loadSettings();
+  return settings.maxCommits ?? 30; // Default to 30 if not set
+}
+
+export function setMaxCommits(maxCommits: number): void {
+  const settings = loadSettings();
+  settings.maxCommits = maxCommits;
   saveSettings(settings);
 }
 
