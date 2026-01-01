@@ -115,10 +115,10 @@ export class GitMermaidService {
   private parseLine(line: string): GitLogEntry {
     const parts = line.split('|');
     return {
-      hash: parts[0] || '',
-      parents: parts[1] ? parts[1].split(' ') : [],
-      refs: parts[2] || '',
-      subject: parts[3] || ''
+      hash: (parts[0] || '').trim(),
+      parents: parts[1] ? parts[1].trim().split(/\s+/).filter(p => p.length > 0) : [],
+      refs: (parts[2] || '').trim(),
+      subject: (parts[3] || '').trim()
     };
   }
 
