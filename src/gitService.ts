@@ -438,28 +438,42 @@ export async function getHistory(maxCount: number = 50): Promise<{
     
     const lines = stdout.trim().split('\n').filter(line => line.trim());
     
-    // First, get branch info for all commits using git branch --contains
-    const commitBranches: Record<string, string> = {};
+    // Build a map of commit hash to branch name
+    const commitToBranch: Record<string, string> = {};
     
-    // Get list of all local branches
-    const { stdout: branchList } = await runGitCommand('branch --list --format="%(refname:short)"');
-    const branches = branchList.trim().split('\n').filter(b => b.trim());
-    
-    // For each non-main branch, find commits that are only on that branch
-    for (const branch of branches) {
-      if (branch === 'main' || branch === 'master') continue;
+    // First pass: collect branch info from refs (commits that have branch refs pointing to them)
+    for (const line of lines) {
+      const parts = line.split('|');
+      if (parts.length < 5) continue;
       
-      try {
-        // Get commits on this branch that are not on main
-        const { stdout: branchCommits } = await runGitCommand(`log ${branch} --not main --pretty=format:"%H"`);
-        const hashes = branchCommits.trim().split('\n').filter(h => h.trim());
-        for (const hash of hashes) {
-          if (!commitBranches[hash]) {
-            commitBranches[hash] = branch;
+      const hash = parts[0].trim();
+      const refs = (parts[4] || '').trim();
+      
+      if (refs) {
+        const refParts = refs.split(',').map(r => r.trim());
+        for (const ref of refParts) {
+          // Skip tags and remote refs
+          if (ref.startsWith('tag:')) {
+            continue;
+          }
+          // Extract branch name from HEAD -> branch
+          if (ref.includes('HEAD -> ')) {
+            const match = ref.match(/HEAD -> (.+)/);
+            if (match) {
+              const refBranch = match[1].trim();
+              // Only track non-main/master branches
+              if (refBranch !== 'main' && refBranch !== 'master') {
+                commitToBranch[hash] = refBranch;
+                break;
+              }
+            }
+          } 
+          // Direct branch reference (not a tag, not remote, not main/master)
+          else if (ref && ref.trim() && !ref.startsWith('tag:') && ref !== 'main' && ref !== 'master') {
+            commitToBranch[hash] = ref.trim();
+            break;
           }
         }
-      } catch (e) {
-        // Branch might not exist or have issues, skip
       }
     }
     
@@ -473,7 +487,53 @@ export async function getHistory(maxCount: number = 50): Promise<{
       isMerge?: boolean;
     }> = [];
     
-    // Parse commits
+    // Second pass: propagate branch info from commits with refs to their ancestors
+    // Since the log is in date-order (newest first), we process commits in forward order
+    // and propagate branch info to parents (which come later in the list)
+    // We need multiple passes to ensure propagation reaches all ancestors
+    let changed = true;
+    let iterations = 0;
+    const maxIterations = 10; // Safety limit
+    
+    while (changed && iterations < maxIterations) {
+      changed = false;
+      iterations++;
+      
+      // Build a map of parent -> children for efficient lookup
+      const parentToChildren: Record<string, string[]> = {};
+      for (const line of lines) {
+        const parts = line.split('|');
+        if (parts.length < 5) continue;
+        const hash = parts[0].trim();
+        const parents = (parts.length > 5 ? parts[5] : '').trim();
+        const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
+        
+        // Only consider first parent for branch propagation (main branch line)
+        if (parentHashes.length > 0) {
+          const firstParent = parentHashes[0].trim();
+          if (!parentToChildren[firstParent]) {
+            parentToChildren[firstParent] = [];
+          }
+          parentToChildren[firstParent].push(hash);
+        }
+      }
+      
+      // Propagate branch info from children to parents
+      for (const parentHash in parentToChildren) {
+        if (commitToBranch[parentHash]) continue; // Already has a branch
+        
+        // Check if any child has a branch
+        for (const childHash of parentToChildren[parentHash]) {
+          if (commitToBranch[childHash]) {
+            commitToBranch[parentHash] = commitToBranch[childHash];
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Third pass: process commits in forward order to build the commit list
     for (const line of lines) {
       const parts = line.split('|');
       if (parts.length < 5) continue;
@@ -482,44 +542,20 @@ export async function getHistory(maxCount: number = 50): Promise<{
       const message = parts[1] || 'No message';
       const author = parts[2] || 'Unknown';
       const dateStr = parts[3];
-      const refs = (parts[4] || '').trim();
       const parents = (parts.length > 5 ? parts[5] : '').trim();
       
       const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
       const isMerge = parentHashes.length > 1;
       
-      // Determine branch name
-      let branchName: string | undefined = undefined;
+      // Get branch name from our map
+      let branchName: string | undefined = commitToBranch[hash];
       
-      // First check if we identified this commit as belonging to a feature branch
-      if (commitBranches[hash]) {
-        branchName = commitBranches[hash];
-      }
-      // Check merge commit message for branch name
-      else if (isMerge) {
-        const mergeMatch = message.match(/Merge branch '([^']+)'/);
+      // Fallback: Check merge commit message for branch name
+      if (!branchName && isMerge) {
+        const mergeMatch = message.match(/Merge branch ['"]([^'"]+)['"]/);
         if (mergeMatch) {
           branchName = mergeMatch[1];
-        }
-      }
-      // Check refs for branch info
-      else if (refs) {
-        const refParts = refs.split(',').map(r => r.trim());
-        for (const ref of refParts) {
-          if (ref.startsWith('tag:') || ref.includes('origin/')) {
-            continue;
-          }
-          // Extract branch name from HEAD -> branch or direct ref
-          if (ref.includes('HEAD -> ')) {
-            const match = ref.match(/HEAD -> (.+)/);
-            if (match && match[1] !== 'main' && match[1] !== 'master') {
-              branchName = match[1].trim();
-              break;
-            }
-          } else if (ref && ref.trim() && !ref.includes('/') && ref !== 'main' && ref !== 'master') {
-            branchName = ref.trim();
-            break;
-          }
+          commitToBranch[hash] = branchName; // Cache it
         }
       }
       
