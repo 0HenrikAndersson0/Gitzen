@@ -253,6 +253,9 @@ export class GitMermaidService {
     }
 
     if (bestName) {
+      if (bestName === 'master') {
+          bestName = 'main';
+      }
       return this.sanitizeBranchName(bestName);
     }
 
@@ -284,7 +287,11 @@ export class GitMermaidService {
     // Mermaid branch names can be strings "name/with/slashes", but to be safe we often sanitize.
     // Modern mermaid handles "name", but let's be safe.
     // Actually, "Deep Research" says: Replace /[^a-zA-Z0-9_]/ with -
-    return name.replace(/[^a-zA-Z0-9_\-]/g, '-');
+    let sanitized = name.replace(/[^a-zA-Z0-9_\-]/g, '-');
+    if (/^[0-9]/.test(sanitized)) {
+        sanitized = `ref-${sanitized}`;
+    }
+    return sanitized;
   }
 
   private sanitizeMessage(msg: string): string {
