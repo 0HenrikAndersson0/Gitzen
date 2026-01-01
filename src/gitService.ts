@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { shell } from 'electron';
 import { CredentialManager } from './CredentialManager';
 import * as settingsService from './settingsService';
+import { GitMermaidService } from './mermaidGen';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -582,121 +583,10 @@ export async function getHistory(maxCount: number = 50): Promise<{
 async function generateMermaidDiagram(maxCount: number): Promise<string> {
   try {
     // Use --all to show all branches, --reverse to get oldest first
-    // Mermaid BT orientation needs chronological order (oldest first) to build graph correctly
-    // but will render with newest at top
-    // %H: Hash | %P: Parent Hashes | %D: Ref Names | %s: Subject
     const { stdout } = await runGitCommand(`log -n ${maxCount} --all --date-order --reverse --pretty=format:"%H|%P|%D|%s"`);
     
-    const lines = stdout.trim().split('\n').filter(line => line.trim());
-    if (lines.length === 0) return '';
-    
-    // Parse commits into GitLogEntry format
-    interface GitLogEntry {
-      hash: string;
-      parents: string[];
-      branchName: string;
-      message: string;
-    }
-    
-    // Map to track which branch each commit hash belongs to
-    const hashToBranch = new Map<string, string>();
-    
-    // 1. Pre-process: Map and Sanitize all entries
-    const logs: GitLogEntry[] = lines.map(line => {
-      const [hash, parents, ref, message] = line.split('|');
-      const shortHash = hash.trim().substring(0, 7);
-      
-      let branchRef = (ref || '').trim();
-      
-      // Handle multiple refs (take the first one)
-      if (branchRef.includes(',')) {
-        branchRef = branchRef.split(',')[0].trim();
-      }
-      
-      // Clean up "HEAD ->" pointers
-      branchRef = branchRef.replace('HEAD -> ', '');
-      
-      // Map master/main consistency
-      if (!branchRef || branchRef === 'master' || branchRef.includes('master')) {
-        branchRef = 'main';
-      }
-      
-      // Final sanitization: Remove special characters Mermaid hates
-      const sanitizedBranchName = branchRef.replace(/[^a-zA-Z0-9_]/g, '_');
-      const parentsArr = parents ? parents.trim().split(/\s+/).filter(Boolean).map(p => p.substring(0, 7)) : [];
-      
-      hashToBranch.set(shortHash, sanitizedBranchName);
-      
-      return {
-        hash: shortHash,
-        parents: parentsArr,
-        branchName: sanitizedBranchName,
-        message: (message || '').trim()
-      };
-    });
-    
-    // Generate Mermaid diagram
-    const mermaidLines: string[] = [
-      '%%{init: { \'logLevel\': \'debug\', \'theme\': \'base\', \'gitGraph\': { \'showBranches\': false } } }%%',
-      'gitGraph BT:'
-    ];
-    
-    const createdBranches = new Set<string>(['main']);
-    let currentActiveBranch = 'main';
-    
-    // 2. Process logs with Safe Branch Navigation
-    logs.forEach((entry, index) => {
-      // First commit initialization
-      if (index === 0) {
-        mermaidLines.push(`    commit id: "${entry.hash}"`);
-        return;
-      }
-      
-      // Determine the branch of the first parent
-      const firstParentHash = entry.parents[0];
-      let parentBranch = hashToBranch.get(firstParentHash) || 'main';
-      
-      // SAFETY: If the parent branch hasn't been created in Mermaid yet, fall back to main
-      if (!createdBranches.has(parentBranch)) {
-        parentBranch = 'main';
-      }
-      
-      // Move to parent's branch before performing actions
-      if (currentActiveBranch !== parentBranch) {
-        mermaidLines.push(`    checkout ${parentBranch}`);
-        currentActiveBranch = parentBranch;
-      }
-      
-      // Handle Branch Creation (branch before checkout)
-      if (!createdBranches.has(entry.branchName)) {
-        mermaidLines.push(`    branch ${entry.branchName}`);
-        createdBranches.add(entry.branchName);
-        currentActiveBranch = entry.branchName;
-      }
-      
-      // Ensure we are on the specific branch for this commit
-      if (currentActiveBranch !== entry.branchName) {
-        mermaidLines.push(`    checkout ${entry.branchName}`);
-        currentActiveBranch = entry.branchName;
-      }
-      
-      // Handle Merges vs Regular Commits
-      if (entry.parents.length > 1) {
-        const secondParentHash = entry.parents[1];
-        let sourceBranch = hashToBranch.get(secondParentHash);
-        
-        // Only merge if the source branch exists and is not the current branch
-        if (sourceBranch && createdBranches.has(sourceBranch) && sourceBranch !== entry.branchName) {
-          mermaidLines.push(`    merge ${sourceBranch} id: "${entry.hash}"`);
-        } else {
-          mermaidLines.push(`    commit id: "${entry.hash}"`);
-        }
-      } else {
-        mermaidLines.push(`    commit id: "${entry.hash}"`);
-      }
-    });
-    
-    return mermaidLines.join('\n');
+    const mermaidService = new GitMermaidService();
+    return mermaidService.convertToMermaid(stdout);
   } catch (error: any) {
     console.error('Failed to generate Mermaid diagram:', error);
     return '';
