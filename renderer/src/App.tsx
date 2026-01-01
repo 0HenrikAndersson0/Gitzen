@@ -680,7 +680,7 @@ export default function App() {
           onOpenSettings={() => setShowSettingsDialog(true)}
         />
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 grid-cols-1">
           <div className="space-y-6">
             {!repoName ? (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
