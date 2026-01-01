@@ -159,7 +159,7 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
                     fromX: sourceNode.x,
                     fromY: sourceNode.y,
                     toX: sourceNode.x,
-                    toY: sourceNode.y + spacingY,
+                    toY: (commits.length + 1) * spacingY,
                     color: sourceNode.color
                 });
             }
@@ -295,7 +295,7 @@ export function CommitGraph({
               return (
                 <div
                   key={commit.id}
-                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 ${
+                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 cursor-pointer ${
                     hoveredCommitId === commit.id
                       ? 'bg-zinc-800/50'
                       : 'hover:bg-zinc-800/30'
