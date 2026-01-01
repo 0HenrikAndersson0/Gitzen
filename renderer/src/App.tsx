@@ -34,6 +34,8 @@ interface Commit {
   branch?: string;
   hash: string;
   isMerge?: boolean;
+  parents?: string[];
+  refs?: string;
 }
 
 declare global {
@@ -49,7 +51,7 @@ declare global {
       gitPush: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
-      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; mermaidDiagram?: string; error?: string }>;
+      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
@@ -89,7 +91,6 @@ export default function App() {
   const [files, setFiles] = useState<FileChange[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
-  const [mermaidDiagram, setMermaidDiagram] = useState<string>('');
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
   const [unpushedCommitsCount, setUnpushedCommitsCount] = useState(0);
@@ -162,9 +163,6 @@ export default function App() {
       if (result.success) {
         if (result.commits) {
           setCommits(result.commits);
-        }
-        if (result.mermaidDiagram) {
-          setMermaidDiagram(result.mermaidDiagram);
         }
       }
     } catch (error) {
@@ -544,7 +542,6 @@ export default function App() {
     setRemoteUrl(null);
     setFiles([]);
     setCommits([]);
-    setMermaidDiagram('');
     addLog('info', `Switching to repository: ${name}...`);
     
     // Open the new repository (this will validate credentials)
@@ -556,7 +553,6 @@ export default function App() {
     setRepoPath(null);
     setFiles([]);
     setCommits([]);
-    setMermaidDiagram('');
     setHasCredentials(false);
     setRemoteUrl(null);
     setActiveTab('clone');
@@ -714,7 +710,6 @@ export default function App() {
             ) : (
               <CommitGraph 
                 commits={commits}
-                mermaidDiagram={mermaidDiagram}
                 currentBranch={currentBranch}
               />
             )}

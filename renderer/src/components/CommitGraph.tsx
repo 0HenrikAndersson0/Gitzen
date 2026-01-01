@@ -1,6 +1,5 @@
 import { GitBranch, User, Clock, Tag, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
-import mermaid from 'mermaid';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { Button } from './ui/button';
 
@@ -12,216 +11,177 @@ interface Commit {
   branch?: string;
   hash: string;
   isMerge?: boolean;
+  parents?: string[];
+  refs?: string;
   tags?: string[];
 }
 
 interface CommitGraphProps {
   commits?: Commit[];
-  mermaidDiagram?: string;
   currentBranch: string;
 }
 
-// Initialize mermaid with base theme and TB orientation
-mermaid.initialize({
-  startOnLoad: false,
-  logLevel: 'debug',
-  theme: 'base',
-  gitGraph: {
-    showBranches: false,
-    showCommitLabel: true,
-    mainBranchName: 'main',
-    rotateCommitLabel: false,
-  },
-  themeVariables: {
-    git0: '#10b981', // emerald
-    git1: '#3b82f6', // blue
-    git2: '#a855f7', // purple
-    git3: '#f97316', // orange
-    git4: '#ec4899', // pink
-    git5: '#06b6d4', // cyan
-    git6: '#84cc16', // lime
-    git7: '#f43f5e', // rose
-    gitBranchLabel0: '#10b981',
-    gitBranchLabel1: '#3b82f6',
-    gitBranchLabel2: '#a855f7',
-    gitBranchLabel3: '#f97316',
-    commitLabelColor: '#e4e4e7',
-    commitLabelBackground: '#27272a',
-    tagLabelColor: '#fbbf24',
-    tagLabelBackground: '#422006',
-    tagLabelBorder: '#f59e0b',
-  },
-});
+// Layout Engine
+interface Node {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  commit: Commit;
+}
 
-export function CommitGraph({ 
-  commits = [], 
-  mermaidDiagram = '', 
+interface Edge {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  color: string;
+}
+
+const COLORS = [
+  '#10b981', // emerald
+  '#3b82f6', // blue
+  '#a855f7', // purple
+  '#f97316', // orange
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#84cc16', // lime
+  '#f43f5e', // rose
+];
+
+function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: number = 40) {
+  return useMemo(() => {
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+
+    // Map of commit hash -> occupied lane index
+    // Note: commits are processed newest to oldest (top to bottom)
+    const lanes: (string | null)[] = [];
+    // Map commit hash -> lane index it was assigned to
+    const commitLaneMap = new Map<string, number>();
+    // Map commit hash -> color index
+    const commitColorMap = new Map<string, number>();
+
+    // Helper to find a lane for a commit
+    // If the commit is already expected by a parent (from above), it has a reserved lane?
+    // Actually, processing Top -> Bottom:
+    // When we see a commit, we check if any active lane is 'expecting' this commit (i.e. is a parent of a previous node)
+
+    // Active lanes state: each lane holds the hash of the *next* commit it expects (the parent of the current tip)
+    const activeLanes: (string | null)[] = [];
+
+    commits.forEach((commit, index) => {
+      // 1. Identify which lane this commit belongs to
+      let laneIndex = activeLanes.indexOf(commit.id);
+
+      if (laneIndex === -1) {
+        // Not expected by any existing lane -> Start of a new branch (tip)
+        // Find first null lane or append
+        laneIndex = activeLanes.findIndex(l => l === null);
+        if (laneIndex === -1) {
+          laneIndex = activeLanes.length;
+          activeLanes.push(null);
+        }
+      }
+
+      // Assign lane and color
+      commitLaneMap.set(commit.id, laneIndex);
+      activeLanes[laneIndex] = null; // Occupy this lane for this commit
+      
+      // Determine color: Try to reuse color of the child that pointed here?
+      // Or just assign based on lane index? Lane index is unstable.
+      // Let's assign color based on lane index for now.
+      const color = COLORS[laneIndex % COLORS.length];
+
+      nodes.push({
+        id: commit.id,
+        x: laneIndex * spacingX + 10, // Margin
+        y: index * spacingY + 20,
+        color,
+        commit
+      });
+
+      // 2. Prepare lanes for parents
+      const parents = commit.parents || [];
+
+      // First parent continues the lane
+      if (parents.length > 0) {
+        const p1 = parents[0];
+        activeLanes[laneIndex] = p1; // Expect P1 in this lane
+
+        // Edges will be drawn when we verify the parent exists or just draw to calculated coords?
+        // Since we don't know parent Y yet, we can't draw edge now?
+        // Actually we can draw edges backwards if we want, or draw from Child to Parent.
+        // We know Child (current) coords.
+        // We don't know Parent coords yet.
+        // But we can store connections.
+      } else {
+        // Root commit, lane ends.
+        activeLanes[laneIndex] = null;
+      }
+
+      // Merge parents (2nd, 3rd...) need new lanes or merge into existing
+      for (let i = 1; i < parents.length; i++) {
+        const p = parents[i];
+        // Check if p is already expected in another lane?
+        let pLane = activeLanes.indexOf(p);
+        if (pLane === -1) {
+            // Find free lane
+            pLane = activeLanes.findIndex(l => l === null);
+            if (pLane === -1) {
+                pLane = activeLanes.length;
+                activeLanes.push(null);
+            }
+            activeLanes[pLane] = p;
+        }
+        // We will draw a merge line from current node to this parent lane later
+      }
+    });
+
+    // Second pass to create edges since we now know all coordinates
+    commits.forEach((commit, index) => {
+        const sourceNode = nodes[index];
+        const parents = commit.parents || [];
+
+        parents.forEach(parentId => {
+            const targetNode = nodes.find(n => n.id === parentId);
+            if (targetNode) {
+                edges.push({
+                    fromX: sourceNode.x,
+                    fromY: sourceNode.y,
+                    toX: targetNode.x,
+                    toY: targetNode.y,
+                    color: sourceNode.color
+                });
+            } else {
+                // Parent is not in the list (history truncated), point downwards to infinity
+                edges.push({
+                    fromX: sourceNode.x,
+                    fromY: sourceNode.y,
+                    toX: sourceNode.x,
+                    toY: sourceNode.y + spacingY,
+                    color: sourceNode.color
+                });
+            }
+        });
+    });
+
+    return { nodes, edges, width: activeLanes.length * spacingX + 40, height: commits.length * spacingY + 40 };
+  }, [commits, spacingX, spacingY]);
+}
+
+export function CommitGraph({
+  commits = [],
   currentBranch
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
-  const [diagramSvg, setDiagramSvg] = useState<string>('');
-  const [diagramError, setDiagramError] = useState<string>('');
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const diagramRef = useRef<HTMLDivElement>(null);
-  const diagramContainerRef = useRef<HTMLDivElement>(null);
 
-  // Highlight node in diagram when hovering commit in list
-  const highlightNode = (commitId: string | null) => {
-    if (!diagramRef.current) return;
-    
-    // Reset all nodes first
-    const allNodes = diagramRef.current.querySelectorAll('.commit');
-    allNodes.forEach((node) => {
-      (node as SVGElement).style.filter = '';
-    });
-    
-    // Also reset circles
-    const allCircles = diagramRef.current.querySelectorAll('circle');
-    allCircles.forEach((circle) => {
-      circle.style.filter = '';
-    });
-    
-    if (!commitId) return;
-    
-    // Try to find and highlight the node
-    // Mermaid uses various selectors for commit nodes
-    const svg = diagramRef.current.querySelector('svg');
-    if (!svg) return;
-    
-    // Look for text elements containing the commit ID
-    const textElements = svg.querySelectorAll('text');
-    textElements.forEach((text) => {
-      if (text.textContent?.includes(commitId)) {
-        // Found the label, highlight the parent group or nearby circle
-        const parent = text.closest('g');
-        if (parent) {
-          const circle = parent.querySelector('circle');
-          if (circle) {
-            circle.style.filter = 'drop-shadow(0 0 8px #10b981) brightness(1.3)';
-          }
-        }
-      }
-    });
-    
-    // Also try to find by commit class or id
-    const commitNodes = svg.querySelectorAll(`[id*="${commitId}"], [class*="${commitId}"]`);
-    commitNodes.forEach((node) => {
-      const circle = node.querySelector('circle') || (node.tagName === 'circle' ? node : null);
-      if (circle) {
-        (circle as SVGElement).style.filter = 'drop-shadow(0 0 8px #10b981) brightness(1.3)';
-      }
-    });
-  };
-
-  // Update highlight when hovered commit changes
-  useEffect(() => {
-    highlightNode(hoveredCommitId);
-  }, [hoveredCommitId, diagramSvg]);
-
-  // Apply zoom and pan transforms
-  useEffect(() => {
-    if (diagramContainerRef.current) {
-      const svg = diagramContainerRef.current.querySelector('svg');
-      if (svg) {
-        svg.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
-        svg.style.transformOrigin = 'top left';
-      }
-    }
-  }, [zoomLevel, panX, panY, diagramSvg]);
-
-  // Handle mouse wheel zoom
-  useEffect(() => {
-    const container = diagramContainerRef.current;
-    if (!container) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        setZoomLevel(prev => Math.max(0.5, Math.min(3, prev + delta)));
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  // Handle panning (drag to move)
-  useEffect(() => {
-    const container = diagramContainerRef.current;
-    if (!container) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      // Only start dragging if clicking on the container or SVG, not on buttons
-      const target = e.target as HTMLElement;
-      if (target.closest('button')) return;
-      
-      setIsDragging(true);
-      setDragStart({ x: e.clientX - panX, y: e.clientY - panY });
-      container.style.cursor = 'grabbing';
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      setPanX(e.clientX - dragStart.x);
-      setPanY(e.clientY - dragStart.y);
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      if (container) {
-        container.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
-      }
-    };
-
-    const handleMouseLeave = () => {
-      setIsDragging(false);
-      if (container) {
-        container.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
-      }
-    };
-
-    container.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    container.addEventListener('mouseleave', handleMouseLeave);
-
-    return () => {
-      container.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      container.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, [isDragging, dragStart, panX, panY, zoomLevel]);
-
-  const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(3, prev + 0.2));
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(0.5, prev - 0.2));
-  };
-
-  const handleResetZoom = () => {
-    setZoomLevel(1);
-    setPanX(0);
-    setPanY(0);
-  };
-
-  // Update cursor style based on zoom level
-  useEffect(() => {
-    const container = diagramContainerRef.current;
-    if (container) {
-      container.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
-    }
-  }, [zoomLevel]);
+  // Custom Graph Props
+  const spacingX = 20;
+  const spacingY = 36;
+  const { nodes, edges, width, height } = useGraphLayout(commits, spacingX, spacingY);
 
   // Load tags for commits
   useEffect(() => {
@@ -247,31 +207,6 @@ export function CommitGraph({
       loadTags();
     }
   }, [commits]);
-
-  // Render Mermaid diagram
-  useEffect(() => {
-    const renderDiagram = async () => {
-      if (!mermaidDiagram) {
-        setDiagramSvg('');
-        return;
-      }
-
-      try {
-        // Generate unique ID for this render
-        const id = `mermaid-${Date.now()}`;
-        const { svg } = await mermaid.render(id, mermaidDiagram);
-        setDiagramSvg(svg);
-        setDiagramError('');
-      } catch (error: any) {
-        console.error('Mermaid render error:', error);
-        setDiagramError(error.message || 'Failed to render diagram');
-        setDiagramSvg('');
-      }
-    };
-
-    renderDiagram();
-  }, [mermaidDiagram]);
-
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -310,135 +245,104 @@ export function CommitGraph({
         </span>
       </div>
 
-      {/* Mermaid Diagram - Full Width with Zoom Controls */}
-      <div className="p-4 border-b border-zinc-800">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-zinc-500">Commit Graph</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">{Math.round(zoomLevel * 100)}%</span>
-            <Button
-              onClick={handleZoomOut}
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
-              disabled={zoomLevel <= 0.5}
-            >
-              <ZoomOut className="h-3 w-3" />
-            </Button>
-            <Button
-              onClick={handleResetZoom}
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
-              disabled={zoomLevel === 1 && panX === 0 && panY === 0}
-            >
-              <RotateCcw className="h-3 w-3" />
-            </Button>
-            <Button
-              onClick={handleZoomIn}
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
-              disabled={zoomLevel >= 3}
-            >
-              <ZoomIn className="h-3 w-3" />
-            </Button>
-          </div>
+      <div className="flex-1 overflow-auto bg-zinc-950 relative" style={{ height: '500px' }}>
+        <div className="relative" style={{ height: height, minWidth: '100%' }}>
+           {/* Graph Layer - Absolute positioned behind content */}
+           <svg
+             width={width + 20}
+             height={height}
+             className="absolute top-0 left-0 pointer-events-none z-10"
+           >
+             {edges.map((edge, i) => (
+               <path
+                 key={`edge-${i}`}
+                 d={`M ${edge.fromX} ${edge.fromY} C ${edge.fromX} ${edge.fromY + 15}, ${edge.toX} ${edge.toY - 15}, ${edge.toX} ${edge.toY}`}
+                 stroke={edge.color}
+                 strokeWidth="2"
+                 fill="none"
+                 opacity="0.6"
+               />
+             ))}
+             {nodes.map((node) => (
+               <g key={`node-${node.id}`}>
+                 <circle
+                   cx={node.x}
+                   cy={node.y}
+                   r="4"
+                   fill={node.color}
+                   stroke="#18181b" // zinc-950
+                   strokeWidth="2"
+                 />
+                 {hoveredCommitId === node.id && (
+                   <circle
+                     cx={node.x}
+                     cy={node.y}
+                     r="6"
+                     fill="none"
+                     stroke={node.color}
+                     strokeWidth="2"
+                     opacity="0.5"
+                   />
+                 )}
+               </g>
+             ))}
+           </svg>
+
+           {/* Commit List Layer */}
+           <div className="absolute top-0 left-0 right-0 z-20">
+            {nodes.map((node) => {
+              const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
+              return (
+                <div
+                  key={commit.id}
+                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 ${
+                    hoveredCommitId === commit.id
+                      ? 'bg-zinc-800/50'
+                      : 'hover:bg-zinc-800/30'
+                  }`}
+                  style={{
+                    top: node.y - 18,
+                    height: spacingY,
+                    left: width + 20 // Offset content to right of graph
+                  }}
+                  onClick={() => setSelectedCommit(commit)}
+                  onMouseEnter={() => setHoveredCommitId(commit.id)}
+                  onMouseLeave={() => setHoveredCommitId(null)}
+                >
+                  <div className="flex items-center gap-3">
+                    <p className="font-medium text-zinc-200 text-sm truncate flex-1">
+                      {commit.message}
+                    </p>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {commit.branch && (
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400 border border-emerald-500/20">
+                            {commit.branch}
+                            </span>
+                        )}
+                        {commit.tags && commit.tags.map(tag => (
+                            <span key={tag} className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400 border border-amber-500/20">
+                                <Tag className="h-2 w-2" />
+                                {tag}
+                            </span>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-zinc-500 w-32 justify-end">
+                      <span className="flex items-center gap-1 truncate max-w-[80px]">
+                        {commit.author}
+                      </span>
+                      <span className="flex-shrink-0">
+                        {formatTime(commit.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+           </div>
         </div>
-        <div 
-          ref={diagramContainerRef}
-          className="overflow-auto max-h-[400px] border border-zinc-800 rounded-lg bg-zinc-950 p-4"
-          style={{ 
-            cursor: isDragging ? 'grabbing' : (zoomLevel > 1 ? 'grab' : 'default'),
-            userSelect: 'none'
-          }}
-        >
-          {diagramError ? (
-            <div className="text-red-400 text-sm p-4 bg-red-500/10 rounded">
-              <p className="font-medium">Diagram Error:</p>
-              <p className="text-xs mt-1 opacity-75">{diagramError}</p>
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-zinc-500">Show diagram source</summary>
-                <pre className="mt-2 text-xs bg-zinc-800 p-2 rounded overflow-x-auto whitespace-pre-wrap">
-                  {mermaidDiagram}
-                </pre>
-              </details>
-            </div>
-          ) : diagramSvg ? (
-            <div 
-              ref={diagramRef}
-              className="mermaid-container w-full"
-              style={{ minWidth: '100%' }}
-              dangerouslySetInnerHTML={{ __html: diagramSvg }}
-            />
-          ) : (
-            <div className="text-zinc-500 text-center py-8">
-              Loading diagram...
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-zinc-500 mt-2">
-          Use Ctrl/Cmd + Mouse Wheel to zoom, drag to pan, or use the zoom controls above
-        </p>
       </div>
-
-      {/* Commit List - Below the diagram */}
-      <div className="border-t border-zinc-800 overflow-y-auto max-h-[300px] p-4">
-        <div className="space-y-2">
-          {commitsWithTags.map((commit) => (
-            <div
-              key={commit.id}
-              className={`group p-3 rounded-lg cursor-pointer transition-all border ${
-                hoveredCommitId === commit.id 
-                  ? 'bg-emerald-500/20 border-emerald-500/50 ring-1 ring-emerald-500/30' 
-                  : 'bg-zinc-800/30 hover:bg-zinc-800/60 border-transparent hover:border-zinc-700'
-              }`}
-              onClick={() => setSelectedCommit(commit)}
-              onMouseEnter={() => setHoveredCommitId(commit.id)}
-              onMouseLeave={() => setHoveredCommitId(null)}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-medium text-zinc-200 group-hover:text-zinc-100 line-clamp-2">
-                  {commit.message}
-                </p>
-                <code className="flex-shrink-0 rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-400 font-mono">
-                  {commit.hash}
-                </code>
-              </div>
-
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  {commit.branch && (
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-xs text-emerald-400 border border-emerald-500/30">
-                      <GitBranch className="h-3 w-3" />
-                      {commit.branch}
-                    </span>
-                  )}
-                  
-                  {commit.tags && commit.tags.map(tag => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400 border border-amber-500/20"
-                    >
-                      <Tag className="h-3 w-3" />
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
-                  <span className="flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {commit.author}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {formatTime(commit.timestamp)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
       {/* Commit Details Overlay */}
       {selectedCommit && (
@@ -447,26 +351,6 @@ export function CommitGraph({
           onClose={() => setSelectedCommit(null)}
         />
       )}
-
-      <style>{`
-        .mermaid-container svg {
-          width: 100%;
-          height: auto;
-          transition: transform 0.2s ease;
-        }
-        .mermaid-container .commit-label {
-          font-size: 10px !important;
-        }
-        .mermaid-container .branch-label {
-          font-size: 12px !important;
-        }
-        .mermaid-container circle {
-          transition: filter 0.2s ease;
-        }
-        .mermaid-container g {
-          transition: filter 0.2s ease;
-        }
-      `}</style>
     </div>
   );
 }
