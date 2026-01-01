@@ -30,6 +30,8 @@ export class GitMermaidService {
 
   // Map of ParentHash -> List of BranchNames that spawn from this parent
   private divergentChildren: Map<string, string[]> = new Map();
+  // Track commit counts to prevent empty-branch merges
+  private branchCommitCount: Map<string, number> = new Map();
 
   /**
    * Converts a raw git log string into a Mermaid gitGraph diagram.
@@ -44,6 +46,7 @@ export class GitMermaidService {
 
     this.commits.clear();
     this.divergentChildren.clear();
+    this.branchCommitCount.clear();
     this.branchCounter = 0;
 
     // Phase 1: Ingestion & Topological Map Building
@@ -232,6 +235,17 @@ export class GitMermaidService {
                       const isLastMerge = (i === node.parents.length - 1);
                       const idAttr = isLastMerge ? ` id: "${id}"` : '';
                       const tagAttr = (isLastMerge && this.getTag(node.refs)) ? ` tag: "${this.getTag(node.refs)}"` : '';
+
+                      // Safety: If we are merging into a branch that has NO commits yet,
+                      // Mermaid can fail with "merge into itself" or other topological errors
+                      // if the source is an ancestor/descendant.
+                      // We inject a synthetic commit to anchor the branch.
+                      const currentCount = this.branchCommitCount.get(targetLane) || 0;
+                      if (currentCount === 0) {
+                          lines.push(`   commit id: "${targetLane}-start"`);
+                          this.branchCommitCount.set(targetLane, 1);
+                      }
+
                       lines.push(`   merge ${sourceBranch}${idAttr}${tagAttr}`);
                   } else if (node.parents.length === 2) {
                        lines.push(`   commit id: "${id}" type: HIGHLIGHT`);
@@ -244,6 +258,7 @@ export class GitMermaidService {
           const tag = this.getTag(node.refs);
           const tagStr = tag ? ` tag: "${tag}"` : '';
           lines.push(`   commit id: "${id}"${tagStr}`);
+          this.branchCommitCount.set(targetLane, (this.branchCommitCount.get(targetLane) || 0) + 1);
       }
 
       // 3. Post-Processing: Spawn divergent branches
