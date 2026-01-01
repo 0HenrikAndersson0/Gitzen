@@ -52,8 +52,14 @@ export function BranchesPanel({
       setLoading(true);
     }
     try {
-      // Load local branches
-      const localResult = await window.electronAPI.gitGetBranches();
+      // Load local branches, remote branches, and tags in parallel
+      const [localResult, remoteResult, tagsResult] = await Promise.all([
+        window.electronAPI.gitGetBranches(),
+        window.electronAPI.getRemoteBranches(),
+        window.electronAPI.getTags(),
+      ]);
+
+      // Process local branches
       if (localResult.success && localResult.branches) {
         const newLocalBranches = localResult.branches.map((name) => ({
           name,
@@ -76,8 +82,7 @@ export function BranchesPanel({
         });
       }
 
-      // Load remote branches
-      const remoteResult = await window.electronAPI.getRemoteBranches();
+      // Process remote branches
       if (remoteResult.success && remoteResult.branches) {
         const newRemoteBranches = remoteResult.branches.map((branch) => ({
           name: `${branch.remote}/${branch.name}`,
@@ -96,26 +101,10 @@ export function BranchesPanel({
           return prev;
         });
       }
-    } catch (error) {
-      console.error('Failed to load branches:', error);
-      if (showLoading) {
-        toast.error('Failed to load branches');
-      }
-    } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
-    }
-  }, [currentBranch]);
 
-  const loadTags = useCallback(async (showLoading: boolean = false) => {
-    if (showLoading) {
-      setLoading(true);
-    }
-    try {
-      const result = await window.electronAPI.getTags();
-      if (result.success && result.tags) {
-        const newTags = result.tags.map((tag) => ({
+      // Process tags
+      if (tagsResult.success && tagsResult.tags) {
+        const newTags = tagsResult.tags.map((tag) => ({
           name: tag.name,
           commit: tag.commit,
           date: new Date(tag.date),
@@ -133,38 +122,29 @@ export function BranchesPanel({
         });
       }
     } catch (error) {
-      console.error('Failed to load tags:', error);
+      console.error('Failed to load branches and tags:', error);
       if (showLoading) {
-        toast.error('Failed to load tags');
+        toast.error('Failed to load branches and tags');
       }
     } finally {
       if (showLoading) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [currentBranch]);
 
   useEffect(() => {
-    if (activeTab === 'local' || activeTab === 'remote') {
-      loadBranches(true); // Show loading on initial load or tab switch
-    } else if (activeTab === 'tags') {
-      loadTags(true); // Show loading on initial load or tab switch
-    }
+    // Always load branches and tags together, regardless of active tab
+    loadBranches(true); // Show loading on initial load or tab switch
     // Only depend on activeTab and currentBranch - the functions are stable via useCallback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, currentBranch]);
 
   // Memoize the refresh function to avoid recreating it on every render
   const refreshCurrentTab = useCallback(async () => {
-    // Refresh branches if on local or remote tab (silent refresh, no loading indicator)
-    if (activeTab === 'local' || activeTab === 'remote') {
-      await loadBranches(false);
-    }
-    // Refresh tags if on tags tab (silent refresh, no loading indicator)
-    if (activeTab === 'tags') {
-      await loadTags(false);
-    }
-  }, [activeTab, loadBranches, loadTags]);
+    // Always refresh branches and tags together (silent refresh, no loading indicator)
+    await loadBranches(false);
+  }, [loadBranches]);
 
   // Auto-refresh branches and tags every 10 seconds
   // Refresh based on the currently active tab
@@ -255,7 +235,7 @@ export function BranchesPanel({
         if (result.success) {
           toast.success(`Deleted tag ${dialogToDelete.name}`);
           onDeleteTag?.(dialogToDelete.name);
-          await loadTags(true);
+          await loadBranches(true);
         } else {
           toast.error(result.error || 'Failed to delete tag');
         }
