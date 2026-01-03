@@ -245,7 +245,7 @@ export function CommitGraph({
         </span>
       </div>
 
-      <div className="flex-1 overflow-auto bg-zinc-950 relative" style={{ height: '500px' }}>
+      <div className="flex-1 overflow-auto bg-zinc-950 relative" style={{ maxHeight: '754px' }}>
         <div className="relative" style={{ height: height, minWidth: '100%' }}>
            {/* Graph Layer - Absolute positioned behind content */}
            <svg

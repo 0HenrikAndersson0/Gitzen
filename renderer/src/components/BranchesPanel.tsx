@@ -321,94 +321,48 @@ export function BranchesPanel({
   }, [contextMenu]);
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50">
-      {/* Header */}
-      <div className="border-b border-zinc-800 p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-zinc-100">Branches & Tags</h3>
+    <div className="flex flex-col gap-4">
+      {/* Local Branches Panel */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
+        <div className="border-b border-zinc-800 p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-zinc-100">
+            <GitBranch className="size-4" />
+            <h3 className="font-semibold text-sm">Local Branches</h3>
+          </div>
           <button
             onClick={handleCreateBranchClick}
-            className="flex items-center gap-1.5 rounded-md bg-emerald-600/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-600/20"
+            className="flex items-center gap-1.5 rounded-md bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-600/20"
           >
-            <Plus className="size-3.5" />
-            New Branch
+            <Plus className="size-3" />
+            New
           </button>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-zinc-800 bg-zinc-900/30">
-        <button
-          onClick={() => setActiveTab('local')}
-          className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'local'
-              ? 'border-b-2 border-blue-500 bg-zinc-800/50 text-zinc-100'
-              : 'text-zinc-400 hover:bg-zinc-800/30 hover:text-zinc-300'
-          }`}
-        >
-          <div className="flex items-center justify-center gap-2">
-            <GitBranch className="size-4" />
-            Local ({localBranches.length})
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('remote')}
-          className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'remote'
-              ? 'border-b-2 border-purple-500 bg-zinc-800/50 text-zinc-100'
-              : 'text-zinc-400 hover:bg-zinc-800/30 hover:text-zinc-300'
-          }`}
-        >
-          <div className="flex items-center justify-center gap-2">
-            <GitMerge className="size-4" />
-            Remote ({remoteBranches.length})
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('tags')}
-          className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'tags'
-              ? 'border-b-2 border-amber-500 bg-zinc-800/50 text-zinc-100'
-              : 'text-zinc-400 hover:bg-zinc-800/30 hover:text-zinc-300'
-          }`}
-        >
-          <div className="flex items-center justify-center gap-2">
-            <Tag className="size-4" />
-            Tags ({tags.length})
-          </div>
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="max-h-[400px] overflow-y-auto">
-        {loading && (
-          <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
-        )}
-        
-        {!loading && activeTab === 'local' && (
-          <div className="divide-y divide-zinc-800">
-            {localBranches.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-500">No local branches</div>
-            ) : (
-              localBranches.map((branch) => (
+        <div className="max-h-[300px] overflow-y-auto">
+          {loading && localBranches.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+          ) : localBranches.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">No local branches</div>
+          ) : (
+            <div className="divide-y divide-zinc-800">
+              {localBranches.map((branch) => (
                 <div
                   key={branch.name}
-                  className="group flex items-center justify-between p-3 transition-colors hover:bg-zinc-800/50"
+                  className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
                   onContextMenu={(e) => handleContextMenu(e, branch.name)}
                 >
                   <button
                     onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
-                    className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                    className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                     disabled={branch.isCurrent}
                   >
-                    <GitBranch className={`size-4 flex-shrink-0 ${branch.isCurrent ? 'text-blue-400' : 'text-zinc-500'}`} />
+                    <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-blue-400' : 'text-zinc-500'}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={`truncate text-sm font-medium ${branch.isCurrent ? 'text-blue-400' : 'text-zinc-300'}`}>
+                        <span className={`truncate text-sm ${branch.isCurrent ? 'text-blue-400 font-medium' : 'text-zinc-300'}`}>
                           {branch.name}
                         </span>
                         {branch.isCurrent && (
-                          <CheckCircle2 className="size-3.5 flex-shrink-0 text-blue-400" />
+                          <CheckCircle2 className="size-3 flex-shrink-0 text-blue-400" />
                         )}
                       </div>
                     </div>
@@ -421,41 +375,49 @@ export function BranchesPanel({
                       }}
                       className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                     >
-                      <Trash2 className="size-4 text-red-400 hover:text-red-300" />
+                      <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
                     </button>
                   )}
                 </div>
-              ))
-            )}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-        {!loading && activeTab === 'remote' && (
-          <div className="divide-y divide-zinc-800">
-            {remoteBranches.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-500">No remote branches</div>
-            ) : (
-              remoteBranches.map((branch) => {
-                // Extract branch name from remote/branch format (e.g., origin/feature/dev/something -> feature/dev/something)
+      {/* Remote Branches Panel */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
+        <div className="border-b border-zinc-800 p-3 flex items-center gap-2 text-zinc-100">
+          <GitMerge className="size-4" />
+          <h3 className="font-semibold text-sm">Remote Branches</h3>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto">
+          {loading && remoteBranches.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+          ) : remoteBranches.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">No remote branches</div>
+          ) : (
+            <div className="divide-y divide-zinc-800">
+              {remoteBranches.map((branch) => {
                 const branchName = extractBranchNameFromRemote(branch.name);
                 const isLocalBranch = localBranches.some(b => b.name === branchName);
                 
                 return (
                   <div
                     key={branch.name}
-                    className="group flex items-center justify-between p-3 transition-colors hover:bg-zinc-800/50"
+                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
                   >
                     <div
-                      className="flex min-w-0 flex-1 items-start gap-3 cursor-pointer"
+                      className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
                       onClick={() => !isLocalBranch && handleCheckout(branch.name)}
                     >
-                      <GitMerge className="size-4 flex-shrink-0 text-purple-400" />
+                      <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-purple-400" />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-zinc-300">
+                        <div className="truncate text-sm text-zinc-300">
                           {branch.name}
                         </div>
                         {isLocalBranch && (
-                          <div className="text-xs text-zinc-500 mt-0.5">
+                          <div className="text-[10px] text-zinc-500">
                             Local branch exists
                           </div>
                         )}
@@ -468,33 +430,42 @@ export function BranchesPanel({
                       }}
                       className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                     >
-                      <Trash2 className="size-4 text-red-400 hover:text-red-300" />
+                      <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
                     </button>
                   </div>
                 );
-              })
-            )}
-          </div>
-        )}
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
-        {!loading && activeTab === 'tags' && (
-          <div className="divide-y divide-zinc-800">
-            {tags.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-500">No tags</div>
-            ) : (
-              tags.map((tag) => (
+      {/* Tags Panel */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
+        <div className="border-b border-zinc-800 p-3 flex items-center gap-2 text-zinc-100">
+          <Tag className="size-4" />
+          <h3 className="font-semibold text-sm">Tags</h3>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto">
+          {loading && tags.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+          ) : tags.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">No tags</div>
+          ) : (
+            <div className="divide-y divide-zinc-800">
+              {tags.map((tag) => (
                 <div
                   key={tag.name}
-                  className="group flex items-center justify-between p-3 transition-colors hover:bg-zinc-800/50"
+                  className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
                 >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <Tag className="size-4 flex-shrink-0 text-amber-400" />
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                    <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-zinc-300">
+                      <div className="truncate text-sm text-zinc-300">
                         {tag.name}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
-                        <span className="font-mono">{tag.commit}</span>
+                      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                        <span className="font-mono">{tag.commit.substring(0, 7)}</span>
                         <span>•</span>
                         <span>{tag.date.toLocaleDateString()}</span>
                       </div>
@@ -507,13 +478,13 @@ export function BranchesPanel({
                     }}
                     className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                   >
-                    <Trash2 className="size-4 text-red-400 hover:text-red-300" />
+                    <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
                   </button>
                 </div>
-              ))
-            )}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Delete Confirmation Dialog */}

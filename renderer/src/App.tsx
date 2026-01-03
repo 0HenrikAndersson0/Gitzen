@@ -669,8 +669,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
+      <div className="w-full space-y-4">
         <RepoHeader
           repoName={repoName}
           currentBranch={currentBranch}
@@ -680,8 +680,23 @@ export default function App() {
           onOpenSettings={() => setShowSettingsDialog(true)}
         />
 
-        <div className="grid gap-6 grid-cols-1">
-          <div className="space-y-6">
+        <div className="grid grid-cols-5 gap-4">
+          {/* Left Sidebar - Branches & Tags (20%) */}
+          {repoName && (
+            <div className="col-span-1 flex flex-col gap-4">
+              <BranchesPanel
+                currentBranch={currentBranch}
+                onCheckout={handleCheckout}
+                onCreateBranch={handleCreateBranch}
+                onDeleteBranch={handleDeleteBranch}
+                onDeleteTag={handleDeleteTag}
+                onMergeBranch={handleMergeBranch}
+              />
+            </div>
+          )}
+
+          {/* Main Content Area - Graph or Repo Selector */}
+          <div className={`${repoName ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4`}>
             {!repoName ? (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
                 <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')}>
@@ -713,6 +728,11 @@ export default function App() {
                 currentBranch={currentBranch}
               />
             )}
+          </div>
+        </div>
+
+        {repoName ? (
+          <div className="grid grid-cols-2 gap-4">
             <CommitPanel
               files={files}
               onToggleStage={handleToggleStage}
@@ -723,22 +743,11 @@ export default function App() {
               onRevertFile={handleRevertFile}
               onDeleteFile={handleDeleteFile}
             />
-          </div>
-
-          <div className="space-y-6">
             <ActivityLog logs={logs} />
-            {repoName && (
-              <BranchesPanel
-                currentBranch={currentBranch}
-                onCheckout={handleCheckout}
-                onCreateBranch={handleCreateBranch}
-                onDeleteBranch={handleDeleteBranch}
-                onDeleteTag={handleDeleteTag}
-                onMergeBranch={handleMergeBranch}
-              />
-            )}
           </div>
-        </div>
+        ) : (
+          <ActivityLog logs={logs} />
+        )}
       </div>
 
       <CredentialsDialog
