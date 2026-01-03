@@ -465,13 +465,13 @@ export async function getHistory(maxCount: number = 50): Promise<{
             const match = ref.match(/HEAD -> (.+)/);
             if (match) {
               const refBranch = match[1].trim();
-              if (refBranch !== 'main' && refBranch !== 'master') {
+              
                 commitToBranch[hash] = refBranch;
                 break;
-              }
+              
             }
           } 
-          else if (ref && ref.trim() && !ref.startsWith('tag:') && ref !== 'main' && ref !== 'master') {
+          else if (ref && ref.trim() && !ref.startsWith('tag:')) {
             commitToBranch[hash] = ref.trim();
             break;
           }
