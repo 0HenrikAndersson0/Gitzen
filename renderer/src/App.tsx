@@ -58,6 +58,12 @@ declare global {
       gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: string[]; error?: string }>;
       getConflictedFiles: () => Promise<{ success: boolean; files?: string[]; error?: string }>;
       abortMerge: () => Promise<{ success: boolean; error?: string }>;
+      gitRebaseBranch: (branch: string) => Promise<{ success: boolean; error?: string }>;
+      gitAbortRebase: () => Promise<{ success: boolean; error?: string }>;
+      gitContinueRebase: () => Promise<{ success: boolean; error?: string }>;
+      gitGetRebaseStatus: () => Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string }>;
+      gitGetCommitsForInteractiveRebase: (targetBranch: string) => Promise<{ success: boolean; commits?: any[]; error?: string }>;
+      gitInteractiveRebase: (targetBranch: string, todoLines: string[]) => Promise<{ success: boolean; error?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       saveCredentials: (remoteUrl: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
       hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
@@ -97,6 +103,7 @@ export default function App() {
   const [showMergeConflictDialog, setShowMergeConflictDialog] = useState(false);
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -182,20 +189,57 @@ export default function App() {
     }
   }, [repoPath]);
 
+  const refreshRebaseStatus = useCallback(async () => {
+    if (!repoPath) return;
+    try {
+      const result = await window.electronAPI.gitGetRebaseStatus();
+      if (result.success) {
+        setRebaseStatus({ inProgress: result.inProgress, currentStep: result.currentStep, totalSteps: result.totalSteps });
+
+        // If rebase is in progress, check for conflicts
+        if (result.inProgress) {
+            const conflictResult = await window.electronAPI.getConflictedFiles();
+            if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+               setConflictedFiles(conflictResult.files);
+               // We don't necessarily show the merge conflict dialog automatically because it might be intrusive
+               // But we should show it if user tries to continue rebase
+               // Or better, show it if the list changed significantly?
+               // For now, let's keep it consistent with merge flow, but maybe distinct UI?
+               // The user requested: "Also handle merge conflicts if they accour in a rebase step"
+               // We can show the same dialog or a banner.
+               // Since we have a global rebase banner (to be added below), maybe that's enough,
+               // and the "Continue" button there can trigger conflict check.
+
+               // Actually, if we are in rebase and have conflicts, let's update the conflictedFiles state
+               // so the file list (CommitPanel) shows them correctly (it does via gitStatus).
+            } else {
+               // If no conflicts, clear them
+               setConflictedFiles([]);
+            }
+        } else {
+            setConflictedFiles([]);
+        }
+      }
+    } catch (error) {
+       console.error('Failed to check rebase status:', error);
+    }
+  }, [repoPath]);
+
   useEffect(() => {
     if (repoPath) {
       refreshStatus();
       refreshBranch();
       refreshHistory();
       refreshUnpushedCommits();
+      refreshRebaseStatus();
     }
-  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits]);
+  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits, refreshRebaseStatus]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits],
+    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits, refreshRebaseStatus],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -421,16 +465,55 @@ export default function App() {
     }
   };
 
-  const handleRebase = async (branch: string) => {
-    addLog('info', `Rebasing ${currentBranch} onto ${branch}...`);
-    toast.info('Rebase functionality coming soon');
-    // TODO: Implement rebase
+  const handleAbortRebase = async () => {
+      try {
+          const result = await window.electronAPI.gitAbortRebase();
+          if (result.success) {
+              toast.success('Rebase aborted');
+              addLog('info', 'Rebase aborted');
+              await refreshRebaseStatus();
+              await refreshStatus();
+              await refreshHistory();
+              await refreshBranch();
+          } else {
+              toast.error(result.error || 'Failed to abort rebase');
+          }
+      } catch (error: any) {
+          toast.error(`Failed to abort rebase: ${error.message}`);
+      }
   };
 
-  const handleInteractiveRebase = async (branch: string) => {
-    addLog('info', `Starting interactive rebase of ${currentBranch} onto ${branch}...`);
-    toast.info('Interactive rebase functionality coming soon');
-    // TODO: Implement interactive rebase
+  const handleContinueRebase = async () => {
+      // Check for conflicts first
+      const conflictResult = await window.electronAPI.getConflictedFiles();
+      if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+          setConflictedFiles(conflictResult.files);
+          setShowMergeConflictDialog(true);
+          toast.warning('Please resolve conflicts before continuing');
+          return;
+      }
+
+      try {
+          const result = await window.electronAPI.gitContinueRebase();
+          if (result.success) {
+              toast.success('Rebase continued');
+              addLog('info', 'Rebase continued');
+              await refreshRebaseStatus();
+              await refreshStatus();
+              await refreshHistory();
+              await refreshBranch();
+          } else {
+             if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
+                 toast.warning('Rebase paused due to conflicts');
+                 await refreshRebaseStatus();
+                 await refreshStatus(); // To show conflicted files
+             } else {
+                 toast.error(result.error || 'Failed to continue rebase');
+             }
+          }
+      } catch (error: any) {
+          toast.error(`Failed to continue rebase: ${error.message}`);
+      }
   };
 
   const handleMergeBranch = async (branch: string) => {
@@ -679,6 +762,32 @@ export default function App() {
           onOpenNew={handleOpenNewRepo}
           onOpenSettings={() => setShowSettingsDialog(true)}
         />
+
+        {rebaseStatus.inProgress && (
+            <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="size-2 rounded-full bg-purple-500 animate-pulse" />
+                    <span className="font-medium text-purple-200">
+                        Rebase in progress
+                        {rebaseStatus.totalSteps ? ` (Step ${rebaseStatus.currentStep} of ${rebaseStatus.totalSteps})` : ''}
+                    </span>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleAbortRebase}
+                        className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
+                    >
+                        Abort
+                    </button>
+                    <button
+                        onClick={handleContinueRebase}
+                        className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-colors"
+                    >
+                        Continue
+                    </button>
+                </div>
+            </div>
+        )}
 
         <div className="grid grid-cols-5 gap-4">
           {/* Left Sidebar - Branches & Tags (20%) */}

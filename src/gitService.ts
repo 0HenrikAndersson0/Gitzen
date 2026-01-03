@@ -1037,10 +1037,14 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
       return { success: false, error: 'No repository open' };
     }
 
-    // Check if we're in a merge state
+    // Check if we're in a merge or rebase state
     const mergeHeadPath = path.join(currentRepoPath, '.git', 'MERGE_HEAD');
-    if (!fs.existsSync(mergeHeadPath)) {
-      return { success: false, error: 'Not in a merge state' };
+    const rebaseMergePath = path.join(currentRepoPath, '.git', 'rebase-merge');
+    const rebaseApplyPath = path.join(currentRepoPath, '.git', 'rebase-apply');
+
+    if (!fs.existsSync(mergeHeadPath) && !fs.existsSync(rebaseMergePath) && !fs.existsSync(rebaseApplyPath)) {
+      // Not in a known conflict state, but we can still check for unmerged files
+      // return { success: false, error: 'Not in a merge or rebase state' };
     }
 
     // Get conflicted files using git status --porcelain
@@ -1254,3 +1258,192 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
   }
 }
 
+
+export async function rebaseBranch(branch: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await runGitCommand(`rebase ${branch}`);
+    return { success: true };
+  } catch (error: any) {
+    const errorMsg = error.message || error.stderr || 'Unknown error';
+    if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
+       // This is expected for conflicts
+       return { success: false, error: 'Rebase paused due to conflicts' };
+    }
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function abortRebase(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand('rebase --abort');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function continueRebase(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    // We need to set GIT_EDITOR to true (or cat) to handle "resolved" commits that might pop up an editor
+    // but typically continue just goes.
+    // However, if there are changes, it might ask for commit message.
+    await runGitCommand('rebase --continue', undefined, { GIT_EDITOR: 'true' });
+    return { success: true };
+  } catch (error: any) {
+     const errorMsg = error.message || error.stderr || 'Unknown error';
+    if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
+       return { success: false, error: 'Rebase paused due to conflicts' };
+    }
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function getRebaseStatus(): Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open', inProgress: false };
+    }
+
+    const rebaseMergePath = path.join(currentRepoPath, '.git', 'rebase-merge');
+    const rebaseApplyPath = path.join(currentRepoPath, '.git', 'rebase-apply');
+
+    if (fs.existsSync(rebaseMergePath)) {
+      // Interactive or merge-based rebase
+      let current = 0;
+      let total = 0;
+      try {
+        const msgNum = fs.readFileSync(path.join(rebaseMergePath, 'msgnum'), 'utf8').trim();
+        const end = fs.readFileSync(path.join(rebaseMergePath, 'end'), 'utf8').trim();
+        current = parseInt(msgNum, 10);
+        total = parseInt(end, 10);
+      } catch (e) {
+        // ignore parsing errors
+      }
+      return { success: true, inProgress: true, currentStep: current, totalSteps: total };
+    } else if (fs.existsSync(rebaseApplyPath)) {
+       // Apply based rebase
+       let current = 0;
+       let total = 0;
+       try {
+         const next = fs.readFileSync(path.join(rebaseApplyPath, 'next'), 'utf8').trim();
+         const last = fs.readFileSync(path.join(rebaseApplyPath, 'last'), 'utf8').trim();
+         current = parseInt(next, 10);
+         total = parseInt(last, 10);
+       } catch (e) {
+         // ignore
+       }
+       return { success: true, inProgress: true, currentStep: current, totalSteps: total };
+    }
+
+    return { success: true, inProgress: false };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error', inProgress: false };
+  }
+}
+
+export interface RebaseTodoItem {
+  action: 'pick' | 'reword' | 'edit' | 'squash' | 'fixup' | 'drop';
+  hash: string;
+  message: string;
+}
+
+export async function getCommitsForInteractiveRebase(targetBranch: string): Promise<{ success: boolean; commits?: RebaseTodoItem[]; error?: string }> {
+  try {
+     if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Get list of commits to be rebased: targetBranch..HEAD
+    const { stdout } = await runGitCommand(`log ${targetBranch}..HEAD --pretty=format:"%H %s" --reverse`);
+
+    const commits: RebaseTodoItem[] = stdout.split('\n').filter(l => l.trim()).map(line => {
+      const parts = line.split(' ');
+      const hash = parts[0];
+      const message = parts.slice(1).join(' ');
+      return {
+        action: 'pick', // default action
+        hash,
+        message
+      };
+    });
+
+    return { success: true, commits };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function performInteractiveRebase(targetBranch: string, todoLines: string[]): Promise<{ success: boolean; error?: string }> {
+  try {
+     if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Write todo list to temp file
+    const tempTodoPath = path.join(currentRepoPath, '.git', 'rebase-todo-temp');
+    fs.writeFileSync(tempTodoPath, todoLines.join('\n'));
+
+    // Construct command to copy temp file to GIT_SEQUENCE_EDITOR argument
+    // On Windows, use a node script to be safe across shells
+    const nodeScript = `const fs = require('fs'); fs.copyFileSync('${tempTodoPath.replace(/\\/g, '\\\\')}', process.argv[2]);`;
+    const editorCmd = `node -e "${nodeScript}"`;
+
+    // We use process.argv[2] because git runs: EDITOR file
+    // node -e "..." file
+    // argv[0] is node, argv[1] is -e (or similar), argv[2] should be the file path?
+    // Wait, node -e script_content arg1
+    // inside script: process.argv[0] is node, process.argv[1] is the script content?
+    // Let's verify node -e behavior.
+
+    // Actually simpler: GIT_SEQUENCE_EDITOR="cp ${tempTodoPath} "
+    // But cross platform...
+
+    // Let's stick to node but be careful about argv.
+    // node -e "console.log(process.argv)" a b
+    // Output: [node_path, '-e', 'a', 'b']? No.
+    // [node_path, a, b]?
+
+    // I'll use a small intermediate JS file to be sure.
+    const helperScriptPath = path.join(currentRepoPath, '.git', 'rebase-helper.js');
+    const helperScript = `
+      const fs = require('fs');
+      const src = process.env.TEMP_TODO;
+      const dest = process.argv[2]; // argv[0] is node, argv[1] is script path, argv[2] is the file passed by git
+      fs.copyFileSync(src, dest);
+    `;
+    fs.writeFileSync(helperScriptPath, helperScript);
+
+    const env = {
+      ...process.env,
+      TEMP_TODO: tempTodoPath,
+      // Use our helper to replace the todo list
+      GIT_SEQUENCE_EDITOR: `node "${helperScriptPath.replace(/\\/g, '\\\\')}"`,
+      // Prevent git from opening an editor for squash/amend actions (auto-accept default)
+      GIT_EDITOR: 'node -e "process.exit(0)"'
+    };
+
+    await runGitCommand(`rebase -i ${targetBranch}`, undefined, env);
+
+    // Cleanup
+    if (fs.existsSync(tempTodoPath)) fs.unlinkSync(tempTodoPath);
+    if (fs.existsSync(helperScriptPath)) fs.unlinkSync(helperScriptPath);
+
+    return { success: true };
+  } catch (error: any) {
+    const errorMsg = error.message || error.stderr || 'Unknown error';
+    if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
+       return { success: false, error: 'Rebase paused due to conflicts' };
+    }
+    return { success: false, error: errorMsg };
+  }
+}

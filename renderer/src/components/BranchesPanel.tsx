@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
+import { RebaseModal } from './RebaseModal';
 
 interface Branch {
   name: string;
@@ -45,6 +46,8 @@ export function BranchesPanel({
   const [newBranchName, setNewBranchName] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch' | 'tag'; name: string } | null>(null);
+  const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
+  const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const loadBranches = useCallback(async (showLoading: boolean = false) => {
@@ -293,7 +296,7 @@ export function BranchesPanel({
     }
   };
 
-  const handleMenuAction = (action: 'merge') => {
+  const handleMenuAction = (action: 'merge' | 'rebase' | 'interactive-rebase') => {
     if (!contextMenu) return;
 
     const branch = contextMenu.branch;
@@ -302,9 +305,47 @@ export function BranchesPanel({
       case 'merge':
         onMergeBranch?.(branch);
         break;
+      case 'rebase':
+        // Direct rebase call
+        window.electronAPI.gitRebaseBranch(branch).then(result => {
+           if (result.success) {
+             toast.success(`Successfully rebased current branch onto ${branch}`);
+           } else {
+             if (result.error && result.error.includes('conflict')) {
+                toast.warning('Rebase started but encountered conflicts. Please resolve them.');
+                // App.tsx should pick up the conflict state via gitStatus polling
+             } else {
+                toast.error(`Rebase failed: ${result.error}`);
+             }
+           }
+        }).catch(err => {
+           toast.error(`Rebase failed: ${err.message}`);
+        });
+        break;
+      case 'interactive-rebase':
+        setRebaseTargetBranch(branch);
+        setRebaseModalOpen(true);
+        break;
     }
 
     setContextMenu(null);
+  };
+
+  const handleStartInteractiveRebase = async (targetBranch: string, todoLines: string[]) => {
+      try {
+        const result = await window.electronAPI.gitInteractiveRebase(targetBranch, todoLines);
+        if (result.success) {
+           toast.success('Interactive rebase started successfully');
+        } else {
+           if (result.error && result.error.includes('conflict')) {
+              toast.warning('Rebase encountered conflicts. Please resolve them.');
+           } else {
+              toast.error(`Rebase failed: ${result.error}`);
+           }
+        }
+      } catch (error: any) {
+        toast.error(`Rebase failed: ${error.message}`);
+      }
   };
 
   useEffect(() => {
@@ -598,7 +639,29 @@ export function BranchesPanel({
           >
             Merge to current
           </div>
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors border-t border-zinc-700"
+            onClick={() => handleMenuAction('rebase')}
+          >
+            Rebase current onto {contextMenu.branch}
+          </div>
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('interactive-rebase')}
+          >
+            Interactive Rebase...
+          </div>
         </div>
+      )}
+
+      {rebaseTargetBranch && (
+        <RebaseModal
+            isOpen={rebaseModalOpen}
+            onClose={() => setRebaseModalOpen(false)}
+            targetBranch={rebaseTargetBranch}
+            currentBranch={currentBranch}
+            onStartRebase={handleStartInteractiveRebase}
+        />
       )}
     </div>
   );
