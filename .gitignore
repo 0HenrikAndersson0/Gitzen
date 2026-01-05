@@ -8,3 +8,5 @@ build/
 *.deb
 *.rpm
 *.AppImage
+playwright-report/
+test-results/

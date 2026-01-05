@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Checkbox } from './ui/checkbox';
 import { FileCheck, FileX } from 'lucide-react';
+import { FileDiff } from './FileDiff';
 
 interface FileChange {
   path: string;
@@ -17,6 +18,7 @@ interface FileStagingProps {
 
 export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile }: FileStagingProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -93,8 +95,9 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile }
         files.map((file) => (
           <div
             key={file.path}
-            className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950/50 p-3 hover:bg-zinc-900/50 transition-colors"
+            className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950/50 p-3 hover:bg-zinc-900/50 transition-colors cursor-pointer"
             onContextMenu={(e) => handleContextMenu(e, file)}
+            onClick={() => setSelectedFile(file)}
           >
             <Checkbox
               checked={file.staged}
@@ -135,6 +138,14 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile }
             </div>
           )}
         </div>
+      )}
+
+      {/* File Diff Modal */}
+      {selectedFile && (
+        <FileDiff
+          file={selectedFile}
+          onClose={() => setSelectedFile(null)}
+        />
       )}
     </div>
   );

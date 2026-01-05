@@ -3,16 +3,18 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { shell } from 'electron';
-import { CredentialManager } from './CredentialManager';
 import * as settingsService from './settingsService';
+
+let CredentialManager: any;
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 let currentRepoPath: string | null = null;
-let credentialManager: CredentialManager | null = null;
+let credentialManager: any | null = null;
 
 export function initializeGitService() {
+  CredentialManager = require('./CredentialManager').CredentialManager;
   credentialManager = new CredentialManager();
 }
 
@@ -955,6 +957,42 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
     }
 
     return { success: true, files };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getFileDiff(filePath: string, staged: boolean): Promise<{ success: boolean; diff?: string; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const args = ['diff'];
+    if (staged) {
+      args.push('--cached');
+    }
+    args.push('--');
+    args.push(filePath);
+
+    // Unlike other commands, `git diff` can exit with code 1 if there are changes.
+    // We need to handle this gracefully by catching the error and checking stdout.
+    try {
+      const { stdout } = await execFileAsync('git', args, {
+        cwd: currentRepoPath,
+        maxBuffer: 10 * 1024 * 1024, // 10MB
+      });
+      // No diff found, returns empty string.
+      return { success: true, diff: stdout };
+    } catch (error: any) {
+      // If there's a diff, git exits with 1, and execFileAsync throws.
+      // The diff is in error.stdout.
+      if (typeof error.stdout === 'string') {
+        return { success: true, diff: error.stdout };
+      }
+      // A real error occurred
+      throw error;
+    }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

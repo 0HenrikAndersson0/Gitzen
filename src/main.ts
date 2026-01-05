@@ -32,7 +32,9 @@ function createWindow() {
 }
 
 // Initialize git service
-gitService.initializeGitService();
+if (process.env.NODE_ENV !== 'test') {
+  gitService.initializeGitService();
+}
 
 // Initialize recent repos service
 recentReposService.setUserDataPath(app.getPath('userData'));
@@ -139,6 +141,10 @@ ipcMain.handle('git:getTags', async () => {
 
 ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
   return await gitService.getCommitDiff(commitHash);
+});
+
+ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
+  return await gitService.getFileDiff(filePath, staged);
 });
 
 ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {
