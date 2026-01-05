@@ -27,6 +27,7 @@ interface BranchesPanelProps {
   onDeleteBranch?: (branch: string) => void;
   onDeleteTag?: (tag: string) => void;
   onMergeBranch?: (branch: string) => void;
+  onSetLoading?: (loading: boolean, message?: string) => void;
 }
 
 export function BranchesPanel({ 
@@ -35,7 +36,8 @@ export function BranchesPanel({
   onCreateBranch,
   onDeleteBranch,
   onDeleteTag,
-  onMergeBranch
+  onMergeBranch,
+  onSetLoading
 }: BranchesPanelProps) {
   const [activeTab, setActiveTab] = useState<'local' | 'remote' | 'tags'>('local');
   const [localBranches, setLocalBranches] = useState<Branch[]>([]);
@@ -212,6 +214,7 @@ export function BranchesPanel({
     
     // Close dialog immediately to provide better UX
     setDeleteDialog(null);
+    onSetLoading?.(true, `Deleting ${dialogToDelete.name}...`);
 
     try {
       let result;
@@ -246,6 +249,8 @@ export function BranchesPanel({
     } catch (error) {
       const itemType = dialogToDelete.type === 'branch' ? 'branch' : dialogToDelete.type === 'remoteBranch' ? 'remote branch' : 'tag';
       toast.error(`Failed to delete ${itemType}`);
+    } finally {
+      onSetLoading?.(false);
     }
   };
 
@@ -307,6 +312,7 @@ export function BranchesPanel({
         break;
       case 'rebase':
         // Direct rebase call
+        onSetLoading?.(true, `Rebasing onto ${branch}...`);
         window.electronAPI.gitRebaseBranch(branch).then(result => {
            if (result.success) {
              toast.success(`Successfully rebased current branch onto ${branch}`);
@@ -320,6 +326,8 @@ export function BranchesPanel({
            }
         }).catch(err => {
            toast.error(`Rebase failed: ${err.message}`);
+        }).finally(() => {
+           onSetLoading?.(false);
         });
         break;
       case 'interactive-rebase':
@@ -332,6 +340,7 @@ export function BranchesPanel({
   };
 
   const handleStartInteractiveRebase = async (targetBranch: string, todoLines: string[]) => {
+      onSetLoading?.(true, 'Starting interactive rebase...');
       try {
         const result = await window.electronAPI.gitInteractiveRebase(targetBranch, todoLines);
         if (result.success) {
@@ -345,6 +354,8 @@ export function BranchesPanel({
         }
       } catch (error: any) {
         toast.error(`Rebase failed: ${error.message}`);
+      } finally {
+        onSetLoading?.(false);
       }
   };
 

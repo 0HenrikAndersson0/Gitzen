@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { useAutoRefresh } from './hooks/useAutoRefresh';
+import { LoadingOverlay } from './components/ui/spinner';
 
 interface FileChange {
   path: string;
@@ -104,6 +105,8 @@ export default function App() {
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
 
@@ -114,6 +117,17 @@ export default function App() {
 
   const addLog = (type: LogEntry['type'], message: string) => {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
+  };
+
+  const withLoading = async (message: string, fn: () => Promise<void>) => {
+    setIsLoading(true);
+    setLoadingMessage(message);
+    try {
+      await fn();
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage(undefined);
+    }
   };
 
   const loadRepository = async () => {
@@ -149,19 +163,12 @@ export default function App() {
       const result = await window.electronAPI.gitGetCurrentBranch();
       if (result.success && result.branch && result.branch.trim()) {
         const newBranch = result.branch.trim();
-        // Only update if the branch actually changed to avoid unnecessary re-renders
-        // and to prevent resetting to a default value
         setCurrentBranch((prevBranch) => {
-          // Only update if different from current state
-          // This prevents resetting to "main" if the branch is already set correctly
           return newBranch !== prevBranch ? newBranch : prevBranch;
         });
       }
-      // If result.branch is empty (detached HEAD), don't update the state
-      // This preserves the current branch name in the UI
     } catch (error) {
       console.error('Failed to refresh branch:', error);
-      // Don't update state on error - preserve current branch
     }
   }, [repoPath]);
 
@@ -251,134 +258,135 @@ export default function App() {
     addLog('info', `Cloning repository from ${url}...`);
     setRemoteUrl(url);
     
-    try {
-      const result = await window.electronAPI.gitClone(url, path);
-      if (result.success) {
-        setRepoPath(path);
-        setRepoName(url.split('/').pop()?.replace('.git', '') || 'repository');
-        addLog('success', `Repository cloned successfully to ${path}`);
-        toast.success('Repository cloned successfully!');
-        
-        // Check if user already has access via Git's built-in credential system
-        const testResult = await window.electronAPI.testGitCredentials(url);
-        if (testResult.success) {
-          // User already has access via SSH keys, credential helper, etc.
-          setHasCredentials(true);
-          addLog('info', 'Git credentials verified - access available');
-        } else {
-          // Check for stored credentials
-          const credResult = await window.electronAPI.hasCredentials(url);
-          if (credResult.success && credResult.hasCredentials) {
-            // Credentials exist, but we'll validate them when actually used
+    await withLoading(`Cloning repository...`, async () => {
+      try {
+        const result = await window.electronAPI.gitClone(url, path);
+        if (result.success) {
+          setRepoPath(path);
+          setRepoName(url.split('/').pop()?.replace('.git', '') || 'repository');
+          addLog('success', `Repository cloned successfully to ${path}`);
+          toast.success('Repository cloned successfully!');
+          
+          const testResult = await window.electronAPI.testGitCredentials(url);
+          if (testResult.success) {
             setHasCredentials(true);
+            addLog('info', 'Git credentials verified - access available');
           } else {
-            // No access and no stored credentials - show dialog
-            setTimeout(() => {
-              setShowCredentialsDialog(true);
-              addLog('warning', 'Git credentials required for push operations');
-            }, 500);
+            const credResult = await window.electronAPI.hasCredentials(url);
+            if (credResult.success && credResult.hasCredentials) {
+              setHasCredentials(true);
+            } else {
+              setTimeout(() => {
+                setShowCredentialsDialog(true);
+                addLog('warning', 'Git credentials required for push operations');
+              }, 500);
+            }
           }
-        }
 
-        await refreshStatus();
-        await refreshBranch();
-        await refreshHistory();
-      } else {
-        addLog('error', result.error || 'Failed to clone repository');
-        toast.error(result.error || 'Failed to clone repository');
+          await refreshStatus();
+          await refreshBranch();
+          await refreshHistory();
+        } else {
+          addLog('error', result.error || 'Failed to clone repository');
+          toast.error(result.error || 'Failed to clone repository');
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Clone failed: ${errorMsg}`);
+        toast.error(`Clone failed: ${errorMsg}`);
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      addLog('error', `Clone failed: ${errorMsg}`);
-      toast.error(`Clone failed: ${errorMsg}`);
-    }
+    });
   };
 
   const handleToggleStage = async (path: string) => {
     const file = files.find(f => f.path === path);
     if (!file) return;
 
-    try {
-      if (file.staged) {
-        // Unstage the file
-        const result = await window.electronAPI.gitUnstage([path]);
-        if (result.success) {
-          // Refresh status to get the actual state from git
-          await refreshStatus();
+    await withLoading(file.staged ? 'Unstaging file...' : 'Staging file...', async () => {
+      try {
+        if (file.staged) {
+          const result = await window.electronAPI.gitUnstage([path]);
+          if (result.success) {
+            await refreshStatus();
+          } else {
+            addLog('error', result.error || 'Failed to unstage file');
+          }
         } else {
-          addLog('error', result.error || 'Failed to unstage file');
+          const result = await window.electronAPI.gitStage([path]);
+          if (result.success) {
+            await refreshStatus();
+          } else {
+            addLog('error', result.error || 'Failed to stage file');
+          }
         }
-      } else {
-        // Stage the file - this works for both new and modified files
-        const result = await window.electronAPI.gitStage([path]);
-        if (result.success) {
-          // Refresh status to get the actual state from git
-          await refreshStatus();
-        } else {
-          addLog('error', result.error || 'Failed to stage file');
-        }
+      } catch (error) {
+        addLog('error', `Failed to toggle stage: ${error}`);
       }
-    } catch (error) {
-      addLog('error', `Failed to toggle stage: ${error}`);
-    }
+    });
   };
 
   const handleRevertFile = async (path: string) => {
-    try {
-      const result = await (window.electronAPI as any).revertFileChanges(path);
-      if (result.success) {
-        addLog('success', `Reverted changes to ${path}`);
-        toast.success(`Reverted changes to ${path}`);
-        await refreshStatus();
-      } else {
-        addLog('error', result.error || 'Failed to revert file changes');
-        toast.error(result.error || 'Failed to revert file changes');
+    await withLoading(`Reverting changes to ${path}...`, async () => {
+      try {
+        const result = await (window.electronAPI as any).revertFileChanges(path);
+        if (result.success) {
+          addLog('success', `Reverted changes to ${path}`);
+          toast.success(`Reverted changes to ${path}`);
+          await refreshStatus();
+        } else {
+          addLog('error', result.error || 'Failed to revert file changes');
+          toast.error(result.error || 'Failed to revert file changes');
+        }
+      } catch (error) {
+        addLog('error', `Failed to revert file: ${error}`);
+        toast.error('Failed to revert file');
       }
-    } catch (error) {
-      addLog('error', `Failed to revert file: ${error}`);
-      toast.error('Failed to revert file');
-    }
+    });
   };
 
   const handleDeleteFile = async (path: string) => {
-    try {
-      const result = await (window.electronAPI as any).deleteFile(path);
-      if (result.success) {
-        addLog('success', `Deleted file ${path}`);
-        toast.success(`Deleted file ${path}`);
-        await refreshStatus();
-      } else {
-        addLog('error', result.error || 'Failed to delete file');
-        toast.error(result.error || 'Failed to delete file');
+    await withLoading(`Deleting file ${path}...`, async () => {
+      try {
+        const result = await (window.electronAPI as any).deleteFile(path);
+        if (result.success) {
+          addLog('success', `Deleted file ${path}`);
+          toast.success(`Deleted file ${path}`);
+          await refreshStatus();
+        } else {
+          addLog('error', result.error || 'Failed to delete file');
+          toast.error(result.error || 'Failed to delete file');
+        }
+      } catch (error) {
+        addLog('error', `Failed to delete file: ${error}`);
+        toast.error('Failed to delete file');
       }
-    } catch (error) {
-      addLog('error', `Failed to delete file: ${error}`);
-      toast.error('Failed to delete file');
-    }
+    });
   };
 
   const handleCommit = async (message: string) => {
     const stagedFiles = files.filter((f) => f.staged);
     addLog('info', `Committing ${stagedFiles.length} file(s)...`);
     
-    try {
-      const result = await window.electronAPI.gitCommit(message);
-      if (result.success) {
-        addLog('success', `Committed: "${message}"`);
-        toast.success('Changes committed successfully!');
-        
-        await refreshStatus();
-        await refreshHistory();
-        await refreshUnpushedCommits();
-      } else {
-        addLog('error', result.error || 'Failed to commit');
-        toast.error(result.error || 'Failed to commit');
+    await withLoading('Committing changes...', async () => {
+      try {
+        const result = await window.electronAPI.gitCommit(message);
+        if (result.success) {
+          addLog('success', `Committed: "${message}"`);
+          toast.success('Changes committed successfully!');
+          
+          await refreshStatus();
+          await refreshHistory();
+          await refreshUnpushedCommits();
+        } else {
+          addLog('error', result.error || 'Failed to commit');
+          toast.error(result.error || 'Failed to commit');
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Commit failed: ${errorMsg}`);
+        toast.error(`Commit failed: ${errorMsg}`);
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      addLog('error', `Commit failed: ${errorMsg}`);
-      toast.error(`Commit failed: ${errorMsg}`);
-    }
+    });
   };
 
   const handlePush = async () => {
@@ -391,50 +399,47 @@ export default function App() {
 
     addLog('info', `Pushing to origin/${currentBranch}...`);
     
-    try {
-      const result = await window.electronAPI.gitPush('origin', currentBranch);
-      if (result.success) {
-        addLog('success', `Successfully pushed to origin/${currentBranch}`);
-        toast.success('Changes pushed successfully!');
-        await refreshUnpushedCommits();
-      } else {
-        const errorMsg = result.error || 'Failed to push';
-        addLog('error', errorMsg);
-        toast.error(errorMsg);
+    await withLoading(`Pushing to origin/${currentBranch}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitPush('origin', currentBranch);
+        if (result.success) {
+          addLog('success', `Successfully pushed to origin/${currentBranch}`);
+          toast.success('Changes pushed successfully!');
+          await refreshUnpushedCommits();
+        } else {
+          const errorMsg = result.error || 'Failed to push';
+          addLog('error', errorMsg);
+          toast.error(errorMsg);
+          
+          if (errorMsg.includes('Authentication') || 
+              errorMsg.includes('Permission denied') ||
+              errorMsg.includes('401') ||
+              errorMsg.includes('403') ||
+              errorMsg.includes('could not read Username') ||
+              errorMsg.includes('could not read Password')) {
+            setHasCredentials(false);
+            if (remoteUrl) {
+              addLog('warning', 'Invalid credentials detected. Please re-enter your credentials.');
+              setShowCredentialsDialog(true);
+            }
+          }
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Push failed: ${errorMsg}`);
+        toast.error(`Push failed: ${errorMsg}`);
         
-        // Check if it's an authentication error
         if (errorMsg.includes('Authentication') || 
             errorMsg.includes('Permission denied') ||
             errorMsg.includes('401') ||
-            errorMsg.includes('403') ||
-            errorMsg.includes('could not read Username') ||
-            errorMsg.includes('could not read Password')) {
-          // Credentials are invalid - mark as not authenticated
+            errorMsg.includes('403')) {
           setHasCredentials(false);
           if (remoteUrl) {
-            // Delete invalid credentials
-            addLog('warning', 'Invalid credentials detected. Please re-enter your credentials.');
-            // Note: We can't delete from here, but the user will need to re-enter
             setShowCredentialsDialog(true);
           }
         }
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      addLog('error', `Push failed: ${errorMsg}`);
-      toast.error(`Push failed: ${errorMsg}`);
-      
-      // Check if it's an authentication error
-      if (errorMsg.includes('Authentication') || 
-          errorMsg.includes('Permission denied') ||
-          errorMsg.includes('401') ||
-          errorMsg.includes('403')) {
-        setHasCredentials(false);
-        if (remoteUrl) {
-          setShowCredentialsDialog(true);
-        }
-      }
-    }
+    });
   };
 
   const handleCredentialsSubmit = async (username: string, password: string) => {
@@ -442,35 +447,35 @@ export default function App() {
     
     addLog('info', `Validating credentials for ${username}...`);
     
-    try {
-      const result = await window.electronAPI.saveCredentials(remoteUrl, username, password);
-      if (result.success) {
-        setHasCredentials(true);
-        setShowCredentialsDialog(false);
-        addLog('success', 'Credentials validated and saved successfully');
-        toast.success('Credentials authenticated!');
-      } else {
-        // Credentials failed validation - they were not saved and were deleted if they existed
-        const errorMsg = result.error || 'Failed to validate credentials';
-        addLog('error', `Authentication failed: ${errorMsg}`);
-        toast.error(`Authentication failed: ${errorMsg}`);
-        // Make sure hasCredentials is false
-        setHasCredentials(false);
-        // Re-check credentials to ensure they're deleted
-        const credCheck = await window.electronAPI.hasCredentials(remoteUrl);
-        if (credCheck.success && credCheck.hasCredentials) {
-          addLog('warning', 'Failed credentials were removed from storage');
+    await withLoading('Validating credentials...', async () => {
+      try {
+        const result = await window.electronAPI.saveCredentials(remoteUrl, username, password);
+        if (result.success) {
+          setHasCredentials(true);
+          setShowCredentialsDialog(false);
+          addLog('success', 'Credentials validated and saved successfully');
+          toast.success('Credentials authenticated!');
+        } else {
+          const errorMsg = result.error || 'Failed to validate credentials';
+          addLog('error', `Authentication failed: ${errorMsg}`);
+          toast.error(`Authentication failed: ${errorMsg}`);
+          setHasCredentials(false);
+          const credCheck = await window.electronAPI.hasCredentials(remoteUrl);
+          if (credCheck.success && credCheck.hasCredentials) {
+            addLog('warning', 'Failed credentials were removed from storage');
+          }
         }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Failed to validate credentials: ${errorMsg}`);
+        toast.error(`Failed to validate credentials: ${errorMsg}`);
+        setHasCredentials(false);
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      addLog('error', `Failed to validate credentials: ${errorMsg}`);
-      toast.error(`Failed to validate credentials: ${errorMsg}`);
-      setHasCredentials(false);
-    }
+    });
   };
 
   const handleAbortRebase = async () => {
+    await withLoading('Aborting rebase...', async () => {
       try {
           const result = await window.electronAPI.gitAbortRebase();
           if (result.success) {
@@ -486,6 +491,7 @@ export default function App() {
       } catch (error: any) {
           toast.error(`Failed to abort rebase: ${error.message}`);
       }
+    });
   };
 
   const handleContinueRebase = async () => {
@@ -498,141 +504,143 @@ export default function App() {
           return;
       }
 
-      try {
-          const result = await window.electronAPI.gitContinueRebase();
-          if (result.success) {
-              toast.success('Rebase continued');
-              addLog('info', 'Rebase continued');
-              await refreshRebaseStatus();
-              await refreshStatus();
-              await refreshHistory();
-              await refreshBranch();
-          } else {
-             if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
-                 toast.warning('Rebase paused due to conflicts');
-                 await refreshRebaseStatus();
-                 await refreshStatus(); // To show conflicted files
-             } else {
-                 toast.error(result.error || 'Failed to continue rebase');
-             }
-          }
-      } catch (error: any) {
-          toast.error(`Failed to continue rebase: ${error.message}`);
-      }
+      await withLoading('Continuing rebase...', async () => {
+        try {
+            const result = await window.electronAPI.gitContinueRebase();
+            if (result.success) {
+                toast.success('Rebase continued');
+                addLog('info', 'Rebase continued');
+                await refreshRebaseStatus();
+                await refreshStatus();
+                await refreshHistory();
+                await refreshBranch();
+            } else {
+               if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
+                   toast.warning('Rebase paused due to conflicts');
+                   await refreshRebaseStatus();
+                   await refreshStatus(); // To show conflicted files
+               } else {
+                   toast.error(result.error || 'Failed to continue rebase');
+               }
+            }
+        } catch (error: any) {
+            toast.error(`Failed to continue rebase: ${error.message}`);
+        }
+      });
   };
 
   const handleMergeBranch = async (branch: string) => {
-    try {
-      addLog('info', `Merging ${branch} into ${currentBranch}...`);
-      const result = await window.electronAPI.gitMergeBranchToCurrent(branch);
-      
-      if (result.success) {
-        toast.success(`Successfully merged ${branch} into ${currentBranch}`);
-        addLog('success', `Merged ${branch} into ${currentBranch}`);
+    addLog('info', `Merging ${branch} into ${currentBranch}...`);
+    
+    await withLoading(`Merging ${branch}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitMergeBranchToCurrent(branch);
         
-        // Refresh state after merge
-        await refreshStatus();
-        await refreshBranch();
-        await refreshHistory();
-      } else if (result.hasConflicts && result.conflictedFiles) {
-        // Show merge conflict dialog
-        setConflictedFiles(result.conflictedFiles);
-        setShowMergeConflictDialog(true);
-        toast.warning(`Merge conflict: ${result.conflictedFiles.length} file(s) have conflicts`);
-        addLog('warning', `Merge conflict: ${result.conflictedFiles.length} file(s) need to be resolved`);
-      } else {
-        toast.error(result.error || 'Merge failed');
-        addLog('error', `Merge failed: ${result.error || 'Unknown error'}`);
+        if (result.success) {
+          toast.success(`Successfully merged ${branch} into ${currentBranch}`);
+          addLog('success', `Merged ${branch} into ${currentBranch}`);
+          
+          await refreshStatus();
+          await refreshBranch();
+          await refreshHistory();
+        } else if (result.hasConflicts && result.conflictedFiles) {
+          setConflictedFiles(result.conflictedFiles);
+          setShowMergeConflictDialog(true);
+          toast.warning(`Merge conflict: ${result.conflictedFiles.length} file(s) have conflicts`);
+          addLog('warning', `Merge conflict: ${result.conflictedFiles.length} file(s) need to be resolved`);
+        } else {
+          toast.error(result.error || 'Merge failed');
+          addLog('error', `Merge failed: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        const errorMessage = error.message || 'Unknown error';
+        toast.error(`Failed to merge: ${errorMessage}`);
+        addLog('error', `Merge error: ${errorMessage}`);
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Unknown error';
-      toast.error(`Failed to merge: ${errorMessage}`);
-      addLog('error', `Merge error: ${errorMessage}`);
-    }
+    });
   };
 
   const handleOpenFileInMergeTool = async (filePath: string) => {
-    try {
-      const result = await window.electronAPI.openFileInMergeTool(filePath);
-      if (result.success) {
-        addLog('info', `Opened ${filePath} in merge tool`);
-      } else {
-        toast.error(`Failed to open file: ${result.error}`);
-        addLog('error', `Failed to open ${filePath}: ${result.error}`);
+    await withLoading('Opening merge tool...', async () => {
+      try {
+        const result = await window.electronAPI.openFileInMergeTool(filePath);
+        if (result.success) {
+          addLog('info', `Opened ${filePath} in merge tool`);
+        } else {
+          toast.error(`Failed to open file: ${result.error}`);
+          addLog('error', `Failed to open ${filePath}: ${result.error}`);
+        }
+      } catch (error: any) {
+        const errorMessage = error.message || 'Unknown error';
+        toast.error(`Failed to open file: ${errorMessage}`);
+        addLog('error', `Failed to open ${filePath}: ${errorMessage}`);
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Unknown error';
-      toast.error(`Failed to open file: ${errorMessage}`);
-      addLog('error', `Failed to open ${filePath}: ${errorMessage}`);
-    }
+    });
   };
 
   const handleAbortMerge = async () => {
-    try {
-      const result = await window.electronAPI.abortMerge();
-      if (result.success) {
-        toast.success('Merge aborted successfully');
-        addLog('info', 'Merge aborted');
-        setShowMergeConflictDialog(false);
-        setConflictedFiles([]);
-        
-        // Refresh state after abort
-        await refreshStatus();
-        await refreshBranch();
-        await refreshHistory();
-      } else {
-        toast.error(result.error || 'Failed to abort merge');
-        addLog('error', `Failed to abort merge: ${result.error || 'Unknown error'}`);
+    await withLoading('Aborting merge...', async () => {
+      try {
+        const result = await window.electronAPI.abortMerge();
+        if (result.success) {
+          toast.success('Merge aborted successfully');
+          addLog('info', 'Merge aborted');
+          setShowMergeConflictDialog(false);
+          setConflictedFiles([]);
+          
+          await refreshStatus();
+          await refreshBranch();
+          await refreshHistory();
+        } else {
+          toast.error(result.error || 'Failed to abort merge');
+          addLog('error', `Failed to abort merge: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        const errorMessage = error.message || 'Unknown error';
+        toast.error(`Failed to abort merge: ${errorMessage}`);
+        addLog('error', `Failed to abort merge: ${errorMessage}`);
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Unknown error';
-      toast.error(`Failed to abort merge: ${errorMessage}`);
-      addLog('error', `Failed to abort merge: ${errorMessage}`);
-    }
+    });
   };
 
   const handleResolveFiles = async (filePaths: string[]) => {
-    try {
-      // Stage the resolved files (git add marks them as resolved)
-      const result = await window.electronAPI.gitStage(filePaths);
-      if (result.success) {
-        toast.success(`Marked ${filePaths.length} file(s) as resolved`);
-        addLog('success', `Resolved ${filePaths.length} conflicted file(s)`);
-        
-        // Refresh conflicted files list
-        const conflictedResult = await window.electronAPI.getConflictedFiles();
-        if (conflictedResult.success && conflictedResult.files) {
-          setConflictedFiles(conflictedResult.files);
+    await withLoading(`Marking ${filePaths.length} file(s) as resolved...`, async () => {
+      try {
+        const result = await window.electronAPI.gitStage(filePaths);
+        if (result.success) {
+          toast.success(`Marked ${filePaths.length} file(s) as resolved`);
+          addLog('success', `Resolved ${filePaths.length} conflicted file(s)`);
           
-          // If all conflicts are resolved, show success message
-          if (conflictedResult.files.length === 0) {
-            toast.success('All conflicts resolved! You can now complete the merge.');
-            addLog('success', 'All merge conflicts have been resolved');
+          const conflictedResult = await window.electronAPI.getConflictedFiles();
+          if (conflictedResult.success && conflictedResult.files) {
+            setConflictedFiles(conflictedResult.files);
+            
+            if (conflictedResult.files.length === 0) {
+              toast.success('All conflicts resolved! You can now complete the merge.');
+              addLog('success', 'All merge conflicts have been resolved');
+            }
           }
+          
+          await refreshStatus();
+        } else {
+          toast.error(result.error || 'Failed to mark files as resolved');
+          addLog('error', `Failed to resolve files: ${result.error || 'Unknown error'}`);
         }
-        
-        // Refresh status to update file staging area
-        await refreshStatus();
-      } else {
-        toast.error(result.error || 'Failed to mark files as resolved');
-        addLog('error', `Failed to resolve files: ${result.error || 'Unknown error'}`);
+      } catch (error: any) {
+        const errorMessage = error.message || 'Unknown error';
+        toast.error(`Failed to resolve files: ${errorMessage}`);
+        addLog('error', `Failed to resolve files: ${errorMessage}`);
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Unknown error';
-      toast.error(`Failed to resolve files: ${errorMessage}`);
-      addLog('error', `Failed to resolve files: ${errorMessage}`);
-    }
+    });
   };
 
   const handleSwitchRepo = async (name: string, path: string) => {
-    // Reset state before switching
     setHasCredentials(false);
     setRemoteUrl(null);
     setFiles([]);
     setCommits([]);
     addLog('info', `Switching to repository: ${name}...`);
     
-    // Open the new repository (this will validate credentials)
     await handleOpenRepo(path);
   };
 
@@ -648,116 +656,111 @@ export default function App() {
   };
 
   const handleCheckout = async (branch: string) => {
-    // Immediately update the branch state to avoid race conditions
-    setCurrentBranch(branch);
-    await refreshBranch(); // This will verify and update if needed
-    await refreshStatus();
-    await refreshHistory();
+    await withLoading(`Switching to branch ${branch}...`, async () => {
+      setCurrentBranch(branch);
+      await refreshBranch(); 
+      await refreshStatus();
+      await refreshHistory();
+    });
   };
 
   const handleCreateBranch = async (name: string) => {
-    // Branch was created and checked out in BranchesPanel
-    // Immediately update the branch state to avoid race conditions
-    setCurrentBranch(name);
-    await refreshBranch(); // This will verify and update if needed
-    await refreshStatus();
-    addLog('success', `Created and checked out branch: ${name}`);
+    await withLoading(`Creating branch ${name}...`, async () => {
+      setCurrentBranch(name);
+      await refreshBranch();
+      await refreshStatus();
+      addLog('success', `Created and checked out branch: ${name}`);
+    });
   };
 
   const handleDeleteBranch = async (branch: string) => {
-    await refreshBranch();
+    await withLoading(`Deleting branch ${branch}...`, async () => {
+      await refreshBranch();
+    });
   };
 
   const handleDeleteTag = async (tag: string) => {
-    // Tags are refreshed when the tags tab is opened
+    // Tags are refreshed when the tags tab is opened, no explicit refresh needed here generally,
+    // but we could trigger a refresh.
   };
 
   const handleOpenRepo = async (path: string) => {
     addLog('info', `Opening repository from ${path}...`);
     
-    try {
-      const result = await window.electronAPI.gitOpen(path);
-      if (result.success) {
-        setRepoPath(path);
-        const nameResult = await window.electronAPI.getRepoName();
-        if (nameResult.success && nameResult.name) {
-          setRepoName(nameResult.name);
-        } else {
-          setRepoName(path.split(/[/\\]/).pop() || 'repository');
-        }
-        
-        addLog('success', `Repository opened successfully from ${path}`);
-        toast.success('Repository opened successfully!');
-        
-        // Get remote URL if available and validate credentials
-        try {
-          const remoteResult = await window.electronAPI.getRemoteUrl('origin');
-          if (remoteResult.success && remoteResult.url) {
-            setRemoteUrl(remoteResult.url);
-            const remoteUrlValue = remoteResult.url;
-            
-            // First, test if Git's built-in credential system can authenticate
-            // This checks SSH keys, credential helper, and other Git credential mechanisms
-            addLog('info', 'Testing Git credential system...');
-            const gitCredTest = await window.electronAPI.testGitCredentials(remoteUrlValue);
-            
-            if (gitCredTest.success) {
-              // Git's credential system works (SSH keys, credential helper, etc.)
-              setHasCredentials(true);
-              addLog('success', 'Git credential system authenticated successfully');
-            } else {
-              // Git's credential system couldn't authenticate, check for stored credentials
-              const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
-              if (credResult.success && credResult.hasCredentials) {
-                // Validate existing stored credentials
-                addLog('info', 'Validating saved credentials...');
-                const validationResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
-                
-                if (validationResult.success) {
-                  // Stored credentials are valid
-                  setHasCredentials(true);
-                  addLog('success', 'Saved credentials validated successfully');
-                } else {
-                  // Stored credentials are invalid - delete them and prompt for new ones
-                  addLog('warning', 'Saved credentials are invalid, removing from storage...');
-                  await window.electronAPI.deleteCredentials(remoteUrlValue);
-                  setHasCredentials(false);
-                  
-                  // Prompt for new credentials
-                  setTimeout(() => {
-                    setShowCredentialsDialog(true);
-                    addLog('warning', 'Please enter new credentials');
-                  }, 500);
-                }
+    await withLoading(`Opening repository...`, async () => {
+      try {
+        const result = await window.electronAPI.gitOpen(path);
+        if (result.success) {
+          setRepoPath(path);
+          const nameResult = await window.electronAPI.getRepoName();
+          if (nameResult.success && nameResult.name) {
+            setRepoName(nameResult.name);
+          } else {
+            setRepoName(path.split(/[/\\]/).pop() || 'repository');
+          }
+          
+          addLog('success', `Repository opened successfully from ${path}`);
+          toast.success('Repository opened successfully!');
+          
+          try {
+            const remoteResult = await window.electronAPI.getRemoteUrl('origin');
+            if (remoteResult.success && remoteResult.url) {
+              setRemoteUrl(remoteResult.url);
+              const remoteUrlValue = remoteResult.url;
+              
+              addLog('info', 'Testing Git credential system...');
+              const gitCredTest = await window.electronAPI.testGitCredentials(remoteUrlValue);
+              
+              if (gitCredTest.success) {
+                setHasCredentials(true);
+                addLog('success', 'Git credential system authenticated successfully');
               } else {
-                // No credentials saved and Git credential system doesn't work
-                // Don't prompt immediately - user might not need to push/pull
-                setHasCredentials(false);
-                addLog('info', 'No credentials configured. You may be prompted when performing push/pull operations.');
+                const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
+                if (credResult.success && credResult.hasCredentials) {
+                  addLog('info', 'Validating saved credentials...');
+                  const validationResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
+                  
+                  if (validationResult.success) {
+                    setHasCredentials(true);
+                    addLog('success', 'Saved credentials validated successfully');
+                  } else {
+                    addLog('warning', 'Saved credentials are invalid, removing from storage...');
+                    await window.electronAPI.deleteCredentials(remoteUrlValue);
+                    setHasCredentials(false);
+                    
+                    setTimeout(() => {
+                      setShowCredentialsDialog(true);
+                      addLog('warning', 'Please enter new credentials');
+                    }, 500);
+                  }
+                } else {
+                  setHasCredentials(false);
+                  addLog('info', 'No credentials configured. You may be prompted when performing push/pull operations.');
+                }
               }
             }
+          } catch (error) {
+            console.log('No remote configured for this repository');
           }
-        } catch (error) {
-          // No remote configured, that's okay
-          console.log('No remote configured for this repository');
+          
+          await refreshStatus();
+          await refreshBranch();
+          await refreshHistory();
+        } else {
+          addLog('error', result.error || 'Failed to open repository');
+          toast.error(result.error || 'Failed to open repository');
         }
-        
-        await refreshStatus();
-        await refreshBranch();
-        await refreshHistory();
-      } else {
-        addLog('error', result.error || 'Failed to open repository');
-        toast.error(result.error || 'Failed to open repository');
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Failed to open repository: ${errorMsg}`);
+        toast.error(`Failed to open repository: ${errorMsg}`);
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      addLog('error', `Failed to open repository: ${errorMsg}`);
-      toast.error(`Failed to open repository: ${errorMsg}`);
-    }
+    });
   };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
+      {isLoading && <LoadingOverlay message={loadingMessage} />}
       <div className="w-full space-y-4">
         <RepoHeader
           repoName={repoName}
@@ -805,6 +808,10 @@ export default function App() {
                 onDeleteBranch={handleDeleteBranch}
                 onDeleteTag={handleDeleteTag}
                 onMergeBranch={handleMergeBranch}
+                onSetLoading={(loading, message) => {
+                  setIsLoading(loading);
+                  setLoadingMessage(message);
+                }}
               />
             </div>
           )}
@@ -887,4 +894,3 @@ export default function App() {
     </div>
   );
 }
-
