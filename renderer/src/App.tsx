@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CloneRepo } from './components/CloneRepo';
 import { OpenRepo } from './components/OpenRepo';
 import { CommitPanel } from './components/CommitPanel';
@@ -104,6 +104,8 @@ export default function App() {
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
+  const lastRebaseStepRef = useRef<number | undefined>(undefined);
+  const lastConflictCountRef = useRef<number>(0);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -199,25 +201,28 @@ export default function App() {
         // If rebase is in progress, check for conflicts
         if (result.inProgress) {
             const conflictResult = await window.electronAPI.getConflictedFiles();
-            if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
-               setConflictedFiles(conflictResult.files);
-               // We don't necessarily show the merge conflict dialog automatically because it might be intrusive
-               // But we should show it if user tries to continue rebase
-               // Or better, show it if the list changed significantly?
-               // For now, let's keep it consistent with merge flow, but maybe distinct UI?
-               // The user requested: "Also handle merge conflicts if they accour in a rebase step"
-               // We can show the same dialog or a banner.
-               // Since we have a global rebase banner (to be added below), maybe that's enough,
-               // and the "Continue" button there can trigger conflict check.
+            const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
+            setConflictedFiles(conflicts);
 
-               // Actually, if we are in rebase and have conflicts, let's update the conflictedFiles state
-               // so the file list (CommitPanel) shows them correctly (it does via gitStatus).
-            } else {
-               // If no conflicts, clear them
-               setConflictedFiles([]);
+            const currentStep = result.currentStep;
+            const hasConflicts = conflicts.length > 0;
+            
+            if (hasConflicts) {
+                 const stepChanged = currentStep !== lastRebaseStepRef.current;
+                 const conflictsAppeared = lastConflictCountRef.current === 0;
+                 
+                 // Show dialog if we're at a new rebase step or if conflicts just appeared
+                 if (stepChanged || conflictsAppeared) {
+                     setShowMergeConflictDialog(true);
+                 }
             }
+            
+            lastRebaseStepRef.current = currentStep;
+            lastConflictCountRef.current = conflicts.length;
         } else {
             setConflictedFiles([]);
+            lastRebaseStepRef.current = undefined;
+            lastConflictCountRef.current = 0;
         }
       }
     } catch (error) {
