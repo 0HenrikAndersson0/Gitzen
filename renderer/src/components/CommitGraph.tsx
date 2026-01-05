@@ -2,6 +2,7 @@ import { GitBranch, User, Clock, Tag, ZoomIn, ZoomOut, RotateCcw } from 'lucide-
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { Button } from './ui/button';
+import { toast } from 'sonner';
 
 interface Commit {
   id: string;
@@ -19,6 +20,7 @@ interface Commit {
 interface CommitGraphProps {
   commits?: Commit[];
   currentBranch: string;
+  onRefresh: () => void;
 }
 
 // Layout Engine
@@ -172,11 +174,16 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
 export function CommitGraph({
   commits = [],
-  currentBranch
+  currentBranch,
+  onRefresh
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, commit: Commit } | null>(null);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [commitToRename, setCommitToRename] = useState<Commit | null>(null);
+  const [newCommitMessage, setNewCommitMessage] = useState('');
 
   // Custom Graph Props
   const spacingX = 20;
@@ -208,6 +215,36 @@ export function CommitGraph({
     }
   }, [commits]);
 
+  const handleContextMenu = async (e: React.MouseEvent, commit: Commit) => {
+    e.preventDefault();
+    const result = await (window.electronAPI as any).isCommitPushed(commit.hash);
+    if (result.success && !result.isPushed) {
+      setContextMenu({ x: e.clientX, y: e.clientY, commit });
+    }
+  };
+
+  const handleRename = () => {
+    if (contextMenu) {
+      setCommitToRename(contextMenu.commit);
+      setNewCommitMessage(contextMenu.commit.message);
+      setIsRenameDialogOpen(true);
+      setContextMenu(null);
+    }
+  };
+
+  const handleRenameSubmit = async () => {
+    if (commitToRename) {
+      const result = await (window.electronAPI as any).renameCommit(commitToRename.hash, newCommitMessage);
+      if (result.success) {
+        setIsRenameDialogOpen(false);
+        setCommitToRename(null);
+        onRefresh();
+      } else {
+        toast.error(result.error);
+      }
+    }
+  };
+
   const formatTime = (date: Date) => {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -236,7 +273,7 @@ export function CommitGraph({
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden flex flex-col">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden flex flex-col" onClick={() => setContextMenu(null)}>
       <div className="p-6 pb-4 flex items-center gap-2 border-b border-zinc-800">
         <GitBranch className="h-5 w-5 text-emerald-400" />
         <h2 className="font-semibold text-zinc-100">Commit History</h2>
@@ -306,6 +343,7 @@ export function CommitGraph({
                     left: width + 20 // Offset content to right of graph
                   }}
                   onClick={() => setSelectedCommit(commit)}
+                  onContextMenu={(e) => handleContextMenu(e, commit)}
                   onMouseEnter={() => setHoveredCommitId(commit.id)}
                   onMouseLeave={() => setHoveredCommitId(null)}
                 >
@@ -343,6 +381,37 @@ export function CommitGraph({
            </div>
         </div>
       </div>
+
+      {contextMenu && (
+        <div
+          className="absolute bg-zinc-800 border border-zinc-700 rounded-md shadow-lg z-50"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <button
+            className="block w-full text-left px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700"
+            onClick={handleRename}
+          >
+            Rename Commit
+          </button>
+        </div>
+      )}
+
+      {isRenameDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-zinc-800 rounded-lg p-6 w-1/3">
+            <h2 className="text-lg font-semibold text-zinc-100 mb-4">Rename Commit</h2>
+            <textarea
+              className="w-full bg-zinc-900 text-zinc-200 rounded-md p-2"
+              value={newCommitMessage}
+              onChange={(e) => setNewCommitMessage(e.target.value)}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <Button onClick={() => setIsRenameDialogOpen(false)} variant="secondary">Cancel</Button>
+              <Button onClick={handleRenameSubmit}>Rename</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Commit Details Overlay */}
       {selectedCommit && (

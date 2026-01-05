@@ -237,15 +237,19 @@ export default function App() {
     }
   }, [repoPath]);
 
+  const refreshAll = useCallback(() => {
+    refreshStatus();
+    refreshBranch();
+    refreshHistory();
+    refreshUnpushedCommits();
+    refreshRebaseStatus();
+  }, [refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits, refreshRebaseStatus]);
+
   useEffect(() => {
     if (repoPath) {
-      refreshStatus();
-      refreshBranch();
-      refreshHistory();
-      refreshUnpushedCommits();
-      refreshRebaseStatus();
+      refreshAll();
     }
-  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits, refreshRebaseStatus]);
+  }, [repoPath, refreshAll]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
@@ -847,6 +851,7 @@ export default function App() {
               <CommitGraph 
                 commits={commits}
                 currentBranch={currentBranch}
+                onRefresh={refreshAll}
               />
             )}
           </div>

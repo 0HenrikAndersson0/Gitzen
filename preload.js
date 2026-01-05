@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitGetRebaseStatus: () => ipcRenderer.invoke('git:getRebaseStatus'),
   gitGetCommitsForInteractiveRebase: (targetBranch) => ipcRenderer.invoke('git:getCommitsForInteractiveRebase', targetBranch),
   gitInteractiveRebase: (targetBranch, todoLines) => ipcRenderer.invoke('git:performInteractiveRebase', targetBranch, todoLines),
+  isCommitPushed: (commitHash) => ipcRenderer.invoke('git:isCommitPushed', commitHash),
+  renameCommit: (commitHash, newMessage) => ipcRenderer.invoke('git:renameCommit', commitHash, newMessage),
   showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),

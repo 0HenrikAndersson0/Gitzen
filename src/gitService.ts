@@ -1447,3 +1447,83 @@ export async function performInteractiveRebase(targetBranch: string, todoLines: 
     return { success: false, error: errorMsg };
   }
 }
+
+export async function isCommitPushed(commitHash: string): Promise<{ success: boolean; isPushed?: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // This command lists remote branches that contain the commit.
+    // If there is any output, the commit is on a remote branch.
+    const { stdout } = await runGitCommand(`branch -r --contains ${commitHash}`);
+
+    return { success: true, isPushed: stdout.trim().length > 0 };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function renameCommit(commitHash: string, newMessage: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Get the current HEAD commit hash
+    const { stdout: headHash } = await runGitCommand('rev-parse HEAD');
+
+    if (headHash.trim().startsWith(commitHash)) {
+      // If it's the HEAD commit, we can just amend
+      await runGitCommand(`commit --amend -m "${newMessage.replace(/"/g, '\\"')}"`);
+    } else {
+      // If it's not HEAD, we need to do an interactive rebase
+      // Find the parent of the commit to rebase from
+      const { stdout: parentHash } = await runGitCommand(`rev-parse ${commitHash}^`);
+
+      const todoLines = (await getCommitsForInteractiveRebase(parentHash.trim())).commits?.map(c => {
+          if (c.hash.startsWith(commitHash)) {
+              return `reword ${c.hash.substring(0, 7)} ${c.message}`;
+          }
+          return `pick ${c.hash.substring(0, 7)} ${c.message}`;
+      }) || [];
+
+      const tempTodoPath = path.join(currentRepoPath, '.git', 'rebase-todo-temp');
+      fs.writeFileSync(tempTodoPath, todoLines.join('\n'));
+
+      const helperScriptPath = path.join(currentRepoPath, '.git', 'rebase-helper.js');
+      const helperScript = `
+        const fs = require('fs');
+        const src = process.env.TEMP_TODO;
+        const dest = process.argv[2];
+        fs.copyFileSync(src, dest);
+      `;
+      fs.writeFileSync(helperScriptPath, helperScript);
+
+      const messageEditorScriptPath = path.join(currentRepoPath, '.git', 'message-editor.js');
+      const messageEditorScript = `
+        const fs = require('fs');
+        fs.writeFileSync(process.argv[2], process.env.NEW_COMMIT_MESSAGE);
+      `;
+      fs.writeFileSync(messageEditorScriptPath, messageEditorScript);
+
+      const env = {
+        ...process.env,
+        TEMP_TODO: tempTodoPath,
+        NEW_COMMIT_MESSAGE: newMessage,
+        GIT_SEQUENCE_EDITOR: `node "${helperScriptPath.replace(/\\/g, '\\\\')}"`,
+        GIT_EDITOR: `node "${messageEditorScriptPath.replace(/\\/g, '\\\\')}"`
+      };
+
+      await runGitCommand(`rebase -i ${parentHash.trim()}`, undefined, env);
+
+      if (fs.existsSync(tempTodoPath)) fs.unlinkSync(tempTodoPath);
+      if (fs.existsSync(helperScriptPath)) fs.unlinkSync(helperScriptPath);
+      if (fs.existsSync(messageEditorScriptPath)) fs.unlinkSync(messageEditorScriptPath);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}

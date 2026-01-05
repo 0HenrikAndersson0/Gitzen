@@ -209,6 +209,14 @@ ipcMain.handle('git:performInteractiveRebase', async (_, targetBranch, todoLines
   return await gitService.performInteractiveRebase(targetBranch, todoLines);
 });
 
+ipcMain.handle('git:isCommitPushed', async (_, commitHash) => {
+  return await gitService.isCommitPushed(commitHash);
+});
+
+ipcMain.handle('git:renameCommit', async (_, commitHash, newMessage) => {
+  return await gitService.renameCommit(commitHash, newMessage);
+});
+
 // Dialog handlers
 ipcMain.handle('dialog:showOpenDialog', async (_, options?: { properties?: string[]; title?: string }) => {
   const dialogOptions: Electron.OpenDialogOptions = {
@@ -308,4 +316,3 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-
