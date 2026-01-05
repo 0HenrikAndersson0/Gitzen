@@ -102,6 +102,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile }
             <Checkbox
               checked={file.staged}
               onCheckedChange={() => onToggleStage(file.path)}
+              onClick={(e) => e.stopPropagation()}
               className="border-zinc-600"
             />
             <span className={`font-mono ${getStatusColor(file.status)} w-4`}>
