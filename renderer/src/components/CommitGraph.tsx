@@ -293,7 +293,7 @@ export function CommitGraph({
                    stroke="#18181b"
                    strokeWidth="2"
                  />
-                 {commit.isStash && (
+                 {node.commit.isStash && (
                     <rect
                       x={node.x - 5}
                       y={node.y - 5}
