@@ -141,6 +141,10 @@ ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
   return await gitService.getCommitDiff(commitHash);
 });
 
+ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
+  return await gitService.getFileDiff(filePath, staged);
+});
+
 ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {
   return await gitService.deleteBranch(branchName, force);
 });
