@@ -3,18 +3,16 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { shell } from 'electron';
+import { CredentialManager } from './CredentialManager';
 import * as settingsService from './settingsService';
-
-let CredentialManager: any;
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 let currentRepoPath: string | null = null;
-let credentialManager: any | null = null;
+let credentialManager: CredentialManager | null = null;
 
 export function initializeGitService() {
-  CredentialManager = require('./CredentialManager').CredentialManager;
   credentialManager = new CredentialManager();
 }
 

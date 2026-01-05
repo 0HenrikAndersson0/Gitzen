@@ -32,9 +32,7 @@ function createWindow() {
 }
 
 // Initialize git service
-if (process.env.NODE_ENV !== 'test') {
-  gitService.initializeGitService();
-}
+gitService.initializeGitService();
 
 // Initialize recent repos service
 recentReposService.setUserDataPath(app.getPath('userData'));
