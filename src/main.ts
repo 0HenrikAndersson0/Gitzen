@@ -185,6 +185,30 @@ ipcMain.handle('git:openFileInMergeTool', async (_, filePath) => {
   return await gitService.openFileInMergeTool(filePath);
 });
 
+ipcMain.handle('git:rebaseBranch', async (_, branch) => {
+  return await gitService.rebaseBranch(branch);
+});
+
+ipcMain.handle('git:abortRebase', async () => {
+  return await gitService.abortRebase();
+});
+
+ipcMain.handle('git:continueRebase', async () => {
+  return await gitService.continueRebase();
+});
+
+ipcMain.handle('git:getRebaseStatus', async () => {
+  return await gitService.getRebaseStatus();
+});
+
+ipcMain.handle('git:getCommitsForInteractiveRebase', async (_, targetBranch) => {
+  return await gitService.getCommitsForInteractiveRebase(targetBranch);
+});
+
+ipcMain.handle('git:performInteractiveRebase', async (_, targetBranch, todoLines) => {
+  return await gitService.performInteractiveRebase(targetBranch, todoLines);
+});
+
 // Dialog handlers
 ipcMain.handle('dialog:showOpenDialog', async (_, options?: { properties?: string[]; title?: string }) => {
   const dialogOptions: Electron.OpenDialogOptions = {
