@@ -85,6 +85,22 @@ ipcMain.handle('git:getHistory', async (_, maxCount) => {
   return await gitService.getHistory(maxCount);
 });
 
+ipcMain.handle('git:getStashes', async () => {
+  return await gitService.getStashes();
+});
+
+ipcMain.handle('git:createStash', async () => {
+  return await gitService.createStash();
+});
+
+ipcMain.handle('git:applyStash', async (_, name) => {
+  return await gitService.applyStash(name);
+});
+
+ipcMain.handle('git:deleteStash', async (_, name) => {
+  return await gitService.deleteStash(name);
+});
+
 ipcMain.handle('git:getBranches', async () => {
   return await gitService.getBranches();
 });
@@ -139,10 +155,6 @@ ipcMain.handle('git:getTags', async () => {
 
 ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
   return await gitService.getCommitDiff(commitHash);
-});
-
-ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
-  return await gitService.getFileDiff(filePath, staged);
 });
 
 ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {

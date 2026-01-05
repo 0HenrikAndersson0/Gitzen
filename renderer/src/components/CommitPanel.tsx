@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GitCommitHorizontal, Upload } from 'lucide-react';
+import { GitCommitHorizontal, Upload, Archive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
@@ -20,6 +20,7 @@ interface CommitPanelProps {
   unpushedCommitsCount?: number;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
+  onStash: () => void;
 }
 
 export function CommitPanel({
@@ -31,6 +32,7 @@ export function CommitPanel({
   unpushedCommitsCount = 0,
   onRevertFile,
   onDeleteFile,
+  onStash,
 }: CommitPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
 
@@ -42,21 +44,29 @@ export function CommitPanel({
   };
 
   const stagedFiles = files.filter((f) => f.staged);
+  const unstagedFiles = files.filter((f) => !f.staged);
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6">
       <div className="mb-4 flex items-center gap-2">
         <GitCommitHorizontal className="size-5 text-green-400" />
         <h2>Changes</h2>
-        <span className="ml-auto text-sm text-zinc-500">
-          {stagedFiles.length} staged / {files.length} total
-        </span>
+        {unstagedFiles.length > 0 && (
+          <Button
+            onClick={onStash}
+            className="ml-auto bg-amber-600 hover:bg-amber-700"
+            size="icon"
+            variant="outline"
+          >
+            <Archive className="size-4" />
+          </Button>
+        )}
       </div>
 
       <div className="space-y-4">
         <div className="max-h-64 overflow-y-auto">
-          <FileStaging 
-            files={files} 
+          <FileStaging
+            files={files}
             onToggleStage={onToggleStage}
             onRevertFile={onRevertFile}
             onDeleteFile={onDeleteFile}
@@ -85,7 +95,7 @@ export function CommitPanel({
           </Button>
           <Button
             onClick={onPush}
-            disabled={!hasCredentials || unpushedCommitsCount === 0 }
+            disabled={!hasCredentials || unpushedCommitsCount === 0}
             className="flex-1 bg-blue-600 hover:bg-blue-700 relative"
           >
             <Upload className="mr-2 size-4" />

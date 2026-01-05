@@ -56,6 +56,71 @@ export async function cloneRepository(url: string, localPath: string, credential
   }
 }
 
+export async function createStash(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    const branchResult = await getCurrentBranch();
+    const branchName = branchResult.branch || 'unknown';
+    const message = `WIP on ${branchName}`;
+    const escapedMessage = message.replace(/"/g, '\\"');
+    const command = `stash push -m "${escapedMessage}"`;
+    await runGitCommand(command);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getStashes(): Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('stash list --pretty=format:"%gD|%gs"');
+    const stashes = stdout
+      .split('\n')
+      .filter((line: string) => line.trim())
+      .map((line: string) => {
+        const [name, message] = line.split('|');
+        return {
+          name: name || '',
+          message: message || '',
+        };
+      });
+
+    return { success: true, stashes };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function applyStash(stashRef: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand(`stash apply "${stashRef}"`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function deleteStash(stashRef: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand(`stash drop "${stashRef}"`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function openRepository(repoPath: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
@@ -417,8 +482,8 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
   }
 }
 
-export async function getHistory(maxCount: number = 50): Promise<{ 
-  success: boolean; 
+export async function getHistory(maxCount: number = 50): Promise<{
+  success: boolean;
   commits?: Array<{
     id: string;
     message: string;
@@ -430,33 +495,33 @@ export async function getHistory(maxCount: number = 50): Promise<{
     parents: string[];
     refs: string;
   }>;
-  error?: string 
+  error?: string
 }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    
+
     // Use configured max commits (defaults to 30)
     const configuredMaxCommits = settingsService.getMaxCommits();
     const diagramMaxCount = Math.min(maxCount, configuredMaxCommits);
-    
+
     // Use --all to show all branches regardless of which branch is checked out
     const { stdout } = await runGitCommand(`log -n ${diagramMaxCount} --all --date-order --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso`);
-    
+
     const lines = stdout.trim().split('\n').filter(line => line.trim());
-    
+
     // Build a map of commit hash to branch name
     const commitToBranch: Record<string, string> = {};
-    
+
     // First pass: collect branch info from refs
     for (const line of lines) {
       const parts = line.split('|');
       if (parts.length < 5) continue;
-      
+
       const hash = parts[0].trim();
       const refs = (parts[4] || '').trim();
-      
+
       if (refs) {
         const refParts = refs.split(',').map(r => r.trim());
         for (const ref of refParts) {
@@ -465,12 +530,12 @@ export async function getHistory(maxCount: number = 50): Promise<{
             const match = ref.match(/HEAD -> (.+)/);
             if (match) {
               const refBranch = match[1].trim();
-              
+
                 commitToBranch[hash] = refBranch;
                 break;
-              
+
             }
-          } 
+          }
           else if (ref && ref.trim() && !ref.startsWith('tag:')) {
             commitToBranch[hash] = ref.trim();
             break;
@@ -478,24 +543,24 @@ export async function getHistory(maxCount: number = 50): Promise<{
         }
       }
     }
-    
-    const commits: Array<{ 
-      id: string; 
-      message: string; 
-      author: string; 
-      timestamp: Date; 
-      branch?: string; 
-      hash: string; 
+
+    const commits: Array<{
+      id: string;
+      message: string;
+      author: string;
+      timestamp: Date;
+      branch?: string;
+      hash: string;
       isMerge?: boolean;
       parents: string[];
       refs: string;
     }> = [];
-    
+
     // Second pass: propagate branch info
     let changed = true;
     let iterations = 0;
     const maxIterations = 10;
-    
+
     while (changed && iterations < maxIterations) {
       changed = false;
       iterations++;
@@ -506,7 +571,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
         const hash = parts[0].trim();
         const parents = (parts.length > 5 ? parts[5] : '').trim();
         const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
-        
+
         if (parentHashes.length > 0) {
           const firstParent = parentHashes[0].trim();
           if (!parentToChildren[firstParent]) {
@@ -526,24 +591,24 @@ export async function getHistory(maxCount: number = 50): Promise<{
         }
       }
     }
-    
+
     // Third pass: build commit list
     for (const line of lines) {
       const parts = line.split('|');
       if (parts.length < 5) continue;
-      
+
       const hash = parts[0].trim();
       const message = parts[1] || 'No message';
       const author = parts[2] || 'Unknown';
       const dateStr = parts[3];
       const refs = parts[4] || '';
       const parents = (parts.length > 5 ? parts[5] : '').trim();
-      
+
       const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
       const isMerge = parentHashes.length > 1;
-      
+
       let branchName: string | undefined = commitToBranch[hash];
-      
+
       if (!branchName && isMerge) {
         const mergeMatch = message.match(/Merge branch ['"]([^'"]+)['"]/);
         if (mergeMatch) {
@@ -551,7 +616,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
           commitToBranch[hash] = branchName;
         }
       }
-      
+
       commits.push({
         id: hash.substr(0, 7),
         message: message || 'No message',
@@ -955,42 +1020,6 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
     }
 
     return { success: true, files };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
-  }
-}
-
-export async function getFileDiff(filePath: string, staged: boolean): Promise<{ success: boolean; diff?: string; error?: string }> {
-  try {
-    if (!currentRepoPath) {
-      return { success: false, error: 'No repository open' };
-    }
-
-    const args = ['diff'];
-    if (staged) {
-      args.push('--cached');
-    }
-    args.push('--');
-    args.push(filePath);
-
-    // Unlike other commands, `git diff` can exit with code 1 if there are changes.
-    // We need to handle this gracefully by catching the error and checking stdout.
-    try {
-      const { stdout } = await execFileAsync('git', args, {
-        cwd: currentRepoPath,
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-      });
-      // No diff found, returns empty string.
-      return { success: true, diff: stdout };
-    } catch (error: any) {
-      // If there's a diff, git exits with 1, and execFileAsync throws.
-      // The diff is in error.stdout.
-      if (typeof error.stdout === 'string') {
-        return { success: true, diff: error.stdout };
-      }
-      // A real error occurred
-      throw error;
-    }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
