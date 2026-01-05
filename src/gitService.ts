@@ -1024,42 +1024,6 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
   }
 }
 
-export async function getFileDiff(filePath: string, staged: boolean): Promise<{ success: boolean; diff?: string; error?: string }> {
-  try {
-    if (!currentRepoPath) {
-      return { success: false, error: 'No repository open' };
-    }
-
-    const args = ['diff'];
-    if (staged) {
-      args.push('--cached');
-    }
-    args.push('--');
-    args.push(filePath);
-
-    // Unlike other commands, `git diff` can exit with code 1 if there are changes.
-    // We need to handle this gracefully by catching the error and checking stdout.
-    try {
-      const { stdout } = await execFileAsync('git', args, {
-        cwd: currentRepoPath,
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-      });
-      // No diff found, returns empty string.
-      return { success: true, diff: stdout };
-    } catch (error: any) {
-      // If there's a diff, git exits with 1, and execFileAsync throws.
-      // The diff is in error.stdout.
-      if (typeof error.stdout === 'string') {
-        return { success: true, diff: error.stdout };
-      }
-      // A real error occurred
-      throw error;
-    }
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
-  }
-}
-
 export async function deleteBranch(branchName: string, force: boolean = false): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {

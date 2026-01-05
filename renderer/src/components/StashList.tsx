@@ -1,5 +1,6 @@
 
 import { Archive, Trash2, Check } from 'lucide-react';
+import { useState } from 'react';
 
 interface Stash {
   name: string;
@@ -13,34 +14,71 @@ interface StashListProps {
 }
 
 export function StashList({ stashes, onApplyStash, onDeleteStash }: StashListProps) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; stash: Stash } | null>(null);
+
+  const handleContextMenu = (e: React.MouseEvent, stash: Stash) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, stash });
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-zinc-400">Stashes</h3>
-      {stashes.length === 0 ? (
-        <p className="text-xs text-zinc-500">No stashes</p>
-      ) : (
-        <ul className="space-y-1">
-          {stashes.map((stash) => (
-            <li
-              key={stash.name}
-              className="group flex items-center justify-between rounded-md px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-800"
-            >
-              <div className="flex items-center gap-2">
-                <Archive className="size-4 text-amber-400" />
-                <span className="truncate">{stash.message}</span>
+    <>
+      <div className="border-b border-zinc-800 p-3 flex items-center gap-2 text-zinc-100">
+        <Archive className="size-4" />
+        <h3 className="font-semibold text-sm">Stashes</h3>
+      </div>
+      <div className="max-h-[300px] overflow-y-auto">
+        {stashes.length === 0 ? (
+          <div className="p-4 text-center text-sm text-zinc-500">No stashes</div>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {stashes.map((stash) => (
+              <div
+                key={stash.name}
+                className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
+                onContextMenu={(e) => handleContextMenu(e, stash)}
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                  <Archive className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-zinc-300">{stash.message}</div>
+                    <div className="text-[10px] text-zinc-500">{stash.name}</div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
-                <button onClick={() => onApplyStash(stash.name)} title="Apply Stash">
-                  <Check className="size-4 text-green-400" />
-                </button>
-                <button onClick={() => onDeleteStash(stash.name)} title="Delete Stash">
-                  <Trash2 className="size-4 text-red-400" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        )}
+      </div>
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            onClick={() => {
+              onApplyStash(contextMenu.stash.name);
+              handleCloseContextMenu();
+            }}
+          >
+            Apply Stash
+          </div>
+          <div
+            className="px-4 py-2 text-sm text-red-400 hover:bg-zinc-700 cursor-pointer transition-colors"
+            onClick={() => {
+              onDeleteStash(contextMenu.stash.name);
+              handleCloseContextMenu();
+            }}
+          >
+            Delete Stash
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }

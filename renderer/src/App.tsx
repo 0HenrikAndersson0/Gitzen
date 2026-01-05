@@ -53,7 +53,10 @@ declare global {
       gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
       gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
-      gitGetStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }>;
+      getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }>;
+      createStash: () => Promise<{ success: boolean; error?: string }>;
+      applyStash: (name: string) => Promise<{ success: boolean; error?: string }>;
+      deleteStash: (name: string) => Promise<{ success: boolean; error?: string }>;
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
