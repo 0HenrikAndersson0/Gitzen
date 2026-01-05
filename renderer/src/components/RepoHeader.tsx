@@ -1,4 +1,4 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, Tag } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef } from 'react';
 
@@ -9,9 +9,10 @@ interface RepoHeaderProps {
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
   onOpenSettings?: () => void;
+  onPushTags?: () => void;
 }
 
-export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRepo, onOpenNew, onOpenSettings }: RepoHeaderProps) {
+export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRepo, onOpenNew, onOpenSettings, onPushTags }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -133,6 +134,13 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRe
         </div>
         
         <div className="flex gap-2 items-center">
+          <button
+            onClick={() => onPushTags?.()}
+            className="p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 transition-colors"
+            title="Push Tags"
+          >
+            <Tag className="size-4 text-zinc-400 hover:text-zinc-200" />
+          </button>
           <button
             onClick={() => onOpenSettings?.()}
             className="p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 transition-colors"

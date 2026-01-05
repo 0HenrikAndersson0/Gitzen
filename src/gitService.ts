@@ -1357,6 +1357,68 @@ export interface RebaseTodoItem {
   message: string;
 }
 
+export async function createTag(tagName: string, commitHash: string, message?: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const msg = message || tagName;
+    await execFileAsync('git', ['tag', '-a', tagName, '-m', msg, commitHash], {
+      cwd: currentRepoPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function pushTags(remote: string = 'origin'): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout: remoteUrl } = await runGitCommand(`remote get-url ${remote}`);
+    const url = remoteUrl.trim();
+
+    if (credentialManager) {
+      const creds = await credentialManager.getRemoteCredentials(url);
+      if (creds?.username && creds?.password) {
+        let urlWithCreds = url;
+        if (url.startsWith('git@') || url.startsWith('ssh://')) {
+          urlWithCreds = url
+            .replace(/^git@/, 'https://')
+            .replace(/^ssh:\/\//, 'https://')
+            .replace(/:([^\/]+)\//, '/$1/');
+        }
+
+        try {
+          const urlObj = new URL(urlWithCreds);
+          urlObj.username = creds.username;
+          urlObj.password = creds.password;
+          await runGitCommand(`remote set-url ${remote} ${urlObj.toString()}`);
+          try {
+            await runGitCommand(`push ${remote} --tags`);
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            return { success: true };
+          } catch (error) {
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            throw error;
+          }
+        } catch (urlError) {
+          console.warn('Failed to parse URL with credentials, trying without:', urlError);
+        }
+      }
+    }
+    await runGitCommand(`push ${remote} --tags`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function getCommitsForInteractiveRebase(targetBranch: string): Promise<{ success: boolean; commits?: RebaseTodoItem[]; error?: string }> {
   try {
      if (!currentRepoPath) {

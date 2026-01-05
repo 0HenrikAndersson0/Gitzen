@@ -73,6 +73,10 @@ ipcMain.handle('git:push', async (_, remote, branch) => {
   return await gitService.push(remote, branch);
 });
 
+ipcMain.handle('git:pushTags', async (_, remote) => {
+  return await gitService.pushTags(remote);
+});
+
 ipcMain.handle('git:pull', async (_, remote, branch) => {
   return await gitService.pull(remote, branch);
 });
@@ -91,6 +95,10 @@ ipcMain.handle('git:getBranches', async () => {
 
 ipcMain.handle('git:createBranch', async (_, name, checkout) => {
   return await gitService.createBranch(name, checkout);
+});
+
+ipcMain.handle('git:createTag', async (_, tagName, commitHash, message) => {
+  return await gitService.createTag(tagName, commitHash, message);
 });
 
 ipcMain.handle('git:checkoutBranch', async (_, name) => {

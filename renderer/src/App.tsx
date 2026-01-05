@@ -50,11 +50,13 @@ declare global {
       gitStageAll: () => Promise<{ success: boolean; error?: string }>;
       gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
       gitPush: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
+      gitPushTags: (remote?: string) => Promise<{ success: boolean; error?: string }>;
       gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
       gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
+      createTag: (tagName: string, commitHash: string, message?: string) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
       gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: string[]; error?: string }>;
       getConflictedFiles: () => Promise<{ success: boolean; files?: string[]; error?: string }>;
@@ -294,6 +296,35 @@ export default function App() {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Clone failed: ${errorMsg}`);
         toast.error(`Clone failed: ${errorMsg}`);
+      }
+    });
+  };
+
+  const handlePushTags = async () => {
+    if (!hasCredentials && remoteUrl) {
+      setShowCredentialsDialog(true);
+      addLog('error', 'Push failed: credentials required');
+      toast.error('Please provide credentials first');
+      return;
+    }
+
+    addLog('info', `Pushing tags...`);
+
+    await withLoading(`Pushing tags...`, async () => {
+      try {
+        const result = await (window.electronAPI as any).pushTags('origin');
+        if (result.success) {
+          addLog('success', `Successfully pushed tags`);
+          toast.success('Tags pushed successfully!');
+        } else {
+          const errorMsg = result.error || 'Failed to push tags';
+          addLog('error', errorMsg);
+          toast.error(errorMsg);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Push failed: ${errorMsg}`);
+        toast.error(`Push failed: ${errorMsg}`);
       }
     });
   };
@@ -769,6 +800,7 @@ export default function App() {
           onSwitchRepo={handleSwitchRepo}
           onOpenNew={handleOpenNewRepo}
           onOpenSettings={() => setShowSettingsDialog(true)}
+          onPushTags={handlePushTags}
         />
 
         {rebaseStatus.inProgress && (
@@ -847,6 +879,7 @@ export default function App() {
               <CommitGraph 
                 commits={commits}
                 currentBranch={currentBranch}
+                refreshHistory={refreshHistory}
               />
             )}
           </div>

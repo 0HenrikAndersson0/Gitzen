@@ -2,6 +2,13 @@ import { GitBranch, User, Clock, Tag, ZoomIn, ZoomOut, RotateCcw } from 'lucide-
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { Button } from './ui/button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { CreateTagDialog } from './CreateTagDialog';
 
 interface Commit {
   id: string;
@@ -19,6 +26,7 @@ interface Commit {
 interface CommitGraphProps {
   commits?: Commit[];
   currentBranch: string;
+  refreshHistory: () => void;
 }
 
 // Layout Engine
@@ -175,6 +183,7 @@ export function CommitGraph({
   currentBranch
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
+  const [contextMenuCommit, setContextMenuCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
 
@@ -294,24 +303,26 @@ export function CommitGraph({
               const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
               return (
                 <div
-                  key={commit.id}
-                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 cursor-pointer ${
-                    hoveredCommitId === commit.id
-                      ? 'bg-zinc-800/50'
-                      : 'hover:bg-zinc-800/30'
-                  }`}
-                  style={{
-                    top: node.y - 18,
-                    height: spacingY,
-                    left: width + 20 // Offset content to right of graph
-                  }}
-                  onClick={() => setSelectedCommit(commit)}
-                  onMouseEnter={() => setHoveredCommitId(commit.id)}
-                  onMouseLeave={() => setHoveredCommitId(null)}
-                >
-                  <div className="flex items-center gap-3">
-                    <p className="font-medium text-zinc-200 text-sm truncate flex-1">
-                      {commit.message}
+                <ContextMenu>
+                  <ContextMenuTrigger
+                    key={commit.id}
+                    className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 cursor-pointer ${
+                      hoveredCommitId === commit.id
+                        ? 'bg-zinc-800/50'
+                        : 'hover:bg-zinc-800/30'
+                    }`}
+                    style={{
+                      top: node.y - 18,
+                      height: spacingY,
+                      left: width + 20, // Offset content to right of graph
+                    }}
+                    onClick={() => setSelectedCommit(commit)}
+                    onMouseEnter={() => setHoveredCommitId(commit.id)}
+                    onMouseLeave={() => setHoveredCommitId(null)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <p className="font-medium text-zinc-200 text-sm truncate flex-1">
+                        {commit.message}
                     </p>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -337,7 +348,11 @@ export function CommitGraph({
                       </span>
                     </div>
                   </div>
-                </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => setContextMenuCommit(commit)}>Create Tag</ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               );
             })}
            </div>
@@ -349,6 +364,16 @@ export function CommitGraph({
         <CommitDetails
           commit={selectedCommit}
           onClose={() => setSelectedCommit(null)}
+        />
+      )}
+      {contextMenuCommit && (
+        <CreateTagDialog
+          commitHash={contextMenuCommit.hash}
+          onClose={() => setContextMenuCommit(null)}
+          onCreateTag={async (tagName, message) => {
+            await window.electronAPI.createTag(tagName, contextMenuCommit.hash, message);
+            refreshHistory();
+          }}
         />
       )}
     </div>

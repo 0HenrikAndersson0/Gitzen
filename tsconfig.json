@@ -14,7 +14,13 @@
     "declarationMap": true,
     "sourceMap": true,
     "moduleResolution": "node",
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "renderer/src/*"
+      ]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
