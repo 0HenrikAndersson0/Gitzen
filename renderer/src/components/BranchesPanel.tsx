@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitBranch, GitMerge, Tag, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { StashList } from './StashList';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
@@ -22,22 +23,28 @@ interface TagItem {
 
 interface BranchesPanelProps {
   currentBranch: string;
+  stashes: { name: string; message: string }[];
   onCheckout?: (branch: string) => void;
   onCreateBranch?: (name: string) => void;
   onDeleteBranch?: (branch: string) => void;
   onDeleteTag?: (tag: string) => void;
   onMergeBranch?: (branch: string) => void;
   onSetLoading?: (loading: boolean, message?: string) => void;
+  onApplyStash: (name: string) => void;
+  onDeleteStash: (name: string) => void;
 }
 
-export function BranchesPanel({ 
-  currentBranch, 
-  onCheckout, 
+export function BranchesPanel({
+  currentBranch,
+  stashes,
+  onCheckout,
   onCreateBranch,
   onDeleteBranch,
   onDeleteTag,
   onMergeBranch,
-  onSetLoading
+  onSetLoading,
+  onApplyStash,
+  onDeleteStash,
 }: BranchesPanelProps) {
   const [activeTab, setActiveTab] = useState<'local' | 'remote' | 'tags'>('local');
   const [localBranches, setLocalBranches] = useState<Branch[]>([]);
@@ -537,6 +544,15 @@ export function BranchesPanel({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Stashes Panel */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
+        <StashList
+          stashes={stashes}
+          onApplyStash={onApplyStash}
+          onDeleteStash={onDeleteStash}
+        />
       </div>
 
       {/* Delete Confirmation Dialog */}

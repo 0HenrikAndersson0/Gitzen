@@ -53,6 +53,7 @@ declare global {
       gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
       gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
+      gitGetStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }>;
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
@@ -98,6 +99,7 @@ export default function App() {
   const [files, setFiles] = useState<FileChange[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
+  const [stashes, setStashes] = useState<{ name: string; message: string }[]>([]);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
   const [unpushedCommitsCount, setUnpushedCommitsCount] = useState(0);
@@ -186,6 +188,20 @@ export default function App() {
     }
   }, [repoPath]);
 
+  const refreshStashes = useCallback(async () => {
+    if (!repoPath) return;
+    try {
+      const result = await (window.electronAPI as any).getStashes();
+      if (result.success) {
+        if (result.stashes) {
+          setStashes(result.stashes);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh stashes:', error);
+    }
+  }, [repoPath]);
+
   const refreshUnpushedCommits = useCallback(async () => {
     if (!repoPath) return;
     try {
@@ -242,16 +258,17 @@ export default function App() {
       refreshStatus();
       refreshBranch();
       refreshHistory();
+      refreshStashes();
       refreshUnpushedCommits();
       refreshRebaseStatus();
     }
-  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits, refreshRebaseStatus]);
+  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshUnpushedCommits, refreshRebaseStatus]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshUnpushedCommits, refreshRebaseStatus],
+    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshUnpushedCommits, refreshRebaseStatus],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -363,16 +380,16 @@ export default function App() {
     });
   };
 
-  const handleStash = async (message: string) => {
+  const handleStash = async () => {
     addLog('info', 'Stashing changes...');
     await withLoading('Stashing changes...', async () => {
       try {
-        const result = await (window.electronAPI as any).createStash(message);
+        const result = await (window.electronAPI as any).createStash();
         if (result.success) {
           addLog('success', 'Changes stashed successfully');
           toast.success('Changes stashed successfully!');
           await refreshStatus();
-          await refreshHistory();
+          await refreshStashes();
         } else {
           addLog('error', result.error || 'Failed to stash changes');
           toast.error(result.error || 'Failed to stash changes');
@@ -381,6 +398,49 @@ export default function App() {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Stash failed: ${errorMsg}`);
         toast.error(`Stash failed: ${errorMsg}`);
+      }
+    });
+  };
+
+  const handleApplyStash = async (name: string) => {
+    addLog('info', `Applying stash ${name}...`);
+    await withLoading(`Applying stash ${name}...`, async () => {
+      try {
+        const result = await (window.electronAPI as any).applyStash(name);
+        if (result.success) {
+          addLog('success', `Stash ${name} applied successfully`);
+          toast.success(`Stash ${name} applied successfully!`);
+          await refreshStatus();
+          await refreshStashes();
+        } else {
+          addLog('error', result.error || 'Failed to apply stash');
+          toast.error(result.error || 'Failed to apply stash');
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Apply stash failed: ${errorMsg}`);
+        toast.error(`Apply stash failed: ${errorMsg}`);
+      }
+    });
+  };
+
+  const handleDeleteStash = async (name: string) => {
+    addLog('info', `Deleting stash ${name}...`);
+    await withLoading(`Deleting stash ${name}...`, async () => {
+      try {
+        const result = await (window.electronAPI as any).deleteStash(name);
+        if (result.success) {
+          addLog('success', `Stash ${name} deleted successfully`);
+          toast.success(`Stash ${name} deleted successfully!`);
+          await refreshStashes();
+        } else {
+          addLog('error', result.error || 'Failed to delete stash');
+          toast.error(result.error || 'Failed to delete stash');
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Delete stash failed: ${errorMsg}`);
+        toast.error(`Delete stash failed: ${errorMsg}`);
       }
     });
   };
@@ -825,6 +885,7 @@ export default function App() {
             <div className="col-span-1 flex flex-col gap-4">
               <BranchesPanel
                 currentBranch={currentBranch}
+                stashes={stashes}
                 onCheckout={handleCheckout}
                 onCreateBranch={handleCreateBranch}
                 onDeleteBranch={handleDeleteBranch}
@@ -834,6 +895,8 @@ export default function App() {
                   setIsLoading(loading);
                   setLoadingMessage(message);
                 }}
+                onApplyStash={handleApplyStash}
+                onDeleteStash={handleDeleteStash}
               />
             </div>
           )}
@@ -886,7 +949,7 @@ export default function App() {
               unpushedCommitsCount={unpushedCommitsCount}
               onRevertFile={handleRevertFile}
               onDeleteFile={handleDeleteFile}
-              onStash={handleStash}
+              onStash={() => handleStash()}
             />
             <ActivityLog logs={logs} />
           </div>

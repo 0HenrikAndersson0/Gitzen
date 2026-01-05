@@ -56,14 +56,41 @@ export async function cloneRepository(url: string, localPath: string, credential
   }
 }
 
-export async function createStash(message: string): Promise<{ success: boolean; error?: string }> {
+export async function createStash(): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    const command = message ? `stash push -m "${message}"` : 'stash';
+    const branchResult = await getCurrentBranch();
+    const branchName = branchResult.branch || 'unknown';
+    const message = `WIP on ${branchName}`;
+    const command = `stash push -m "${message}"`;
     await runGitCommand(command);
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getStashes(): Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('stash list --pretty=format:"%gD|%gs"');
+    const stashes = stdout
+      .split('\n')
+      .filter((line: string) => line.trim())
+      .map((line: string) => {
+        const [name, message] = line.split('|');
+        return {
+          name: name || '',
+          message: message || '',
+        };
+      });
+
+    return { success: true, stashes };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -466,8 +493,6 @@ export async function getHistory(maxCount: number = 50): Promise<{
     isMerge?: boolean;
     parents: string[];
     refs: string;
-    isStash?: boolean;
-    stashRef?: string;
   }>;
   error?: string
 }> {
@@ -476,6 +501,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
       return { success: false, error: 'No repository open' };
     }
 
+    // Use configured max commits (defaults to 30)
     const configuredMaxCommits = settingsService.getMaxCommits();
     const diagramMaxCount = Math.min(maxCount, configuredMaxCommits);
 
@@ -504,8 +530,8 @@ export async function getHistory(maxCount: number = 50): Promise<{
             if (match) {
               const refBranch = match[1].trim();
 
-              commitToBranch[hash] = refBranch;
-              break;
+                commitToBranch[hash] = refBranch;
+                break;
 
             }
           }
@@ -517,7 +543,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
       }
     }
 
-    const allCommits: Array<{
+    const commits: Array<{
       id: string;
       message: string;
       author: string;
@@ -527,8 +553,6 @@ export async function getHistory(maxCount: number = 50): Promise<{
       isMerge?: boolean;
       parents: string[];
       refs: string;
-      isStash?: boolean;
-      stashRef?: string;
     }> = [];
 
     // Second pass: propagate branch info
@@ -592,7 +616,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
         }
       }
 
-      allCommits.push({
+      commits.push({
         id: hash.substr(0, 7),
         message: message || 'No message',
         author: author || 'Unknown',
@@ -601,64 +625,9 @@ export async function getHistory(maxCount: number = 50): Promise<{
         hash: hash.substr(0, 7),
         isMerge: isMerge,
         parents: parentHashes.map(p => p.substr(0, 7)),
-        refs: refs,
-        isStash: false,
+        refs: refs
       });
     }
-
-    // Get stashes
-    try {
-      const { stdout: stashOutput } = await runGitCommand(`log -g refs/stash --pretty=format:"%H|%s|%an|%ad|%D|%P|%gd" --date=iso`);
-      const stashLines = stashOutput.trim().split('\n').filter(line => line.trim());
-
-      for (const line of stashLines) {
-        const parts = line.split('|');
-        if (parts.length < 7) continue;
-
-        const hash = parts[0].trim();
-        let message = parts[1] || 'Stash';
-        const author = parts[2] || 'Unknown';
-        const dateStr = parts[3];
-        const refs = parts[4] || '';
-        const parents = (parts[5] || '').trim();
-        const stashRef = (parts[6] || '').trim();
-
-        const stashMessagePrefix = 'On ';
-        const prefixIndex = message.indexOf(stashMessagePrefix);
-        if (prefixIndex !== -1) {
-          const branchAndMessage = message.substring(prefixIndex + stashMessagePrefix.length);
-          const separatorIndex = branchAndMessage.indexOf(': ');
-          if (separatorIndex !== -1) {
-            message = branchAndMessage.substring(separatorIndex + 2);
-          }
-        }
-
-
-        const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
-
-        allCommits.push({
-          id: hash.substr(0, 7),
-          message: message,
-          author: author,
-          timestamp: new Date(dateStr),
-          branch: 'stash',
-          hash: hash.substr(0, 7),
-          isMerge: false,
-          parents: parentHashes.map(p => p.substr(0, 7)),
-          refs: refs,
-          isStash: true,
-          stashRef: stashRef
-        });
-      }
-    } catch (e) {
-      // No stashes found, ignore error
-    }
-
-    // Sort all commits and stashes by date
-    allCommits.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    // Limit to max count
-    const commits = allCommits.slice(0, diagramMaxCount);
 
     return { success: true, commits };
   } catch (error: any) {
