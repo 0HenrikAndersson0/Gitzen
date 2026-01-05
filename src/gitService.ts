@@ -64,7 +64,8 @@ export async function createStash(): Promise<{ success: boolean; error?: string 
     const branchResult = await getCurrentBranch();
     const branchName = branchResult.branch || 'unknown';
     const message = `WIP on ${branchName}`;
-    const command = `stash push -m "${message}"`;
+    const escapedMessage = message.replace(/"/g, '\\"');
+    const command = `stash push -m "${escapedMessage}"`;
     await runGitCommand(command);
     return { success: true };
   } catch (error: any) {
@@ -101,7 +102,7 @@ export async function applyStash(stashRef: string): Promise<{ success: boolean; 
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand(`stash apply ${stashRef}`);
+    await runGitCommand(`stash apply "${stashRef}"`);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -113,7 +114,7 @@ export async function deleteStash(stashRef: string): Promise<{ success: boolean;
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand(`stash drop ${stashRef}`);
+    await runGitCommand(`stash drop "${stashRef}"`);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };

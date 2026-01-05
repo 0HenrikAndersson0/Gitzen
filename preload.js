@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStashes: () => ipcRenderer.invoke('git:getStashes'),
   createStash: () => ipcRenderer.invoke('git:createStash'),
   applyStash: (name) => ipcRenderer.invoke('git:applyStash', name),
-  deleteStash: (name) => ipcRenderer.invoke('git:deleteStash'),
+  deleteStash: (name) => ipcRenderer.invoke('git:deleteStash', name),
   gitGetBranches: () => ipcRenderer.invoke('git:getBranches'),
   gitCreateBranch: (name, checkout) => ipcRenderer.invoke('git:createBranch', name, checkout),
   gitCheckoutBranch: (name) => ipcRenderer.invoke('git:checkoutBranch', name),
