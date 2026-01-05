@@ -1,7 +1,6 @@
-import { GitBranch, User, Clock, Tag, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { GitBranch, User, Clock, Tag, Archive } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
-import { Button } from './ui/button';
 
 interface Commit {
   id: string;
@@ -14,11 +13,14 @@ interface Commit {
   parents?: string[];
   refs?: string;
   tags?: string[];
+  isStash?: boolean;
+  stashRef?: string;
 }
 
 interface CommitGraphProps {
   commits?: Commit[];
   currentBranch: string;
+  onStashAction?: () => void;
 }
 
 // Layout Engine
@@ -172,11 +174,29 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
 export function CommitGraph({
   commits = [],
-  currentBranch
+  currentBranch,
+  onStashAction
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, commit: Commit } | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  const handleApplyStash = async (stashRef: string) => {
+    await (window.electronAPI as any).applyStash(stashRef);
+    onStashAction?.();
+  };
+
+  const handleDeleteStash = async (stashRef: string) => {
+    await (window.electronAPI as any).deleteStash(stashRef);
+    onStashAction?.();
+  };
 
   // Custom Graph Props
   const spacingX = 20;
@@ -270,9 +290,21 @@ export function CommitGraph({
                    cy={node.y}
                    r="4"
                    fill={node.color}
-                   stroke="#18181b" // zinc-950
+                   stroke="#18181b"
                    strokeWidth="2"
                  />
+                 {commit.isStash && (
+                    <rect
+                      x={node.x - 5}
+                      y={node.y - 5}
+                      width="10"
+                      height="10"
+                      fill={node.color}
+                      stroke="#18181b"
+                      strokeWidth="2"
+                      rx="2"
+                    />
+                  )}
                  {hoveredCommitId === node.id && (
                    <circle
                      cx={node.x}
@@ -308,14 +340,26 @@ export function CommitGraph({
                   onClick={() => setSelectedCommit(commit)}
                   onMouseEnter={() => setHoveredCommitId(commit.id)}
                   onMouseLeave={() => setHoveredCommitId(null)}
+                  onContextMenu={(e) => {
+                    if (commit.isStash) {
+                      e.preventDefault();
+                      setContextMenu({ x: e.clientX, y: e.clientY, commit });
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-3">
+                    {commit.isStash && <Archive className="h-4 w-4 text-amber-400 flex-shrink-0" />}
                     <p className="font-medium text-zinc-200 text-sm truncate flex-1">
                       {commit.message}
                     </p>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
-                        {commit.branch && (
+                      {commit.isStash && (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400 border border-amber-500/20">
+                          {commit.stashRef}
+                        </span>
+                      )}
+                        {commit.branch && !commit.isStash && (
                             <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400 border border-emerald-500/20">
                             {commit.branch}
                             </span>
@@ -343,6 +387,26 @@ export function CommitGraph({
            </div>
         </div>
       </div>
+      {contextMenu && (
+        <div
+          className="absolute z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-lg text-sm text-zinc-200"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={() => setContextMenu(null)}
+        >
+          <button
+            className="block w-full text-left px-4 py-2 hover:bg-zinc-700"
+            onClick={() => handleApplyStash(contextMenu.commit.stashRef!)}
+          >
+            Apply Stash
+          </button>
+          <button
+            className="block w-full text-left px-4 py-2 hover:bg-zinc-700 text-red-400"
+            onClick={() => handleDeleteStash(contextMenu.commit.stashRef!)}
+          >
+            Delete Stash
+          </button>
+        </div>
+      )}
 
       {/* Commit Details Overlay */}
       {selectedCommit && (

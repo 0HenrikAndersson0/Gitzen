@@ -56,6 +56,43 @@ export async function cloneRepository(url: string, localPath: string, credential
   }
 }
 
+export async function createStash(message: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    const command = message ? `stash push -m "${message}"` : 'stash';
+    await runGitCommand(command);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function applyStash(stashRef: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand(`stash apply ${stashRef}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function deleteStash(stashRef: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand(`stash drop ${stashRef}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function openRepository(repoPath: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
@@ -417,8 +454,8 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
   }
 }
 
-export async function getHistory(maxCount: number = 50): Promise<{ 
-  success: boolean; 
+export async function getHistory(maxCount: number = 50): Promise<{
+  success: boolean;
   commits?: Array<{
     id: string;
     message: string;
@@ -429,34 +466,35 @@ export async function getHistory(maxCount: number = 50): Promise<{
     isMerge?: boolean;
     parents: string[];
     refs: string;
+    isStash?: boolean;
+    stashRef?: string;
   }>;
-  error?: string 
+  error?: string
 }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    
-    // Use configured max commits (defaults to 30)
+
     const configuredMaxCommits = settingsService.getMaxCommits();
     const diagramMaxCount = Math.min(maxCount, configuredMaxCommits);
-    
+
     // Use --all to show all branches regardless of which branch is checked out
     const { stdout } = await runGitCommand(`log -n ${diagramMaxCount} --all --date-order --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso`);
-    
+
     const lines = stdout.trim().split('\n').filter(line => line.trim());
-    
+
     // Build a map of commit hash to branch name
     const commitToBranch: Record<string, string> = {};
-    
+
     // First pass: collect branch info from refs
     for (const line of lines) {
       const parts = line.split('|');
       if (parts.length < 5) continue;
-      
+
       const hash = parts[0].trim();
       const refs = (parts[4] || '').trim();
-      
+
       if (refs) {
         const refParts = refs.split(',').map(r => r.trim());
         for (const ref of refParts) {
@@ -465,12 +503,12 @@ export async function getHistory(maxCount: number = 50): Promise<{
             const match = ref.match(/HEAD -> (.+)/);
             if (match) {
               const refBranch = match[1].trim();
-              
-                commitToBranch[hash] = refBranch;
-                break;
-              
+
+              commitToBranch[hash] = refBranch;
+              break;
+
             }
-          } 
+          }
           else if (ref && ref.trim() && !ref.startsWith('tag:')) {
             commitToBranch[hash] = ref.trim();
             break;
@@ -478,24 +516,26 @@ export async function getHistory(maxCount: number = 50): Promise<{
         }
       }
     }
-    
-    const commits: Array<{ 
-      id: string; 
-      message: string; 
-      author: string; 
-      timestamp: Date; 
-      branch?: string; 
-      hash: string; 
+
+    const allCommits: Array<{
+      id: string;
+      message: string;
+      author: string;
+      timestamp: Date;
+      branch?: string;
+      hash: string;
       isMerge?: boolean;
       parents: string[];
       refs: string;
+      isStash?: boolean;
+      stashRef?: string;
     }> = [];
-    
+
     // Second pass: propagate branch info
     let changed = true;
     let iterations = 0;
     const maxIterations = 10;
-    
+
     while (changed && iterations < maxIterations) {
       changed = false;
       iterations++;
@@ -506,7 +546,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
         const hash = parts[0].trim();
         const parents = (parts.length > 5 ? parts[5] : '').trim();
         const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
-        
+
         if (parentHashes.length > 0) {
           const firstParent = parentHashes[0].trim();
           if (!parentToChildren[firstParent]) {
@@ -526,24 +566,24 @@ export async function getHistory(maxCount: number = 50): Promise<{
         }
       }
     }
-    
+
     // Third pass: build commit list
     for (const line of lines) {
       const parts = line.split('|');
       if (parts.length < 5) continue;
-      
+
       const hash = parts[0].trim();
       const message = parts[1] || 'No message';
       const author = parts[2] || 'Unknown';
       const dateStr = parts[3];
       const refs = parts[4] || '';
       const parents = (parts.length > 5 ? parts[5] : '').trim();
-      
+
       const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
       const isMerge = parentHashes.length > 1;
-      
+
       let branchName: string | undefined = commitToBranch[hash];
-      
+
       if (!branchName && isMerge) {
         const mergeMatch = message.match(/Merge branch ['"]([^'"]+)['"]/);
         if (mergeMatch) {
@@ -551,8 +591,8 @@ export async function getHistory(maxCount: number = 50): Promise<{
           commitToBranch[hash] = branchName;
         }
       }
-      
-      commits.push({
+
+      allCommits.push({
         id: hash.substr(0, 7),
         message: message || 'No message',
         author: author || 'Unknown',
@@ -561,9 +601,64 @@ export async function getHistory(maxCount: number = 50): Promise<{
         hash: hash.substr(0, 7),
         isMerge: isMerge,
         parents: parentHashes.map(p => p.substr(0, 7)),
-        refs: refs
+        refs: refs,
+        isStash: false,
       });
     }
+
+    // Get stashes
+    try {
+      const { stdout: stashOutput } = await runGitCommand(`log -g refs/stash --pretty=format:"%H|%s|%an|%ad|%D|%P|%gd" --date=iso`);
+      const stashLines = stashOutput.trim().split('\n').filter(line => line.trim());
+
+      for (const line of stashLines) {
+        const parts = line.split('|');
+        if (parts.length < 7) continue;
+
+        const hash = parts[0].trim();
+        let message = parts[1] || 'Stash';
+        const author = parts[2] || 'Unknown';
+        const dateStr = parts[3];
+        const refs = parts[4] || '';
+        const parents = (parts[5] || '').trim();
+        const stashRef = (parts[6] || '').trim();
+
+        const stashMessagePrefix = 'On ';
+        const prefixIndex = message.indexOf(stashMessagePrefix);
+        if (prefixIndex !== -1) {
+          const branchAndMessage = message.substring(prefixIndex + stashMessagePrefix.length);
+          const separatorIndex = branchAndMessage.indexOf(': ');
+          if (separatorIndex !== -1) {
+            message = branchAndMessage.substring(separatorIndex + 2);
+          }
+        }
+
+
+        const parentHashes = parents ? parents.split(' ').filter(p => p.trim()) : [];
+
+        allCommits.push({
+          id: hash.substr(0, 7),
+          message: message,
+          author: author,
+          timestamp: new Date(dateStr),
+          branch: 'stash',
+          hash: hash.substr(0, 7),
+          isMerge: false,
+          parents: parentHashes.map(p => p.substr(0, 7)),
+          refs: refs,
+          isStash: true,
+          stashRef: stashRef
+        });
+      }
+    } catch (e) {
+      // No stashes found, ignore error
+    }
+
+    // Sort all commits and stashes by date
+    allCommits.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    // Limit to max count
+    const commits = allCommits.slice(0, diagramMaxCount);
 
     return { success: true, commits };
   } catch (error: any) {

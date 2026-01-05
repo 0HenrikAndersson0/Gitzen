@@ -363,6 +363,28 @@ export default function App() {
     });
   };
 
+  const handleStash = async (message: string) => {
+    addLog('info', 'Stashing changes...');
+    await withLoading('Stashing changes...', async () => {
+      try {
+        const result = await (window.electronAPI as any).createStash(message);
+        if (result.success) {
+          addLog('success', 'Changes stashed successfully');
+          toast.success('Changes stashed successfully!');
+          await refreshStatus();
+          await refreshHistory();
+        } else {
+          addLog('error', result.error || 'Failed to stash changes');
+          toast.error(result.error || 'Failed to stash changes');
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Stash failed: ${errorMsg}`);
+        toast.error(`Stash failed: ${errorMsg}`);
+      }
+    });
+  };
+
   const handleCommit = async (message: string) => {
     const stagedFiles = files.filter((f) => f.staged);
     addLog('info', `Committing ${stagedFiles.length} file(s)...`);
@@ -844,9 +866,10 @@ export default function App() {
                 </Tabs>
               </div>
             ) : (
-              <CommitGraph 
+              <CommitGraph
                 commits={commits}
                 currentBranch={currentBranch}
+                onStashAction={refreshHistory}
               />
             )}
           </div>
@@ -863,6 +886,7 @@ export default function App() {
               unpushedCommitsCount={unpushedCommitsCount}
               onRevertFile={handleRevertFile}
               onDeleteFile={handleDeleteFile}
+              onStash={handleStash}
             />
             <ActivityLog logs={logs} />
           </div>

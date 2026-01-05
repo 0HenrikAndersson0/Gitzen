@@ -20,6 +20,7 @@ interface CommitPanelProps {
   unpushedCommitsCount?: number;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
+  onStash: (message: string) => void;
 }
 
 export function CommitPanel({
@@ -31,14 +32,21 @@ export function CommitPanel({
   unpushedCommitsCount = 0,
   onRevertFile,
   onDeleteFile,
+  onStash,
 }: CommitPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
+  const [stashMessage, setStashMessage] = useState('');
 
   const handleCommit = () => {
     if (commitMessage.trim()) {
       onCommit(commitMessage);
       setCommitMessage('');
     }
+  };
+
+  const handleStash = () => {
+    onStash(stashMessage);
+    setStashMessage('');
   };
 
   const stagedFiles = files.filter((f) => f.staged);
@@ -95,6 +103,22 @@ export function CommitPanel({
                 {unpushedCommitsCount}
               </span>
             )}
+          </Button>
+        </div>
+        <div className="flex gap-2">
+          <Textarea
+            id="stash-message"
+            placeholder="Enter your stash message..."
+            value={stashMessage}
+            onChange={(e) => setStashMessage(e.target.value)}
+            className="min-h-10 bg-zinc-950 border-zinc-700 font-mono resize-none"
+          />
+          <Button
+            onClick={handleStash}
+            disabled={files.length === 0}
+            className="bg-amber-600 hover:bg-amber-700"
+          >
+            Stash
           </Button>
         </div>
       </div>
