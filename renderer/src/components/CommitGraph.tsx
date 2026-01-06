@@ -302,10 +302,8 @@ export function CommitGraph({
             {nodes.map((node) => {
               const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
               return (
-                <div
-                <ContextMenu>
+                <ContextMenu key={commit.id}>
                   <ContextMenuTrigger
-                    key={commit.id}
                     className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 cursor-pointer ${
                       hoveredCommitId === commit.id
                         ? 'bg-zinc-800/50'
