@@ -343,7 +343,7 @@ export async function addRemote(name: string, url: string): Promise<{ success: b
   }
 }
 
-export async function createGitHubRepo(token: string, name: string, isPrivate: boolean, description?: string): Promise<{ success: boolean; cloneUrl?: string; error?: string }> {
+export async function createGitHubRepo(token: string, name: string, isPrivate: boolean, description?: string): Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string }> {
   try {
     const response = await fetch('https://api.github.com/user/repos', {
       method: 'POST',
@@ -366,7 +366,7 @@ export async function createGitHubRepo(token: string, name: string, isPrivate: b
     }
 
     const data: any = await response.json();
-    return { success: true, cloneUrl: data.clone_url };
+    return { success: true, cloneUrl: data.clone_url, ownerLogin: data.owner.login };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -843,10 +843,8 @@ async function validateCredentials(remoteUrl: string, username: string, password
           maxBuffer: 1024 * 1024, // 1MB
         });
         
-        // Check if we got any output (empty output might indicate auth failure)
-        if (!result.stdout || result.stdout.trim().length === 0) {
-          return { success: false, error: 'Authentication failed: No access to repository' };
-        }
+        // Check if we got any output (empty output might indicate auth failure, OR an empty repo)
+        // If exit code is 0 (which it is here, otherwise we'd catch error), empty output means empty repo, which is valid access.
         
         return { success: true };
       } catch (error: any) {

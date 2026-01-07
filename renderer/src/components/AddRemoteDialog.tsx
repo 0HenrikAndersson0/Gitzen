@@ -11,7 +11,7 @@ import { Loader2 } from 'lucide-react';
 interface AddRemoteDialogProps {
   open: boolean;
   onClose: () => void;
-  onAddRemote: (name: string, url: string) => void;
+  onAddRemote: (name: string, url: string) => Promise<void>;
 }
 
 export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogProps) {
@@ -42,7 +42,28 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
       const result = await window.electronAPI.gitCreateGitHubRepo(token, repoName, isPrivate, description);
       if (result.success && result.cloneUrl) {
         toast.success('Repository created on GitHub!');
-        onAddRemote('origin', result.cloneUrl);
+        
+        // Save credentials
+        const username = result.ownerLogin || 'git';
+        const saveResult = await window.electronAPI.saveCredentials(result.cloneUrl, username, token);
+        if (!saveResult.success) {
+          console.error('Failed to save credentials:', saveResult.error);
+          toast.warning('Failed to save credentials, you may need to enter them manually.');
+        }
+
+        // Add remote
+        await onAddRemote('origin', result.cloneUrl);
+        
+        // Push code
+        toast.info('Pushing code to new repository...');
+        const pushResult = await window.electronAPI.gitPush('origin');
+        
+        if (pushResult.success) {
+          toast.success('Code pushed successfully!');
+        } else {
+          toast.error('Failed to push code: ' + pushResult.error);
+        }
+        
         onClose();
       } else {
         toast.error(result.error || 'Failed to create repository');
