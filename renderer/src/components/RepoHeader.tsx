@@ -1,17 +1,25 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef } from 'react';
+import { Button } from './ui/button';
 
 interface RepoHeaderProps {
   repoName: string | null;
   currentBranch: string;
   hasCredentials: boolean;
+  branchStatus?: {
+    ahead: number;
+    behind: number;
+    hasUpstream: boolean;
+  };
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
   onOpenSettings?: () => void;
+  onPush?: () => void;
+  onPull?: () => void;
 }
 
-export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRepo, onOpenNew, onOpenSettings }: RepoHeaderProps) {
+export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -123,6 +131,18 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRe
                   <div className="flex items-center gap-2 text-sm text-zinc-400">
                     <GitBranch className="size-4" />
                     <span>{currentBranch}</span>
+                    {branchStatus && branchStatus.hasUpstream && (
+                      <div className="flex items-center gap-2 ml-2 text-xs">
+                        <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-yellow-400' : 'text-zinc-600'}`} title={`${branchStatus.behind} commits behind`}>
+                          <ArrowDown className="size-3 mr-0.5" />
+                          {branchStatus.behind}
+                        </span>
+                        <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-blue-400' : 'text-zinc-600'}`} title={`${branchStatus.ahead} commits ahead`}>
+                          <ArrowUp className="size-3 mr-0.5" />
+                          {branchStatus.ahead}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -133,6 +153,41 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRe
         </div>
         
         <div className="flex gap-2 items-center">
+          {repoName && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onPull}
+                className="gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300"
+                title="Pull from remote"
+              >
+                <DownloadCloud className="size-4" />
+                <span className="hidden sm:inline">Pull</span>
+                {branchStatus && branchStatus.behind > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 border-none">
+                    {branchStatus.behind}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onPush}
+                className="gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300"
+                title="Push to remote"
+              >
+                <UploadCloud className="size-4" />
+                <span className="hidden sm:inline">Push</span>
+                {branchStatus && branchStatus.ahead > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-blue-500/20 text-blue-400 border-none">
+                    {branchStatus.ahead}
+                  </Badge>
+                )}
+              </Button>
+            </>
+          )}
+
           <button
             onClick={() => onOpenSettings?.()}
             className="p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 transition-colors"
@@ -154,3 +209,4 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, onSwitchRe
     </div>
   );
 }
+

@@ -307,7 +307,7 @@ export async function push(remote: string = 'origin', branch?: string): Promise<
           await runGitCommand(`remote set-url ${remote} ${urlObj.toString()}`);
           try {
             const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-            await runGitCommand(`push ${remote} ${branchName}`);
+            await runGitCommand(`push -u ${remote} ${branchName}`);
             // Restore original URL
             await runGitCommand(`remote set-url ${remote} ${url}`);
             return { success: true };
@@ -324,8 +324,86 @@ export async function push(remote: string = 'origin', branch?: string): Promise<
     }
 
     const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-    await runGitCommand(`push ${remote} ${branchName}`);
+    await runGitCommand(`push -u ${remote} ${branchName}`);
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function addRemote(name: string, url: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand(`remote add ${name} ${url}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function createGitHubRepo(token: string, name: string, isPrivate: boolean, description?: string): Promise<{ success: boolean; cloneUrl?: string; error?: string }> {
+  try {
+    const response = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: {
+        'Authorization': `token ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json',
+      },
+      body: JSON.stringify({
+        name,
+        private: isPrivate,
+        description,
+        auto_init: false, // We want an empty repo to push to
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData: any = await response.json();
+      return { success: false, error: errorData.message || 'Failed to create repository' };
+    }
+
+    const data: any = await response.json();
+    return { success: true, cloneUrl: data.clone_url };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getBranchStatus(): Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Get upstream branch
+    let upstream = '';
+    try {
+      const { stdout } = await runGitCommand('rev-parse --abbrev-ref --symbolic-full-name @{upstream}');
+      upstream = stdout.trim();
+    } catch (e) {
+      return { success: true, ahead: 0, behind: 0, hasUpstream: false };
+    }
+
+    if (!upstream) {
+      return { success: true, ahead: 0, behind: 0, hasUpstream: false };
+    }
+
+    // Get ahead/behind counts
+    // git rev-list --left-right --count HEAD...@{upstream}
+    // Output: "ahead    behind" (tab separated)
+    const { stdout } = await runGitCommand('rev-list --left-right --count HEAD...@{upstream}');
+    const parts = stdout.trim().split(/\s+/);
+    
+    if (parts.length >= 2) {
+      const ahead = parseInt(parts[0], 10);
+      const behind = parseInt(parts[1], 10);
+      return { success: true, ahead, behind, hasUpstream: true, upstream };
+    }
+    
+    return { success: true, ahead: 0, behind: 0, hasUpstream: true, upstream };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

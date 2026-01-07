@@ -42,6 +42,12 @@ export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
           </DialogDescription>
         </DialogHeader>
         
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3 mt-2">
+          <p className="text-[11px] text-yellow-200/80 leading-relaxed">
+            <strong>Note:</strong> For GitHub, use your <strong>Personal Access Token</strong> as the password. GitHub no longer accepts account passwords for Git operations.
+          </p>
+        </div>
+        
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>

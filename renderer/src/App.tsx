@@ -3,6 +3,7 @@ import { CloneRepo } from './components/CloneRepo';
 import { OpenRepo } from './components/OpenRepo';
 import { CommitPanel } from './components/CommitPanel';
 import { ActivityLog } from './components/ActivityLog';
+import { AddRemoteDialog } from './components/AddRemoteDialog';
 import { RepoHeader } from './components/RepoHeader';
 import { CredentialsDialog } from './components/CredentialsDialog';
 import { MergeConflictDialog } from './components/MergeConflictDialog';
@@ -15,6 +16,13 @@ import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { useAutoRefresh } from './hooks/useAutoRefresh';
 import { LoadingOverlay } from './components/ui/spinner';
+
+interface BranchStatus {
+  ahead: number;
+  behind: number;
+  hasUpstream: boolean;
+  upstream?: string;
+}
 
 interface FileChange {
   path: string;
@@ -46,13 +54,14 @@ export default function App() {
   const [currentBranch, setCurrentBranch] = useState('main');
   const [hasCredentials, setHasCredentials] = useState(false);
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
+  const [showAddRemoteDialog, setShowAddRemoteDialog] = useState(false);
+  const [branchStatus, setBranchStatus] = useState<BranchStatus | undefined>(undefined);
   const [files, setFiles] = useState<FileChange[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [stashes, setStashes] = useState<{ name: string; message: string }[]>([]);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
-  const [unpushedCommitsCount, setUnpushedCommitsCount] = useState(0);
   const [showMergeConflictDialog, setShowMergeConflictDialog] = useState(false);
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -152,15 +161,20 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshUnpushedCommits = useCallback(async () => {
+  const refreshBranchStatus = useCallback(async () => {
     if (!repoPath) return;
     try {
-      const result = await (window.electronAPI as any).hasUnpushedCommits();
+      const result = await window.electronAPI.gitGetBranchStatus();
       if (result.success) {
-        setUnpushedCommitsCount(result.count || 0);
+        setBranchStatus({
+          ahead: result.ahead || 0,
+          behind: result.behind || 0,
+          hasUpstream: !!result.hasUpstream,
+          upstream: result.upstream
+        });
       }
     } catch (error) {
-      console.error('Failed to check unpushed commits:', error);
+      console.error('Failed to refresh branch status:', error);
     }
   }, [repoPath]);
 
@@ -209,16 +223,16 @@ export default function App() {
       refreshBranch();
       refreshHistory();
       refreshStashes();
-      refreshUnpushedCommits();
       refreshRebaseStatus();
+      refreshBranchStatus();
     }
-  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshUnpushedCommits, refreshRebaseStatus]);
+  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshUnpushedCommits, refreshRebaseStatus],
+    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -395,6 +409,50 @@ export default function App() {
     });
   };
 
+  const handleAddRemote = async (name: string, url: string) => {
+    await withLoading(`Adding remote ${name}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitAddRemote(name, url);
+        if (result.success) {
+          addLog('success', `Remote ${name} added successfully`);
+          toast.success(`Remote ${name} added successfully`);
+          setRemoteUrl(url);
+          // Try to fetch to set up tracking if possible, or just refresh
+          await refreshBranchStatus();
+        } else {
+          addLog('error', result.error || 'Failed to add remote');
+          toast.error(result.error || 'Failed to add remote');
+        }
+      } catch (error) {
+        addLog('error', `Failed to add remote: ${error}`);
+      }
+    });
+  };
+
+  const handlePull = async () => {
+    addLog('info', `Pulling from origin/${currentBranch}...`);
+    await withLoading(`Pulling from origin/${currentBranch}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitPull('origin', currentBranch);
+        if (result.success) {
+          addLog('success', `Successfully pulled from origin/${currentBranch}`);
+          toast.success('Pulled successfully!');
+          await refreshStatus();
+          await refreshHistory();
+          await refreshBranchStatus();
+        } else {
+          const errorMsg = result.error || 'Failed to pull';
+          addLog('error', errorMsg);
+          toast.error(errorMsg);
+        }
+      } catch (error) {
+         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+         addLog('error', `Pull failed: ${errorMsg}`);
+         toast.error(`Pull failed: ${errorMsg}`);
+      }
+    });
+  };
+
   const handleCommit = async (message: string) => {
     const stagedFiles = files.filter((f) => f.staged);
     addLog('info', `Committing ${stagedFiles.length} file(s)...`);
@@ -408,7 +466,7 @@ export default function App() {
           
           await refreshStatus();
           await refreshHistory();
-          await refreshUnpushedCommits();
+          await refreshBranchStatus();
         } else {
           addLog('error', result.error || 'Failed to commit');
           toast.error(result.error || 'Failed to commit');
@@ -422,6 +480,22 @@ export default function App() {
   };
 
   const handlePush = async () => {
+    // Check if we have a remote
+    if (!remoteUrl) {
+      // Check if we can get it from git
+      try {
+        const remoteResult = await window.electronAPI.getRemoteUrl('origin');
+        if (!remoteResult.success || !remoteResult.url) {
+           setShowAddRemoteDialog(true);
+           return;
+        }
+        setRemoteUrl(remoteResult.url);
+      } catch (e) {
+        setShowAddRemoteDialog(true);
+        return;
+      }
+    }
+
     if (!hasCredentials && remoteUrl) {
       setShowCredentialsDialog(true);
       addLog('error', 'Push failed: credentials required');
@@ -437,7 +511,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Successfully pushed to origin/${currentBranch}`);
           toast.success('Changes pushed successfully!');
-          await refreshUnpushedCommits();
+          await refreshBranchStatus();
         } else {
           const errorMsg = result.error || 'Failed to push';
           addLog('error', errorMsg);
@@ -789,17 +863,19 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
       {isLoading && <LoadingOverlay message={loadingMessage} />}
       <div className="w-full space-y-4">
-        <RepoHeader
-          repoName={repoName}
-          currentBranch={currentBranch}
-          hasCredentials={hasCredentials}
-          onSwitchRepo={handleSwitchRepo}
-          onOpenNew={handleOpenNewRepo}
-          onOpenSettings={() => setShowSettingsDialog(true)}
-        />
-
-        {rebaseStatus.inProgress && (
-            <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">
+                <RepoHeader
+                  repoName={repoName}
+                  currentBranch={currentBranch}
+                  hasCredentials={hasCredentials}
+                  branchStatus={branchStatus}
+                  onSwitchRepo={handleSwitchRepo}
+                  onOpenNew={handleOpenNewRepo}
+                  onOpenSettings={() => setShowSettingsDialog(true)}
+                  onPush={handlePush}
+                  onPull={handlePull}
+                />
+                
+                {rebaseStatus.inProgress && (            <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="size-2 rounded-full bg-purple-500 animate-pulse" />
                     <span className="font-medium text-purple-200">
@@ -894,9 +970,6 @@ export default function App() {
               files={files}
               onToggleStage={handleToggleStage}
               onCommit={handleCommit}
-              onPush={handlePush}
-              hasCredentials={hasCredentials}
-              unpushedCommitsCount={unpushedCommitsCount}
               onRevertFile={handleRevertFile}
               onDeleteFile={handleDeleteFile}
               onStash={() => handleStash()}
@@ -911,6 +984,12 @@ export default function App() {
       <CredentialsDialog
         open={showCredentialsDialog}
         onSubmit={handleCredentialsSubmit}
+      />
+
+      <AddRemoteDialog
+        open={showAddRemoteDialog}
+        onClose={() => setShowAddRemoteDialog(false)}
+        onAddRemote={handleAddRemote}
       />
 
       <MergeConflictDialog
