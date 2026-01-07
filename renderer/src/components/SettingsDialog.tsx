@@ -17,18 +17,6 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-declare global {
-  interface Window {
-    electronAPI: {
-      getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;
-      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
-      getMaxCommits: () => Promise<{ success: boolean; maxCommits?: number; error?: string }>;
-      setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string }>;
-      showOpenDialog: (options?: { properties?: string[]; title?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
-    };
-  }
-}
-
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [mergeToolPath, setMergeToolPath] = useState('');
   const [maxCommits, setMaxCommits] = useState(30);

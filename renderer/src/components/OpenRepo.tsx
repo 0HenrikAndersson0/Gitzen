@@ -12,17 +12,6 @@ interface RecentRepo {
   lastOpened: number;
 }
 
-declare global {
-  interface Window {
-    electronAPI: {
-      showOpenDialog: () => Promise<{ success: boolean; path?: string; error?: string }>;
-      getRecentRepos: () => Promise<{ success: boolean; repos?: RecentRepo[]; error?: string }>;
-      addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
-      gitOpen: (path: string) => Promise<{ success: boolean; error?: string }>;
-    };
-  }
-}
-
 export function OpenRepo({ onOpen }: OpenRepoProps) {
   const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const [isLoading, setIsLoading] = useState(false);

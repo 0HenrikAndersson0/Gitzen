@@ -1,7 +1,7 @@
-import { GitBranch, User, Clock, Tag, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { GitBranch, Tag } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
-import { Button } from './ui/button';
+import { CreateTagDialog } from './CreateTagDialog';
 
 interface Commit {
   id: string;
@@ -19,10 +19,11 @@ interface Commit {
 interface CommitGraphProps {
   commits?: Commit[];
   currentBranch: string;
+  onStashAction?: () => void;
 }
 
 // Layout Engine
-interface Node {
+interface GraphNode {
   id: string;
   x: number;
   y: number;
@@ -30,7 +31,7 @@ interface Node {
   commit: Commit;
 }
 
-interface Edge {
+interface GraphEdge {
   fromX: number;
   fromY: number;
   toX: number;
@@ -51,16 +52,14 @@ const COLORS = [
 
 function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: number = 40) {
   return useMemo(() => {
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
+    const nodes: GraphNode[] = [];
+    const edges: GraphEdge[] = [];
 
     // Map of commit hash -> occupied lane index
     // Note: commits are processed newest to oldest (top to bottom)
-    const lanes: (string | null)[] = [];
+    
     // Map commit hash -> lane index it was assigned to
     const commitLaneMap = new Map<string, number>();
-    // Map commit hash -> color index
-    const commitColorMap = new Map<string, number>();
 
     // Helper to find a lane for a commit
     // If the commit is already expected by a parent (from above), it has a reserved lane?
@@ -172,11 +171,18 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
 export function CommitGraph({
   commits = [],
-  currentBranch
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
+  
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commitHash: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Tag Dialog State
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [tagTargetCommit, setTagTargetCommit] = useState<string | undefined>(undefined);
 
   // Custom Graph Props
   const spacingX = 20;
@@ -184,29 +190,52 @@ export function CommitGraph({
   const { nodes, edges, width, height } = useGraphLayout(commits, spacingX, spacingY);
 
   // Load tags for commits
-  useEffect(() => {
-    const loadTags = async () => {
-      const commitsWithTagsData = await Promise.all(
-        commits.map(async (commit) => {
-          try {
-            const result = await (window.electronAPI as any).getTagsForCommit(commit.hash);
-            if (result.success && result.tags && result.tags.length > 0) {
-              return { ...commit, tags: result.tags };
-            }
-            return commit;
-          } catch (error) {
-            console.error(`Failed to load tags for commit ${commit.hash}:`, error);
-            return commit;
+  const loadTags = async () => {
+    const commitsWithTagsData = await Promise.all(
+      commits.map(async (commit) => {
+        try {
+          const result = await (window.electronAPI as any).getTagsForCommit(commit.hash);
+          if (result.success && result.tags && result.tags.length > 0) {
+            return { ...commit, tags: result.tags };
           }
-        })
-      );
-      setCommitsWithTags(commitsWithTagsData);
-    };
+          return commit;
+        } catch (error) {
+          console.error(`Failed to load tags for commit ${commit.hash}:`, error);
+          return commit;
+        }
+      })
+    );
+    setCommitsWithTags(commitsWithTagsData);
+  };
 
+  useEffect(() => {
     if (commits.length > 0) {
       loadTags();
     }
   }, [commits]);
+
+  const handleContextMenu = (e: React.MouseEvent, commitHash: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      commitHash: commitHash,
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as globalThis.Node)) {
+        setContextMenu(null);
+      }
+    };
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [contextMenu]);
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -306,6 +335,7 @@ export function CommitGraph({
                     left: width + 20 // Offset content to right of graph
                   }}
                   onClick={() => setSelectedCommit(commit)}
+                  onContextMenu={(e) => handleContextMenu(e, commit.hash)}
                   onMouseEnter={() => setHoveredCommitId(commit.id)}
                   onMouseLeave={() => setHoveredCommitId(null)}
                 >
@@ -351,6 +381,38 @@ export function CommitGraph({
           onClose={() => setSelectedCommit(null)}
         />
       )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden py-1 min-w-[150px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2"
+            onClick={() => {
+              setTagTargetCommit(contextMenu.commitHash);
+              setShowTagDialog(true);
+              setContextMenu(null);
+            }}
+          >
+            <Tag className="size-3.5 text-amber-400" />
+            Add Tag...
+          </div>
+        </div>
+      )}
+
+      {/* Create Tag Dialog */}
+      <CreateTagDialog
+        open={showTagDialog}
+        onOpenChange={setShowTagDialog}
+        commitHash={tagTargetCommit}
+        onTagCreated={() => {
+          loadTags();
+          setTagTargetCommit(undefined);
+        }}
+      />
     </div>
   );
 }
