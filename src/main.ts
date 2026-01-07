@@ -169,6 +169,18 @@ ipcMain.handle('git:deleteTag', async (_, tagName) => {
   return await gitService.deleteTag(tagName);
 });
 
+ipcMain.handle('git:createTag', async (_, name, commitHash) => {
+  return await gitService.createTag(name, commitHash);
+});
+
+ipcMain.handle('git:pushTag', async (_, tagName, remote) => {
+  return await gitService.pushTag(tagName, remote);
+});
+
+ipcMain.handle('git:getRemoteTags', async (_, remote) => {
+  return await gitService.getRemoteTags(remote);
+});
+
 ipcMain.handle('git:revertFileChanges', async (_, filePath) => {
   return await gitService.revertFileChanges(filePath);
 });

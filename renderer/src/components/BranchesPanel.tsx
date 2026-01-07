@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, GitMerge, Tag, Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
@@ -15,19 +15,12 @@ interface Branch {
   lastCommit?: string;
 }
 
-interface TagItem {
-  name: string;
-  commit: string;
-  date: Date;
-}
-
 interface BranchesPanelProps {
   currentBranch: string;
   stashes: { name: string; message: string }[];
   onCheckout?: (branch: string) => void;
   onCreateBranch?: (name: string) => void;
   onDeleteBranch?: (branch: string) => void;
-  onDeleteTag?: (tag: string) => void;
   onMergeBranch?: (branch: string) => void;
   onSetLoading?: (loading: boolean, message?: string) => void;
   onApplyStash: (name: string) => void;
@@ -40,21 +33,19 @@ export function BranchesPanel({
   onCheckout,
   onCreateBranch,
   onDeleteBranch,
-  onDeleteTag,
   onMergeBranch,
   onSetLoading,
   onApplyStash,
   onDeleteStash,
 }: BranchesPanelProps) {
-  const [activeTab, setActiveTab] = useState<'local' | 'remote' | 'tags'>('local');
+  const [activeTab, setActiveTab] = useState<'local' | 'remote'>('local');
   const [localBranches, setLocalBranches] = useState<Branch[]>([]);
   const [remoteBranches, setRemoteBranches] = useState<Branch[]>([]);
-  const [tags, setTags] = useState<TagItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string } | null>(null);
-  const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch' | 'tag'; name: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch'; name: string } | null>(null);
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -64,11 +55,10 @@ export function BranchesPanel({
       setLoading(true);
     }
     try {
-      // Load local branches, remote branches, and tags in parallel
-      const [localResult, remoteResult, tagsResult] = await Promise.all([
+      // Load local branches, remote branches in parallel
+      const [localResult, remoteResult] = await Promise.all([
         window.electronAPI.gitGetBranches(),
         window.electronAPI.getRemoteBranches(),
-        window.electronAPI.getTags(),
       ]);
 
       // Process local branches
@@ -113,30 +103,10 @@ export function BranchesPanel({
           return prev;
         });
       }
-
-      // Process tags
-      if (tagsResult.success && tagsResult.tags) {
-        const newTags = tagsResult.tags.map((tag) => ({
-          name: tag.name,
-          commit: tag.commit,
-          date: new Date(tag.date),
-        }));
-        
-        // Only update state if tags actually changed
-        setTags((prev) => {
-          const prevNames = prev.map(t => t.name).sort().join(',');
-          const newNames = newTags.map(t => t.name).sort().join(',');
-          
-          if (prevNames !== newNames) {
-            return newTags;
-          }
-          return prev;
-        });
-      }
     } catch (error) {
-      console.error('Failed to load branches and tags:', error);
+      console.error('Failed to load branches:', error);
       if (showLoading) {
-        toast.error('Failed to load branches and tags');
+        toast.error('Failed to load branches');
       }
     } finally {
       if (showLoading) {
@@ -146,7 +116,7 @@ export function BranchesPanel({
   }, [currentBranch]);
 
   useEffect(() => {
-    // Always load branches and tags together, regardless of active tab
+    // Always load branches together, regardless of active tab
     loadBranches(true); // Show loading on initial load or tab switch
     // Only depend on activeTab and currentBranch - the functions are stable via useCallback
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,11 +124,11 @@ export function BranchesPanel({
 
   // Memoize the refresh function to avoid recreating it on every render
   const refreshCurrentTab = useCallback(async () => {
-    // Always refresh branches and tags together (silent refresh, no loading indicator)
+    // Always refresh branches together (silent refresh, no loading indicator)
     await loadBranches(false);
   }, [loadBranches]);
 
-  // Auto-refresh branches and tags every 10 seconds
+  // Auto-refresh branches every 10 seconds
   // Refresh based on the currently active tab
   useAutoRefresh({
     enabled: true, // Always enabled when component is mounted
@@ -209,10 +179,6 @@ export function BranchesPanel({
     setDeleteDialog({ type: 'remoteBranch', name: remoteBranchName });
   };
 
-  const handleDeleteTag = async (tagName: string) => {
-    setDeleteDialog({ type: 'tag', name: tagName });
-  };
-
   const confirmDelete = async () => {
     if (!deleteDialog) return;
 
@@ -243,18 +209,9 @@ export function BranchesPanel({
         } else {
           toast.error(result.error || 'Failed to delete remote branch');
         }
-      } else if (dialogToDelete.type === 'tag') {
-        result = await (window.electronAPI as any).deleteTag(dialogToDelete.name);
-        if (result.success) {
-          toast.success(`Deleted tag ${dialogToDelete.name}`);
-          onDeleteTag?.(dialogToDelete.name);
-          await loadBranches(true);
-        } else {
-          toast.error(result.error || 'Failed to delete tag');
-        }
       }
     } catch (error) {
-      const itemType = dialogToDelete.type === 'branch' ? 'branch' : dialogToDelete.type === 'remoteBranch' ? 'remote branch' : 'tag';
+      const itemType = dialogToDelete.type === 'branch' ? 'branch' : 'remote branch';
       toast.error(`Failed to delete ${itemType}`);
     } finally {
       onSetLoading?.(false);
@@ -499,53 +456,6 @@ export function BranchesPanel({
         </div>
       </div>
 
-      {/* Tags Panel */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
-        <div className="border-b border-zinc-800 p-3 flex items-center gap-2 text-zinc-100">
-          <Tag className="size-4" />
-          <h3 className="font-semibold text-sm">Tags</h3>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto">
-          {loading && tags.length === 0 ? (
-            <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
-          ) : tags.length === 0 ? (
-            <div className="p-4 text-center text-sm text-zinc-500">No tags</div>
-          ) : (
-            <div className="divide-y divide-zinc-800">
-              {tags.map((tag) => (
-                <div
-                  key={tag.name}
-                  className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
-                >
-                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                    <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-zinc-300">
-                        {tag.name}
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                        <span className="font-mono">{tag.commit.substring(0, 7)}</span>
-                        <span>•</span>
-                        <span>{tag.date.toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteTag(tag.name);
-                    }}
-                    className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Stashes Panel */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
         <StashList
@@ -563,7 +473,6 @@ export function BranchesPanel({
               <Trash2 className="size-5" />
               {deleteDialog?.type === 'branch' && 'Delete Branch'}
               {deleteDialog?.type === 'remoteBranch' && 'Delete Remote Branch'}
-              {deleteDialog?.type === 'tag' && 'Delete Tag'}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 mt-3 text-base">
               {deleteDialog?.type === 'branch' && (
@@ -578,13 +487,6 @@ export function BranchesPanel({
                   Are you sure you want to delete the remote branch <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
                   <br />
                   <span className="text-sm text-zinc-500 mt-2 block">This will delete the branch on the remote repository.</span>
-                </>
-              )}
-              {deleteDialog?.type === 'tag' && (
-                <>
-                  Are you sure you want to delete the tag <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
-                  <br />
-                  <span className="text-sm text-zinc-500 mt-2 block">This action cannot be undone.</span>
                 </>
               )}
             </DialogDescription>

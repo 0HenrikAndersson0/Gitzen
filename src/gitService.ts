@@ -1078,6 +1078,104 @@ export async function deleteTag(tagName: string): Promise<{ success: boolean; er
   }
 }
 
+export async function createTag(name: string, commitHash?: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const command = commitHash ? `tag ${name} ${commitHash}` : `tag ${name}`;
+    await runGitCommand(command);
+    return { success: true };
+  } catch (error: any) {
+    const errorMsg = error.message || error.stderr || 'Unknown error';
+    if (errorMsg.includes('already exists')) {
+      return { success: false, error: `Tag '${name}' already exists` };
+    }
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function pushTag(tagName: string, remote: string = 'origin'): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Reuse push logic with credentials if needed, but simplified for now:
+    // Just run git push remote tagname
+    // If we want to support credentials more robustly we should reuse the push function logic
+    // or refactor push to handle generic refs.
+    // For now, let's use the credential manager logic if available.
+    
+    // Get remote URL to check for credentials
+    const { stdout: remoteUrl } = await runGitCommand(`remote get-url ${remote}`);
+    const url = remoteUrl.trim();
+    
+    // Check/Use credentials (similar to push function)
+    if (credentialManager) {
+      const creds = await credentialManager.getRemoteCredentials(url);
+      if (creds?.username && creds?.password) {
+        let urlWithCreds = url;
+        if (url.startsWith('git@') || url.startsWith('ssh://')) {
+           urlWithCreds = url
+            .replace(/^git@/, 'https://')
+            .replace(/^ssh:\/\//, 'https://')
+            .replace(/:([^\/]+)\//, '/$1/');
+        }
+        
+        try {
+          const urlObj = new URL(urlWithCreds);
+          urlObj.username = creds.username;
+          urlObj.password = creds.password;
+          
+          await runGitCommand(`remote set-url ${remote} ${urlObj.toString()}`);
+          try {
+            await runGitCommand(`push ${remote} ${tagName}`);
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            return { success: true };
+          } catch (error) {
+            await runGitCommand(`remote set-url ${remote} ${url}`);
+            throw error;
+          }
+        } catch (urlError) {
+           console.warn('Failed to parse URL with credentials:', urlError);
+        }
+      }
+    }
+
+    await runGitCommand(`push ${remote} ${tagName}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getRemoteTags(remote: string = 'origin'): Promise<{ success: boolean; tags?: string[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Use ls-remote to list tags on the remote
+    const { stdout } = await runGitCommand(`ls-remote --tags --refs ${remote}`);
+    const tags = stdout.split('\n')
+      .map(line => {
+        const parts = line.split('\t');
+        if (parts.length > 1) {
+          return parts[1].replace('refs/tags/', '');
+        }
+        return '';
+      })
+      .filter(t => t);
+
+    return { success: true, tags };
+  } catch (error: any) {
+    // If remote doesn't exist or fails, just return empty list or error
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function revertFileChanges(filePath: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
