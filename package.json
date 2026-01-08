@@ -18,7 +18,7 @@
     "electron",
     "gui"
   ],
-  "author": "",
+  "author": "Henrik <henrik@localhost>",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.19.3",
@@ -53,6 +53,9 @@
     },
     "mac": {
       "icon": "icon.png"
+    },
+    "directories": {
+      "output": "release"
     }
   },
   "dependencies": {
