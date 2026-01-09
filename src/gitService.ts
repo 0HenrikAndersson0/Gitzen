@@ -43,15 +43,26 @@ export async function cloneRepository(url: string, localPath: string, credential
 
     let cloneUrl = url;
     if (credentials) {
-      // Embed credentials in URL
+      // Embed provided credentials
       const urlObj = new URL(url);
       urlObj.username = credentials.username;
       urlObj.password = credentials.password;
       cloneUrl = urlObj.toString();
-    }
-
-    await execFileAsync('git', [
-        '-c', 'http.version=HTTP/1.1',
+    } else {
+      // Try to find existing credentials (including fallback to other repos on same host)
+      if (!credentialManager) {
+        credentialManager = new CredentialManager();
+      }
+      const existingCreds = await credentialManager.getRemoteCredentials(url);
+          if (existingCreds?.username && existingCreds?.password) {
+            const urlObj = new URL(url);
+            urlObj.username = existingCreds.username;
+            urlObj.password = existingCreds.password;
+            cloneUrl = urlObj.toString();
+          }
+        }
+      
+        await execFileAsync('git', [        '-c', 'http.version=HTTP/1.1',
         '-c', 'credential.helper=',
         'clone', cloneUrl, localPath
     ], {
@@ -789,8 +800,6 @@ async function withRemoteCredentials<T>(remote: string, action: () => Promise<T>
         urlObj.username = creds.username;
         urlObj.password = creds.password;
         
-        console.log(`DEBUG: Injecting credentials for ${remote} (user: ${creds.username})`);
-
         // Temporarily update remote URL with credentials
         // Use execFileAsync to avoid shell escaping issues
         if (!currentRepoPath) throw new Error('No repo open');
@@ -816,8 +825,6 @@ async function withRemoteCredentials<T>(remote: string, action: () => Promise<T>
       } catch (urlError) {
         console.warn('Failed to parse URL with credentials, trying without:', urlError);
       }
-    } else {
-        console.log(`DEBUG: No credentials found for ${originalUrl}`);
     }
   }
 
