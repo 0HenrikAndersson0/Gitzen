@@ -50,8 +50,17 @@ export async function cloneRepository(url: string, localPath: string, credential
       cloneUrl = urlObj.toString();
     }
 
-    await execAsync(`git clone ${cloneUrl} ${localPath}`, {
+    await execFileAsync('git', [
+        '-c', 'http.version=HTTP/1.1',
+        '-c', 'credential.helper=',
+        'clone', cloneUrl, localPath
+    ], {
       maxBuffer: 10 * 1024 * 1024,
+      env: { 
+        ...process.env, 
+        GIT_TERMINAL_PROMPT: '0',
+        LC_ALL: 'C'
+      },
     });
 
     currentRepoPath = localPath;
@@ -780,22 +789,35 @@ async function withRemoteCredentials<T>(remote: string, action: () => Promise<T>
         urlObj.username = creds.username;
         urlObj.password = creds.password;
         
+        console.log(`DEBUG: Injecting credentials for ${remote} (user: ${creds.username})`);
+
         // Temporarily update remote URL with credentials
-        await runGitCommand(`remote set-url ${remote} ${urlObj.toString()}`);
+        // Use execFileAsync to avoid shell escaping issues
+        if (!currentRepoPath) throw new Error('No repo open');
+        
+        await execFileAsync('git', ['remote', 'set-url', remote, urlObj.toString()], {
+            cwd: currentRepoPath
+        });
+
         try {
           const result = await action();
           // Restore original URL
-          await runGitCommand(`remote set-url ${remote} ${originalUrl}`);
+          await execFileAsync('git', ['remote', 'set-url', remote, originalUrl], {
+            cwd: currentRepoPath
+          });
           return result;
         } catch (error) {
           // Restore original URL on error
-          await runGitCommand(`remote set-url ${remote} ${originalUrl}`);
+          await execFileAsync('git', ['remote', 'set-url', remote, originalUrl], {
+            cwd: currentRepoPath
+          });
           throw error;
         }
       } catch (urlError) {
-        // If URL parsing fails, log and fall through to action without credentials
         console.warn('Failed to parse URL with credentials, trying without:', urlError);
       }
+    } else {
+        console.log(`DEBUG: No credentials found for ${originalUrl}`);
     }
   }
 

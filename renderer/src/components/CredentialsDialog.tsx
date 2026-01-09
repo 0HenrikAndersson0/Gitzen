@@ -14,10 +14,11 @@ import {
 
 interface CredentialsDialogProps {
   open: boolean;
+  onClose: () => void;
   onSubmit: (username: string, password: string) => void;
 }
 
-export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
+export function CredentialsDialog({ open, onClose, onSubmit }: CredentialsDialogProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -30,7 +31,7 @@ export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
   };
 
   return (
-    <Dialog open={open}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="bg-zinc-900 border-zinc-800">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -75,6 +76,13 @@ export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
         </div>
 
         <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+          >
+            Cancel
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={!username || !password}

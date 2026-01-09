@@ -68,6 +68,7 @@ export default function App() {
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
+  const [pendingClone, setPendingClone] = useState<{ url: string; path: string } | null>(null);
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
 
@@ -268,8 +269,22 @@ export default function App() {
           await refreshBranch();
           await refreshHistory();
         } else {
-          addLog('error', result.error || 'Failed to clone repository');
-          toast.error(result.error || 'Failed to clone repository');
+          const errorMsg = result.error || 'Failed to clone repository';
+          
+          // Check for auth error
+          if (errorMsg.includes('Authentication failed') || 
+              errorMsg.includes('terminal prompts disabled') ||
+              errorMsg.includes('could not read Username') ||
+              errorMsg.includes('could not read Password') ||
+              errorMsg.includes('401') || 
+              errorMsg.includes('403')) {
+            addLog('warning', 'Clone failed: Authentication required. Please enter credentials.');
+            setPendingClone({ url, path });
+            setShowCredentialsDialog(true);
+          } else {
+            addLog('error', errorMsg);
+            toast.error(errorMsg);
+          }
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -549,27 +564,50 @@ export default function App() {
   };
 
   const handleCredentialsSubmit = async (username: string, password: string) => {
-    if (!remoteUrl) return;
+    const targetUrl = pendingClone ? pendingClone.url : remoteUrl;
+    
+    if (!targetUrl) return;
     
     addLog('info', `Validating credentials for ${username}...`);
     
     await withLoading('Validating credentials...', async () => {
       try {
-        const result = await window.electronAPI.saveCredentials(remoteUrl, username, password);
+        const result = await window.electronAPI.saveCredentials(targetUrl, username, password);
         if (result.success) {
           setHasCredentials(true);
           setShowCredentialsDialog(false);
           addLog('success', 'Credentials validated and saved successfully');
           toast.success('Credentials authenticated!');
+          
+          if (pendingClone) {
+            addLog('info', 'Retrying clone with new credentials...');
+            const cloneResult = await window.electronAPI.gitClone(pendingClone.url, pendingClone.path, { username, password });
+            
+            if (cloneResult.success) {
+              setRepoPath(pendingClone.path);
+              setRepoName(pendingClone.url.split('/').pop()?.replace('.git', '') || 'repository');
+              addLog('success', `Repository cloned successfully to ${pendingClone.path}`);
+              toast.success('Repository cloned successfully!');
+              setPendingClone(null);
+              
+              await refreshStatus();
+              await refreshBranch();
+              await refreshHistory();
+            } else {
+              addLog('error', `Clone failed: ${cloneResult.error}`);
+              toast.error(`Clone failed: ${cloneResult.error}`);
+              // Keep pending clone? No, maybe user wants to try different creds?
+              // Let's keep dialog closed but user can try again.
+              setPendingClone(null);
+            }
+          }
         } else {
           const errorMsg = result.error || 'Failed to validate credentials';
           addLog('error', `Authentication failed: ${errorMsg}`);
           toast.error(`Authentication failed: ${errorMsg}`);
           setHasCredentials(false);
-          const credCheck = await window.electronAPI.hasCredentials(remoteUrl);
-          if (credCheck.success && credCheck.hasCredentials) {
-            addLog('warning', 'Failed credentials were removed from storage');
-          }
+          // If validating for a pending clone failed, we stay in dialog? 
+          // Yes, dialog stays open.
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -983,6 +1021,7 @@ export default function App() {
 
       <CredentialsDialog
         open={showCredentialsDialog}
+        onClose={() => setShowCredentialsDialog(false)}
         onSubmit={handleCredentialsSubmit}
       />
 
