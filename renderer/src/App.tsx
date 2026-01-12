@@ -48,6 +48,12 @@ interface Commit {
   refs?: string;
 }
 
+interface Branch {
+  name: string;
+  isRemote: boolean;
+  isCurrent: boolean;
+}
+
 export default function App() {
   const [repoName, setRepoName] = useState<string | null>(null);
   const [repoPath, setRepoPath] = useState<string | null>(null);
@@ -60,6 +66,9 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [stashes, setStashes] = useState<{ name: string; message: string }[]>([]);
+  const [localBranches, setLocalBranches] = useState<Branch[]>([]);
+  const [remoteBranches, setRemoteBranches] = useState<Branch[]>([]);
+  const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
   const [showMergeConflictDialog, setShowMergeConflictDialog] = useState(false);
@@ -71,11 +80,16 @@ export default function App() {
   const [pendingClone, setPendingClone] = useState<{ url: string; path: string } | null>(null);
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
+  const repoPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
     loadRepository();
   }, []);
+
+  useEffect(() => {
+    repoPathRef.current = repoPath;
+  }, [repoPath]);
 
   const addLog = (type: LogEntry['type'], message: string) => {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
@@ -111,6 +125,7 @@ export default function App() {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitStatus();
+      if (repoPath !== repoPathRef.current) return;
       if (result.success && result.files) {
         setFiles(result.files);
       }
@@ -123,6 +138,7 @@ export default function App() {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitGetCurrentBranch();
+      if (repoPath !== repoPathRef.current) return;
       if (result.success && result.branch && result.branch.trim()) {
         const newBranch = result.branch.trim();
         setCurrentBranch((prevBranch) => {
@@ -134,10 +150,41 @@ export default function App() {
     }
   }, [repoPath]);
 
+  const refreshBranches = useCallback(async () => {
+    if (!repoPath) return;
+    setIsRefreshingBranches(true);
+    try {
+      const [localResult, remoteResult] = await Promise.all([
+        window.electronAPI.gitGetBranches(),
+        window.electronAPI.getRemoteBranches(),
+      ]);
+      
+      if (repoPath !== repoPathRef.current) return;
+
+      if (localResult.success && localResult.branches) {
+        setLocalBranches(localResult.branches.map(name => ({
+            name, isRemote: false, isCurrent: name === currentBranch
+        })));
+      }
+      if (remoteResult.success && remoteResult.branches) {
+        setRemoteBranches(remoteResult.branches.map(b => ({
+            name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
+        })));
+      }
+    } catch (e) {
+        console.error('Failed to refresh branches', e);
+    } finally {
+        if (repoPath === repoPathRef.current) {
+             setIsRefreshingBranches(false);
+        }
+    }
+  }, [repoPath, currentBranch]);
+
   const refreshHistory = useCallback(async () => {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitGetHistory(50);
+      if (repoPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.commits) {
           setCommits(result.commits);
@@ -152,6 +199,7 @@ export default function App() {
     if (!repoPath) return;
     try {
       const result = await (window.electronAPI as any).getStashes();
+      if (repoPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.stashes) {
           setStashes(result.stashes);
@@ -166,6 +214,7 @@ export default function App() {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitGetBranchStatus();
+      if (repoPath !== repoPathRef.current) return;
       if (result.success) {
         setBranchStatus({
           ahead: result.ahead || 0,
@@ -183,6 +232,7 @@ export default function App() {
     if (!repoPath) return;
     try {
       const result = await window.electronAPI.gitGetRebaseStatus();
+      if (repoPath !== repoPathRef.current) return;
       if (result.success) {
         setRebaseStatus({ inProgress: result.inProgress, currentStep: result.currentStep, totalSteps: result.totalSteps });
 
@@ -209,6 +259,7 @@ export default function App() {
             lastConflictCountRef.current = conflicts.length;
         } else {
             setConflictedFiles([]);
+            setShowMergeConflictDialog(false); // Close dialog if rebase finished/aborted
             lastRebaseStepRef.current = undefined;
             lastConflictCountRef.current = 0;
         }
@@ -222,18 +273,19 @@ export default function App() {
     if (repoPath) {
       refreshStatus();
       refreshBranch();
+      refreshBranches();
       refreshHistory();
       refreshStashes();
       refreshRebaseStatus();
       refreshBranchStatus();
     }
-  }, [repoPath, refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus]);
+  }, [repoPath, refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus],
+    refreshFunctions: [refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -800,20 +852,59 @@ export default function App() {
   };
 
   const handleCheckout = async (branch: string) => {
+    setCommits([]); // Clear commits to avoid showing stale graph during switch
     await withLoading(`Switching to branch ${branch}...`, async () => {
-      setCurrentBranch(branch);
-      await refreshBranch(); 
-      await refreshStatus();
-      await refreshHistory();
+      try {
+        const result = await window.electronAPI.gitCheckoutBranch(branch);
+        if (result.success) {
+          addLog('success', `Switched to branch ${branch}`);
+          setCurrentBranch(branch);
+          // Refresh everything
+          await Promise.all([
+            refreshBranch(),
+            refreshStatus(),
+            refreshHistory(),
+            refreshStashes(),
+            refreshBranchStatus(),
+            refreshRebaseStatus()
+          ]);
+        } else {
+          addLog('error', result.error || 'Failed to checkout branch');
+          toast.error(result.error || 'Failed to checkout branch');
+          // If failed, reload history to restore graph
+          await refreshHistory();
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Checkout failed: ${msg}`);
+        toast.error(`Checkout failed: ${msg}`);
+        await refreshHistory();
+      }
     });
   };
 
   const handleCreateBranch = async (name: string) => {
     await withLoading(`Creating branch ${name}...`, async () => {
-      setCurrentBranch(name);
-      await refreshBranch();
-      await refreshStatus();
-      addLog('success', `Created and checked out branch: ${name}`);
+      try {
+        const result = await window.electronAPI.gitCreateBranch(name, true);
+        if (result.success) {
+          addLog('success', `Created and checked out branch: ${name}`);
+          setCurrentBranch(name);
+          await Promise.all([
+            refreshBranch(),
+            refreshStatus(),
+            refreshHistory(),
+            refreshStashes(),
+            refreshBranchStatus(),
+            refreshRebaseStatus()
+          ]);
+        } else {
+          addLog('error', result.error || 'Failed to create branch');
+          toast.error(result.error || 'Failed to create branch');
+        }
+      } catch (error) {
+        addLog('error', `Failed to create branch: ${error}`);
+      }
     });
   };
 
@@ -825,6 +916,17 @@ export default function App() {
 
   const handleOpenRepo = async (path: string) => {
     addLog('info', `Opening repository from ${path}...`);
+    
+    // Clear all state before opening
+    setFiles([]);
+    setCommits([]);
+    setStashes([]);
+    setBranchStatus(undefined);
+    setRebaseStatus({ inProgress: false });
+    setConflictedFiles([]);
+    setShowMergeConflictDialog(false);
+    setHasCredentials(false);
+    setRemoteUrl(null);
     
     await withLoading(`Opening repository...`, async () => {
       try {
@@ -847,44 +949,32 @@ export default function App() {
               setRemoteUrl(remoteResult.url);
               const remoteUrlValue = remoteResult.url;
               
-              addLog('info', 'Testing Git credential system...');
-              const gitCredTest = await window.electronAPI.testGitCredentials(remoteUrlValue);
-              
-              if (gitCredTest.success) {
-                setHasCredentials(true);
-                addLog('success', 'Git credential system authenticated successfully');
+              // Try to find credentials (will use fallback if needed)
+              const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
+              if (credResult.success && credResult.hasCredentials) {
+                 setHasCredentials(true);
+                 addLog('info', 'Found saved credentials');
               } else {
-                const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
-                if (credResult.success && credResult.hasCredentials) {
-                  addLog('info', 'Validating saved credentials...');
-                  const validationResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
-                  
-                  if (validationResult.success) {
-                    setHasCredentials(true);
-                    addLog('success', 'Saved credentials validated successfully');
-                  } else {
-                    addLog('warning', 'Saved credentials are invalid, removing from storage...');
-                    await window.electronAPI.deleteCredentials(remoteUrlValue);
-                    setHasCredentials(false);
-                    
-                    setTimeout(() => {
-                      setShowCredentialsDialog(true);
-                      addLog('warning', 'Please enter new credentials');
-                    }, 500);
-                  }
-                } else {
-                  setHasCredentials(false);
-                  addLog('info', 'No credentials configured. You may be prompted when performing push/pull operations.');
-                }
+                 // Even if not strictly saved for this URL, we might have them via fallback logic
+                 // But hasCredentials only checks exact match usually? 
+                 // Actually, CredentialManager fallback logic is in getRemoteCredentials.
+                 // We don't have a "test" method that uses fallback without prompt?
+                 // We can rely on push/pull handling it.
+                 addLog('info', 'No specific credentials saved for this repo (will try to reuse others if available)');
               }
             }
           } catch (error) {
             console.log('No remote configured for this repository');
           }
           
-          await refreshStatus();
-          await refreshBranch();
-          await refreshHistory();
+          await Promise.all([
+            refreshStatus(),
+            refreshBranch(),
+            refreshHistory(),
+            refreshStashes(),
+            refreshBranchStatus(),
+            refreshRebaseStatus()
+          ]);
         } else {
           addLog('error', result.error || 'Failed to open repository');
           toast.error(result.error || 'Failed to open repository');
@@ -906,6 +996,7 @@ export default function App() {
                   currentBranch={currentBranch}
                   hasCredentials={hasCredentials}
                   branchStatus={branchStatus}
+                  isDisabled={isRefreshingBranches}
                   onSwitchRepo={handleSwitchRepo}
                   onOpenNew={handleOpenNewRepo}
                   onOpenSettings={() => setShowSettingsDialog(true)}
@@ -944,7 +1035,10 @@ export default function App() {
             <div className="col-span-1 flex flex-col gap-4">
               <BranchesPanel
                 currentBranch={currentBranch}
+                localBranches={localBranches}
+                remoteBranches={remoteBranches}
                 stashes={stashes}
+                loading={isRefreshingBranches}
                 onCheckout={handleCheckout}
                 onCreateBranch={handleCreateBranch}
                 onDeleteBranch={handleDeleteBranch}

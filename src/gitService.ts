@@ -16,12 +16,26 @@ export function initializeGitService() {
   credentialManager = new CredentialManager();
 }
 
+async function runGitExecFile(args: string[], options: any = {}) {
+  const cmdStr = `git ${args.join(' ')}`;
+  // Mask potential credentials in log (basic check for URL with password)
+  // This regex looks for ://user:pass@ and masks pass
+  const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
+  console.log(`[GIT] ${maskedCmd}`);
+  
+  return await execFileAsync('git', args, { encoding: 'utf8', ...options });
+}
+
 async function runGitCommand(command: string, cwd?: string, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
   const repoPath = cwd || currentRepoPath;
   if (!repoPath) {
     throw new Error('No repository open');
   }
   
+  // Mask credentials in log if they appear in command string (e.g. push url)
+  const maskedCmd = command.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
+  console.log(`[GIT] git ${maskedCmd}`);
+
   return await execAsync(`git ${command}`, {
     cwd: repoPath,
     maxBuffer: 10 * 1024 * 1024, // 10MB
@@ -62,11 +76,17 @@ export async function cloneRepository(url: string, localPath: string, credential
           }
         }
       
-        await execFileAsync('git', [        '-c', 'http.version=HTTP/1.1',
-        '-c', 'credential.helper=',
-        'clone', cloneUrl, localPath
-    ], {
-      maxBuffer: 10 * 1024 * 1024,
+            await runGitExecFile([
+      
+                '-c', 'http.version=HTTP/1.1',
+      
+                '-c', 'credential.helper=',
+      
+                'clone', cloneUrl, localPath
+      
+            ], {
+      
+              maxBuffer: 10 * 1024 * 1024,
       env: { 
         ...process.env, 
         GIT_TERMINAL_PROMPT: '0',
@@ -235,13 +255,13 @@ export async function stageFiles(filePaths: string[]): Promise<{ success: boolea
       // For new files or modified files, use git add
       if (fileStatus === 'deleted') {
         // Use git rm for deleted files - this stages the deletion
-        await execFileAsync('git', ['rm', '--', filePath], {
+        await runGitExecFile(['rm', '--', filePath], {
           cwd: currentRepoPath!,
           maxBuffer: 10 * 1024 * 1024,
         });
       } else {
         // Use git add for new or modified files
-        await execFileAsync('git', ['add', '--', filePath], {
+        await runGitExecFile(['add', '--', filePath], {
           cwd: currentRepoPath!,
           maxBuffer: 10 * 1024 * 1024,
         });
@@ -275,7 +295,7 @@ export async function unstageFiles(filePaths: string[]): Promise<{ success: bool
     // Use execFile with argument array to avoid shell quoting issues with special characters
     // The -- separator tells git that everything after is a file path
     for (const filePath of filePaths) {
-      await execFileAsync('git', ['reset', 'HEAD', '--', filePath], {
+      await runGitExecFile(['reset', 'HEAD', '--', filePath], {
         cwd: currentRepoPath!,
         maxBuffer: 10 * 1024 * 1024,
       });
@@ -473,7 +493,7 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
         : `Merge branch '${branchToMerge}' into ${currentBranch}`;
       
       // Use execFile to avoid shell quoting issues
-      await execFileAsync('git', ['merge', branchToMerge, '--no-ff', '-m', mergeMessage], {
+      await runGitExecFile(['merge', branchToMerge, '--no-ff', '-m', mergeMessage], {
         cwd: currentRepoPath!,
         maxBuffer: 10 * 1024 * 1024,
       });
@@ -734,7 +754,7 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
         // If it doesn't exist, Git will error, then we create it from remote
         try {
           // Try checkout first - if branch exists, this will work
-          await execFileAsync('git', ['checkout', branchName], {
+          await runGitExecFile(['checkout', branchName], {
             cwd: currentRepoPath!,
             maxBuffer: 10 * 1024 * 1024,
           });
@@ -742,7 +762,7 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
         } catch (checkoutError: any) {
           // If branch doesn't exist locally, create it from remote
           // Use -b to create a new branch and set up tracking
-          await execFileAsync('git', ['checkout', '-b', branchName, `${remoteName}/${branchName}`], {
+          await runGitExecFile(['checkout', '-b', branchName, `${remoteName}/${branchName}`], {
             cwd: currentRepoPath!,
             maxBuffer: 10 * 1024 * 1024,
           });
@@ -752,7 +772,7 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
     }
     
     // Local branch checkout (either no slash, or slash but not a remote branch)
-    await execFileAsync('git', ['checkout', name], {
+    await runGitExecFile(['checkout', name], {
                 cwd: currentRepoPath!,      maxBuffer: 10 * 1024 * 1024,
     });
     return { success: true };
@@ -771,11 +791,16 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
  * It temporarily sets the remote URL to include credentials, runs the action, and then restores the URL.
  */
 async function withRemoteCredentials<T>(remote: string, action: () => Promise<T>): Promise<T> {
+  // Capture repo path at start to prevent race conditions during repo switch
+  const repoPath = currentRepoPath;
+  if (!repoPath) throw new Error('No repo open');
+
   // Get remote URL to check for credentials
   let originalUrl: string;
   try {
-    const { stdout: remoteUrl } = await runGitCommand(`remote get-url ${remote}`);
-    originalUrl = remoteUrl.trim();
+    // Use captured repoPath
+    const { stdout } = await runGitExecFile(['remote', 'get-url', remote], { cwd: repoPath });
+    originalUrl = stdout.toString().trim();
   } catch (e) {
     // If we can't get the remote URL, just run the action without credential injection
     return await action();
@@ -801,24 +826,25 @@ async function withRemoteCredentials<T>(remote: string, action: () => Promise<T>
         urlObj.password = creds.password;
         
         // Temporarily update remote URL with credentials
-        // Use execFileAsync to avoid shell escaping issues
-        if (!currentRepoPath) throw new Error('No repo open');
-        
-        await execFileAsync('git', ['remote', 'set-url', remote, urlObj.toString()], {
-            cwd: currentRepoPath
+        // Use captured repoPath to ensure we modify the correct repo
+        await runGitExecFile(['remote', 'set-url', remote, urlObj.toString()], {
+            cwd: repoPath,
+            env: { ...process.env, LC_ALL: 'C' }
         });
 
         try {
           const result = await action();
           // Restore original URL
-          await execFileAsync('git', ['remote', 'set-url', remote, originalUrl], {
-            cwd: currentRepoPath
+          await runGitExecFile(['remote', 'set-url', remote, originalUrl], {
+            cwd: repoPath,
+            env: { ...process.env, LC_ALL: 'C' }
           });
           return result;
         } catch (error) {
           // Restore original URL on error
-          await execFileAsync('git', ['remote', 'set-url', remote, originalUrl], {
-            cwd: currentRepoPath
+          await runGitExecFile(['remote', 'set-url', remote, originalUrl], {
+            cwd: repoPath,
+            env: { ...process.env, LC_ALL: 'C' }
           });
           throw error;
         }
@@ -857,6 +883,10 @@ async function validateCredentials(remoteUrl: string, username: string, password
         'ls-remote', '--exit-code', urlWithCreds
       ];
       
+      const cmdStr = `git ${args.join(' ')}`;
+      const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
+      console.log(`[GIT] ${maskedCmd}`);
+
       await new Promise<void>((resolve, reject) => {
         const child = spawn('git', args, {
           env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }
@@ -1200,7 +1230,7 @@ export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ su
 
     // Delete remote branch using git push --delete
     return await withRemoteCredentials(remoteName, async () => {
-      await execFileAsync('git', ['push', remoteName, '--delete', branchName], {
+      await runGitExecFile(['push', remoteName, '--delete', branchName], {
         cwd: repoPath,
         maxBuffer: 10 * 1024 * 1024,
         env: {
@@ -1295,12 +1325,19 @@ export async function revertFileChanges(filePath: string): Promise<{ success: bo
       return { success: false, error: 'No repository open' };
     }
 
-    // Use git checkout to revert changes (works for both modified and deleted files)
-    // The -- flag tells git that everything after is a file path
-    await execFileAsync('git', ['checkout', '--', filePath], {
-                cwd: currentRepoPath!,      maxBuffer: 10 * 1024 * 1024,
-    });
-    return { success: true };
+        // Use git checkout to revert changes (works for both modified and deleted files)
+
+        // The -- flag tells git that everything after is a file path
+
+        await runGitExecFile(['checkout', '--', filePath], {
+
+          cwd: currentRepoPath!,
+
+          maxBuffer: 10 * 1024 * 1024,
+
+        });
+
+        return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -1378,11 +1415,17 @@ export async function abortMerge(): Promise<{ success: boolean; error?: string }
       return { success: false, error: 'Not in a merge state' };
     }
 
-    await execFileAsync('git', ['merge', '--abort'], {
-                cwd: currentRepoPath!,      maxBuffer: 10 * 1024 * 1024,
-    });
+        await runGitExecFile(['merge', '--abort'], {
 
-    return { success: true };
+          cwd: currentRepoPath!,
+
+          maxBuffer: 10 * 1024 * 1024,
+
+        });
+
+    
+
+        return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -1417,7 +1460,7 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
 
     // Try to use git mergetool, which respects user's merge.tool configuration
     try {
-      await execFileAsync('git', ['mergetool', '--', filePath], {
+      await runGitExecFile(['mergetool', '--', filePath], {
         cwd: currentRepoPath!,
         maxBuffer: 10 * 1024 * 1024,
       });

@@ -249,10 +249,12 @@ export class CredentialManager {
    */
   async getRemoteCredentials(remoteUrl: string): Promise<StoredCredentials | null> {
     const normalizedUrl = this.normalizeRemoteUrl(remoteUrl);
+    console.log(`DEBUG: Looking up credentials for ${normalizedUrl}`);
     
     // 1. Try exact match for this repository
     const creds = await this.getCredentials(normalizedUrl);
     if (creds) {
+      console.log(`DEBUG: Found exact credential match for ${normalizedUrl}`);
       return creds;
     }
 
@@ -260,16 +262,19 @@ export class CredentialManager {
     // This allows reusing a token across multiple repos on github.com, etc.
     try {
       const host = normalizedUrl.split('/')[0];
+      console.log(`DEBUG: No exact match. Searching for siblings on host: ${host}`);
       
       // Basic check to ensure it looks like a domain (has a dot)
       if (host && host.includes('.')) {
         const allIdentifiers = await this.listCredentials();
+        console.log(`DEBUG: Available credentials:`, allIdentifiers);
         
         // Find any identifier that starts with the same host (e.g. "github.com/")
         // We exclude exact "host" matches to avoid recursion if we decide to store host-level creds later
         const siblingIdentifier = allIdentifiers.find(id => id.startsWith(host + '/') && id !== normalizedUrl);
         
         if (siblingIdentifier) {
+          console.log(`DEBUG: CredentialManager: Reusing credentials from ${siblingIdentifier} for ${normalizedUrl}`);
           return await this.getCredentials(siblingIdentifier);
         }
       }

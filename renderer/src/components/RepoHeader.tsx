@@ -12,6 +12,7 @@ interface RepoHeaderProps {
     behind: number;
     hasUpstream: boolean;
   };
+  isDisabled?: boolean;
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
   onOpenSettings?: () => void;
@@ -19,7 +20,7 @@ interface RepoHeaderProps {
   onPull?: () => void;
 }
 
-export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull }: RepoHeaderProps) {
+export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -69,6 +70,12 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
     setIsOpen(false);
   };
 
+  const handleToggleDropdown = () => {
+    if (!isDisabled) {
+      setIsOpen(!isOpen);
+    }
+  };
+
   return (
     <div className="rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6">
       <div className="flex items-start justify-between">
@@ -80,8 +87,9 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
             {repoName ? (
               <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="group flex items-center gap-2 text-left transition-colors hover:text-zinc-100"
+                  onClick={handleToggleDropdown}
+                  disabled={isDisabled}
+                  className={`group flex items-center gap-2 text-left transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-zinc-100'}`}
                 >
                   <h1 className="mb-1">{repoName}</h1>
                   <ChevronDown className="size-4 text-zinc-500 transition-transform group-hover:text-zinc-400" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
