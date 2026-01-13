@@ -36,6 +36,9 @@ declare global {
       gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
       gitPush: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
+      gitAddRemote: (name: string, url: string) => Promise<{ success: boolean; error?: string }>;
+      gitCreateGitHubRepo: (token: string, name: string, isPrivate: boolean, description?: string) => Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string }>;
+      gitGetBranchStatus: () => Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
       gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
       getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }>;

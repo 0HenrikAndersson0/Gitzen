@@ -77,6 +77,18 @@ ipcMain.handle('git:pull', async (_, remote, branch) => {
   return await gitService.pull(remote, branch);
 });
 
+ipcMain.handle('git:addRemote', async (_, name, url) => {
+  return await gitService.addRemote(name, url);
+});
+
+ipcMain.handle('git:createGitHubRepo', async (_, token, name, isPrivate, description) => {
+  return await gitService.createGitHubRepo(token, name, isPrivate, description);
+});
+
+ipcMain.handle('git:getBranchStatus', async () => {
+  return await gitService.getBranchStatus();
+});
+
 ipcMain.handle('git:getCurrentBranch', async () => {
   return await gitService.getCurrentBranch();
 });

@@ -1,23 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { RebaseModal } from './RebaseModal';
 
-interface Branch {
+export interface Branch {
   name: string;
   isRemote: boolean;
   isCurrent: boolean;
-  lastCommit?: string;
 }
 
 interface BranchesPanelProps {
   currentBranch: string;
+  localBranches: Branch[];
+  remoteBranches: Branch[];
   stashes: { name: string; message: string }[];
+  loading?: boolean;
   onCheckout?: (branch: string) => void;
   onCreateBranch?: (name: string) => void;
   onDeleteBranch?: (branch: string) => void;
@@ -29,7 +30,10 @@ interface BranchesPanelProps {
 
 export function BranchesPanel({
   currentBranch,
+  localBranches,
+  remoteBranches,
   stashes,
+  loading,
   onCheckout,
   onCreateBranch,
   onDeleteBranch,
@@ -38,10 +42,6 @@ export function BranchesPanel({
   onApplyStash,
   onDeleteStash,
 }: BranchesPanelProps) {
-  const [activeTab, setActiveTab] = useState<'local' | 'remote'>('local');
-  const [localBranches, setLocalBranches] = useState<Branch[]>([]);
-  const [remoteBranches, setRemoteBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string } | null>(null);
@@ -49,92 +49,6 @@ export function BranchesPanel({
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const loadBranches = useCallback(async (showLoading: boolean = false) => {
-    if (showLoading) {
-      setLoading(true);
-    }
-    try {
-      // Load local branches, remote branches in parallel
-      const [localResult, remoteResult] = await Promise.all([
-        window.electronAPI.gitGetBranches(),
-        window.electronAPI.getRemoteBranches(),
-      ]);
-
-      // Process local branches
-      if (localResult.success && localResult.branches) {
-        const newLocalBranches = localResult.branches.map((name) => ({
-          name,
-          isRemote: false,
-          isCurrent: name === currentBranch,
-        }));
-        
-        // Only update state if branches actually changed
-        setLocalBranches((prev) => {
-          const prevNames = prev.map(b => b.name).sort().join(',');
-          const newNames = newLocalBranches.map(b => b.name).sort().join(',');
-          const prevCurrent = prev.find(b => b.isCurrent)?.name;
-          const newCurrent = newLocalBranches.find(b => b.isCurrent)?.name;
-          
-          // Update if branch list changed or current branch changed
-          if (prevNames !== newNames || prevCurrent !== newCurrent) {
-            return newLocalBranches;
-          }
-          return prev;
-        });
-      }
-
-      // Process remote branches
-      if (remoteResult.success && remoteResult.branches) {
-        const newRemoteBranches = remoteResult.branches.map((branch) => ({
-          name: `${branch.remote}/${branch.name}`,
-          isRemote: true,
-          isCurrent: false,
-        }));
-        
-        // Only update state if branches actually changed
-        setRemoteBranches((prev) => {
-          const prevNames = prev.map(b => b.name).sort().join(',');
-          const newNames = newRemoteBranches.map(b => b.name).sort().join(',');
-          
-          if (prevNames !== newNames) {
-            return newRemoteBranches;
-          }
-          return prev;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load branches:', error);
-      if (showLoading) {
-        toast.error('Failed to load branches');
-      }
-    } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
-    }
-  }, [currentBranch]);
-
-  useEffect(() => {
-    // Always load branches together, regardless of active tab
-    loadBranches(true); // Show loading on initial load or tab switch
-    // Only depend on activeTab and currentBranch - the functions are stable via useCallback
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, currentBranch]);
-
-  // Memoize the refresh function to avoid recreating it on every render
-  const refreshCurrentTab = useCallback(async () => {
-    // Always refresh branches together (silent refresh, no loading indicator)
-    await loadBranches(false);
-  }, [loadBranches]);
-
-  // Auto-refresh branches every 10 seconds
-  // Refresh based on the currently active tab
-  useAutoRefresh({
-    enabled: true, // Always enabled when component is mounted
-    intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshCurrentTab],
-  });
 
   const handleCreateBranchClick = () => {
     setNewBranchName('');
@@ -148,27 +62,14 @@ export function BranchesPanel({
       return;
     }
 
-    // Validate branch name (basic validation)
     if (!/^[a-zA-Z0-9/_-]+$/.test(name)) {
       toast.error('Branch name contains invalid characters');
       return;
     }
 
-    try {
-      const result = await window.electronAPI.gitCreateBranch(name, true);
-      if (result.success) {
-        toast.success(`Created and checked out branch ${name}`);
-        onCreateBranch?.(name);
-        setShowCreateDialog(false);
-        setNewBranchName('');
-        await loadBranches(true);
-      } else {
-        toast.error(result.error || 'Failed to create branch');
-      }
-    } catch (error) {
-      toast.error('Failed to create branch');
-      console.error('Create branch error:', error);
-    }
+    onCreateBranch?.(name);
+    setShowCreateDialog(false);
+    setNewBranchName('');
   };
 
   const handleDeleteBranch = async (branchName: string) => {
@@ -182,30 +83,25 @@ export function BranchesPanel({
   const confirmDelete = async () => {
     if (!deleteDialog) return;
 
-    // Capture the dialog state to avoid stale closures
     const dialogToDelete = deleteDialog;
-    
-    // Close dialog immediately to provide better UX
     setDeleteDialog(null);
     onSetLoading?.(true, `Deleting ${dialogToDelete.name}...`);
 
     try {
       let result;
       if (dialogToDelete.type === 'branch') {
-        result = await (window.electronAPI as any).deleteBranch(dialogToDelete.name, false);
+        result = await window.electronAPI.deleteBranch(dialogToDelete.name, false);
         if (result.success) {
           toast.success(`Deleted branch ${dialogToDelete.name}`);
           onDeleteBranch?.(dialogToDelete.name);
-          await loadBranches(true);
         } else {
           toast.error(result.error || 'Failed to delete branch');
         }
       } else if (dialogToDelete.type === 'remoteBranch') {
-        result = await (window.electronAPI as any).deleteRemoteBranch(dialogToDelete.name);
+        result = await window.electronAPI.deleteRemoteBranch(dialogToDelete.name);
         if (result.success) {
-          const branchName = extractBranchNameFromRemote(dialogToDelete.name);
-          toast.success(`Deleted remote branch ${branchName}`);
-          await loadBranches(true);
+          toast.success(`Deleted remote branch ${dialogToDelete.name}`);
+          // Parent App.tsx should refresh branches
         } else {
           toast.error(result.error || 'Failed to delete remote branch');
         }
@@ -218,39 +114,16 @@ export function BranchesPanel({
     }
   };
 
-  // Helper function to extract branch name from remote/branch format
-  // Handles cases like: origin/feature/dev/something -> feature/dev/something
   const extractBranchNameFromRemote = (remoteBranchName: string): string => {
     const firstSlashIndex = remoteBranchName.indexOf('/');
     if (firstSlashIndex === -1) {
-      return remoteBranchName; // No slash, it's already just the branch name
+      return remoteBranchName;
     }
     return remoteBranchName.substring(firstSlashIndex + 1);
   };
 
   const handleCheckout = async (branchName: string) => {
-    try {
-      // Check if this is a remote branch by checking if it exists in remoteBranches
-      const isRemoteBranch = remoteBranches.some(b => b.name === branchName);
-      
-      const result = await window.electronAPI.gitCheckoutBranch(branchName);
-      if (result.success) {
-        // Extract just the branch name if it's a remote branch (removes remote/ prefix)
-        const displayName = isRemoteBranch ? extractBranchNameFromRemote(branchName) : branchName;
-        toast.success(`Switched to branch ${displayName}`);
-        onCheckout?.(branchName);
-        await loadBranches(true);
-        
-        // Switch to local tab if we checked out a remote branch
-        if (isRemoteBranch) {
-          setActiveTab('local');
-        }
-      } else {
-        toast.error(result.error || 'Failed to checkout branch');
-      }
-    } catch (error) {
-      toast.error('Failed to checkout branch');
-    }
+    onCheckout?.(branchName);
   };
 
   const handleContextMenu = (e: React.MouseEvent, branchName: string) => {
@@ -275,7 +148,6 @@ export function BranchesPanel({
         onMergeBranch?.(branch);
         break;
       case 'rebase':
-        // Direct rebase call
         onSetLoading?.(true, `Rebasing onto ${branch}...`);
         window.electronAPI.gitRebaseBranch(branch).then(result => {
            if (result.success) {
@@ -283,7 +155,6 @@ export function BranchesPanel({
            } else {
              if (result.error && result.error.includes('conflict')) {
                 toast.warning('Rebase started but encountered conflicts. Please resolve them.');
-                // App.tsx should pick up the conflict state via gitStatus polling
              } else {
                 toast.error(`Rebase failed: ${result.error}`);
              }
@@ -595,4 +466,3 @@ export function BranchesPanel({
     </div>
   );
 }
-

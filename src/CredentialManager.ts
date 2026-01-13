@@ -249,7 +249,41 @@ export class CredentialManager {
    */
   async getRemoteCredentials(remoteUrl: string): Promise<StoredCredentials | null> {
     const normalizedUrl = this.normalizeRemoteUrl(remoteUrl);
-    return this.getCredentials(normalizedUrl);
+    console.log(`DEBUG: Looking up credentials for ${normalizedUrl}`);
+    
+    // 1. Try exact match for this repository
+    const creds = await this.getCredentials(normalizedUrl);
+    if (creds) {
+      console.log(`DEBUG: Found exact credential match for ${normalizedUrl}`);
+      return creds;
+    }
+
+    // 2. Fallback: Try to find credentials from another repository on the same host
+    // This allows reusing a token across multiple repos on github.com, etc.
+    try {
+      const host = normalizedUrl.split('/')[0];
+      console.log(`DEBUG: No exact match. Searching for siblings on host: ${host}`);
+      
+      // Basic check to ensure it looks like a domain (has a dot)
+      if (host && host.includes('.')) {
+        const allIdentifiers = await this.listCredentials();
+        console.log(`DEBUG: Available credentials:`, allIdentifiers);
+        
+        // Find any identifier that starts with the same host (e.g. "github.com/")
+        // We exclude exact "host" matches to avoid recursion if we decide to store host-level creds later
+        const siblingIdentifier = allIdentifiers.find(id => id.startsWith(host + '/') && id !== normalizedUrl);
+        
+        if (siblingIdentifier) {
+          console.log(`DEBUG: CredentialManager: Reusing credentials from ${siblingIdentifier} for ${normalizedUrl}`);
+          return await this.getCredentials(siblingIdentifier);
+        }
+      }
+    } catch (error) {
+      // Ignore errors during fallback search
+      console.warn('Error during credential fallback search:', error);
+    }
+
+    return null;
   }
 
   /**
@@ -271,6 +305,9 @@ export class CredentialManager {
   private normalizeRemoteUrl(remoteUrl: string): string {
     // Remove protocol
     let normalized = remoteUrl.replace(/^https?:\/\//, '').replace(/^git@/, '');
+    
+    // Remove user:pass@ if present (e.g. user:token@github.com...)
+    normalized = normalized.replace(/^[^@]+@/, '');
     
     // Remove trailing .git
     normalized = normalized.replace(/\.git$/, '');

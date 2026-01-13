@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GitCommitHorizontal, Upload, Archive } from 'lucide-react';
+import { GitCommitHorizontal, Archive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
@@ -15,9 +15,6 @@ interface CommitPanelProps {
   files: FileChange[];
   onToggleStage: (path: string) => void;
   onCommit: (message: string) => void;
-  onPush: () => void;
-  hasCredentials: boolean;
-  unpushedCommitsCount?: number;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
   onStash: () => void;
@@ -27,9 +24,6 @@ export function CommitPanel({
   files,
   onToggleStage,
   onCommit,
-  onPush,
-  hasCredentials,
-  unpushedCommitsCount = 0,
   onRevertFile,
   onDeleteFile,
   onStash,
@@ -92,19 +86,6 @@ export function CommitPanel({
           >
             <GitCommitHorizontal className="mr-2 size-4" />
             Commit
-          </Button>
-          <Button
-            onClick={onPush}
-            disabled={!hasCredentials || unpushedCommitsCount === 0}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 relative"
-          >
-            <Upload className="mr-2 size-4" />
-            Push
-            {unpushedCommitsCount > 0 && (
-              <span className="ml-2 flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-orange-400 text-white text-[10px] font-semibold">
-                {unpushedCommitsCount}
-              </span>
-            )}
           </Button>
         </div>
       </div>

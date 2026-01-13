@@ -14,10 +14,11 @@ import {
 
 interface CredentialsDialogProps {
   open: boolean;
+  onClose: () => void;
   onSubmit: (username: string, password: string) => void;
 }
 
-export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
+export function CredentialsDialog({ open, onClose, onSubmit }: CredentialsDialogProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -30,7 +31,7 @@ export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
   };
 
   return (
-    <Dialog open={open}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="bg-zinc-900 border-zinc-800">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -41,6 +42,12 @@ export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
             Enter your Git credentials to authenticate this repository.
           </DialogDescription>
         </DialogHeader>
+        
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3 mt-2">
+          <p className="text-[11px] text-yellow-200/80 leading-relaxed">
+            <strong>Note:</strong> For GitHub, use your <strong>Personal Access Token</strong> as the password. GitHub no longer accepts account passwords for Git operations.
+          </p>
+        </div>
         
         <div className="space-y-4 py-4">
           <div className="space-y-2">
@@ -69,6 +76,13 @@ export function CredentialsDialog({ open, onSubmit }: CredentialsDialogProps) {
         </div>
 
         <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+          >
+            Cancel
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={!username || !password}
