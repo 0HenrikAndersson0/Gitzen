@@ -997,11 +997,13 @@ export default function App() {
                   hasCredentials={hasCredentials}
                   branchStatus={branchStatus}
                   isDisabled={isRefreshingBranches}
+                  canStash={files.length > 0}
                   onSwitchRepo={handleSwitchRepo}
                   onOpenNew={handleOpenNewRepo}
                   onOpenSettings={() => setShowSettingsDialog(true)}
                   onPush={handlePush}
                   onPull={handlePull}
+                  onStash={handleStash}
                 />
                 
                 {rebaseStatus.inProgress && (            <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">

@@ -1,4 +1,4 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2 } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2, Archive } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from './ui/button';
@@ -13,14 +13,16 @@ interface RepoHeaderProps {
     hasUpstream: boolean;
   };
   isDisabled?: boolean;
+  canStash?: boolean;
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
   onOpenSettings?: () => void;
   onPush?: () => void;
   onPull?: () => void;
+  onStash?: () => void;
 }
 
-export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull }: RepoHeaderProps) {
+export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -181,6 +183,17 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
         <div className="flex gap-2 items-center">
           {repoName && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onStash}
+                disabled={!canStash}
+                className={`gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 ${!canStash ? 'opacity-50' : ''}`}
+                title="Stash changes"
+              >
+                <Archive className="size-4" />
+                <span className="hidden sm:inline">Stash</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

@@ -17,7 +17,6 @@ interface CommitPanelProps {
   onCommit: (message: string) => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
-  onStash: () => void;
 }
 
 export function CommitPanel({
@@ -26,7 +25,6 @@ export function CommitPanel({
   onCommit,
   onRevertFile,
   onDeleteFile,
-  onStash,
 }: CommitPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
 
@@ -38,23 +36,12 @@ export function CommitPanel({
   };
 
   const stagedFiles = files.filter((f) => f.staged);
-  const unstagedFiles = files.filter((f) => !f.staged);
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6">
       <div className="mb-4 flex items-center gap-2">
         <GitCommitHorizontal className="size-5 text-green-400" />
         <h2>Changes</h2>
-        {unstagedFiles.length > 0 && (
-          <Button
-            onClick={onStash}
-            className="ml-auto bg-amber-600 hover:bg-amber-700"
-            size="icon"
-            variant="outline"
-          >
-            <Archive className="size-4" />
-          </Button>
-        )}
       </div>
 
       <div className="space-y-4">
