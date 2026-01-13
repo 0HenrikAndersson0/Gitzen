@@ -9,3 +9,5 @@ build/
 *.rpm
 *.AppImage
 test-results/
+
+release/
