@@ -1,6 +1,6 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2 } from 'lucide-react';
 import { Badge } from './ui/badge';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from './ui/button';
 
 interface RepoHeaderProps {
@@ -25,25 +25,26 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const loadRecent = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.getRecentRepos();
+      if (result.success && result.repos) {
+        setRecentRepos(
+          result.repos.map((repo) => ({
+            name: repo.name,
+            path: repo.path,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load recent repos:', error);
+    }
+  }, []);
+
   // Load recent repos from IPC
   useEffect(() => {
-    const loadRecent = async () => {
-      try {
-        const result = await window.electronAPI.getRecentRepos();
-        if (result.success && result.repos) {
-          setRecentRepos(
-            result.repos.map((repo) => ({
-              name: repo.name,
-              path: repo.path,
-            }))
-          );
-        }
-      } catch (error) {
-        console.error('Failed to load recent repos:', error);
-      }
-    };
     loadRecent();
-  }, [repoName]); // Reload when repo changes
+  }, [repoName, loadRecent]); // Reload when repo changes
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -73,6 +74,16 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
   const handleToggleDropdown = () => {
     if (!isDisabled) {
       setIsOpen(!isOpen);
+    }
+  };
+
+  const handleRemoveRecent = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    try {
+      await window.electronAPI.removeRecentRepo(path);
+      await loadRecent();
+    } catch (error) {
+      console.error('Failed to remove recent repo:', error);
     }
   };
 
@@ -114,12 +125,12 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
                       <div className="p-2">
                         <div className="px-2 py-1 text-xs font-medium text-zinc-500">Recent Repositories</div>
                         {recentRepos.map((repo, index) => (
-                          <button
+                          <div
                             key={index}
+                            className="group/item flex w-full items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-zinc-800 cursor-pointer"
                             onClick={() => handleSwitchRepo(repo.name, repo.path)}
-                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-zinc-800"
                           >
-                            <FolderOpen className="size-4 text-blue-400" />
+                            <FolderOpen className="size-4 text-blue-400 flex-shrink-0" />
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium text-zinc-300">
                                 {repo.name}
@@ -128,7 +139,14 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
                                 {repo.path}
                               </div>
                             </div>
-                          </button>
+                            <button
+                              onClick={(e) => handleRemoveRecent(e, repo.path)}
+                              className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-zinc-700 rounded transition-all flex-shrink-0"
+                              title="Remove from recent list"
+                            >
+                                <Trash2 className="size-3.5 text-zinc-500 hover:text-red-400" />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -217,4 +235,3 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
     </div>
   );
 }
-

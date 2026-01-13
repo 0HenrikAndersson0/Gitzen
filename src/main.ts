@@ -293,6 +293,15 @@ ipcMain.handle('repos:addRecent', (_, repoPath) => {
   }
 });
 
+ipcMain.handle('repos:removeRecent', (_, repoPath) => {
+  try {
+    recentReposService.removeRecentRepo(repoPath);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
 // Settings handlers
 ipcMain.handle('settings:getMergeToolPath', () => {
   try {

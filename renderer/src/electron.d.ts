@@ -77,10 +77,10 @@ declare global {
       getTagsForCommit: (commitHash: string) => Promise<{ success: boolean; tags?: string[]; error?: string }>;
       testGitCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
       showOpenDialog: (options?: { properties?: string[]; title?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
-      getRecentRepos: () => Promise<{ success: boolean; repos?: RecentRepo[]; error?: string }>;
-      addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
-      getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;
-      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
+        getRecentRepos: () => Promise<{ success: boolean; repos?: RecentRepo[]; error?: string }>;
+        addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
+        removeRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
+        getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
       getMaxCommits: () => Promise<{ success: boolean; maxCommits?: number; error?: string }>;
       setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string }>;
     };

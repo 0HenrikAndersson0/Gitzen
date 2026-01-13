@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, Clock, ChevronRight } from 'lucide-react';
+import { FolderOpen, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface OpenRepoProps {
@@ -29,6 +29,16 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
       }
     } catch (error) {
       console.error('Failed to load recent repos:', error);
+    }
+  };
+
+  const handleRemoveRecent = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    try {
+      await window.electronAPI.removeRecentRepo(path);
+      await loadRecentRepos();
+    } catch (error) {
+      console.error('Failed to remove recent repo:', error);
     }
   };
 
@@ -135,33 +145,40 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
             </div>
             <div className="space-y-2">
               {recentRepos.map((repo, index) => (
-                <button
+                <div
                   key={index}
-                  onClick={() => handleOpenRepository(repo.path)}
-                  disabled={isLoading}
-                  className="group w-full rounded-md border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-left transition-all hover:border-blue-500/50 hover:bg-zinc-800/50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => !isLoading && handleOpenRepository(repo.path)}
+                  className={`group w-full rounded-md border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-left transition-all hover:border-blue-500/50 hover:bg-zinc-800/50 cursor-pointer flex items-center justify-between ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <FolderOpen className="h-4 w-4 flex-shrink-0 text-zinc-500 group-hover:text-blue-400" />
-                        <span className="truncate text-sm font-medium text-zinc-300 group-hover:text-zinc-100">
-                          {repo.name || formatPath(repo.path)}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <p className="truncate text-xs text-zinc-500" title={repo.path}>
-                          {formatPath(repo.path)}
-                        </p>
-                        <span className="text-xs text-zinc-600">•</span>
-                        <span className="text-xs text-zinc-500">
-                          {formatTime(repo.lastOpened)}
-                        </span>
-                      </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4 flex-shrink-0 text-zinc-500 group-hover:text-blue-400" />
+                      <span className="truncate text-sm font-medium text-zinc-300 group-hover:text-zinc-100">
+                        {repo.name || formatPath(repo.path)}
+                      </span>
                     </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="truncate text-xs text-zinc-500" title={repo.path}>
+                        {formatPath(repo.path)}
+                      </p>
+                      <span className="text-xs text-zinc-600">•</span>
+                      <span className="text-xs text-zinc-500">
+                        {formatTime(repo.lastOpened)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                        onClick={(e) => handleRemoveRecent(e, repo.path)}
+                        className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-zinc-700/50 rounded-md text-zinc-500 hover:text-red-400 transition-all focus:opacity-100"
+                        title="Remove from history"
+                    >
+                        <Trash2 className="size-4" />
+                    </button>
                     <ChevronRight className="h-4 w-4 flex-shrink-0 text-zinc-600 transition-transform group-hover:translate-x-1 group-hover:text-blue-400" />
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>

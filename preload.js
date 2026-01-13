@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),
+  removeRecentRepo: (path) => ipcRenderer.invoke('repos:removeRecent', path),
   getMergeToolPath: () => ipcRenderer.invoke('settings:getMergeToolPath'),
   setMergeToolPath: (path) => ipcRenderer.invoke('settings:setMergeToolPath', path),
   getMaxCommits: () => ipcRenderer.invoke('settings:getMaxCommits'),
