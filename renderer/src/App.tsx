@@ -16,6 +16,7 @@ import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { useAutoRefresh } from './hooks/useAutoRefresh';
 import { LoadingOverlay } from './components/ui/spinner';
+import { SplashScreen } from './components/SplashScreen';
 
 interface BranchStatus {
   ahead: number;
@@ -78,18 +79,28 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
   const [pendingClone, setPendingClone] = useState<{ url: string; path: string } | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
   const repoPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
-    loadRepository();
+    initApp();
   }, []);
 
   useEffect(() => {
     repoPathRef.current = repoPath;
   }, [repoPath]);
+
+  const initApp = async () => {
+    const path = await loadRepository();
+    if (path) {
+        await refreshAllData(path);
+    }
+    // Small delay to ensure smooth transition
+    setTimeout(() => setShowSplash(false), 500);
+  };
 
   const addLog = (type: LogEntry['type'], message: string) => {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
@@ -106,8 +117,9 @@ export default function App() {
     }
   };
 
-  const loadRepository = async () => {
+  const loadRepository = async (): Promise<string | null> => {
     try {
+      // 1. Try to get current session repo (e.g. reload)
       const result = await window.electronAPI.getRepoPath();
       if (result.success && result.path) {
         setRepoPath(result.path);
@@ -115,17 +127,48 @@ export default function App() {
         if (nameResult.success && nameResult.name) {
           setRepoName(nameResult.name);
         }
+        return result.path;
+      }
+
+      // 2. If no current repo, try to open the last recent repo
+      const recentResult = await window.electronAPI.getRecentRepos();
+      if (recentResult.success && recentResult.repos && recentResult.repos.length > 0) {
+        const lastRepo = recentResult.repos[0];
+        const openResult = await window.electronAPI.gitOpen(lastRepo.path);
+        
+        if (openResult.success) {
+            setRepoPath(lastRepo.path);
+            setRepoName(lastRepo.name);
+            return lastRepo.path;
+        }
       }
     } catch (error) {
       console.error('Failed to load repository:', error);
     }
+    return null;
   };
 
-  const refreshStatus = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshAllData = async (path: string) => {
+      // Force update the ref for this operation sequence if needed, but the callbacks handle override
+      repoPathRef.current = path; 
+      
+      await Promise.all([
+          refreshStatus(path),
+          refreshBranch(path),
+          refreshBranches(path),
+          refreshHistory(path),
+          refreshStashes(path),
+          refreshBranchStatus(path),
+          refreshRebaseStatus(path)
+      ]);
+  };
+
+  const refreshStatus = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     try {
       const result = await window.electronAPI.gitStatus();
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success && result.files) {
         setFiles(result.files);
       }
@@ -134,11 +177,12 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshBranch = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshBranch = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     try {
       const result = await window.electronAPI.gitGetCurrentBranch();
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success && result.branch && result.branch.trim()) {
         const newBranch = result.branch.trim();
         setCurrentBranch((prevBranch) => {
@@ -150,8 +194,9 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshBranches = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshBranches = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     setIsRefreshingBranches(true);
     try {
       const [localResult, remoteResult] = await Promise.all([
@@ -159,7 +204,7 @@ export default function App() {
         window.electronAPI.getRemoteBranches(),
       ]);
       
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
 
       if (localResult.success && localResult.branches) {
         setLocalBranches(localResult.branches.map(name => ({
@@ -174,17 +219,18 @@ export default function App() {
     } catch (e) {
         console.error('Failed to refresh branches', e);
     } finally {
-        if (repoPath === repoPathRef.current) {
+        if (targetPath === repoPathRef.current) {
              setIsRefreshingBranches(false);
         }
     }
   }, [repoPath, currentBranch]);
 
-  const refreshHistory = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshHistory = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     try {
       const result = await window.electronAPI.gitGetHistory(50);
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.commits) {
           setCommits(result.commits);
@@ -195,11 +241,12 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshStashes = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshStashes = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     try {
       const result = await (window.electronAPI as any).getStashes();
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.stashes) {
           setStashes(result.stashes);
@@ -210,11 +257,12 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshBranchStatus = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshBranchStatus = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     try {
       const result = await window.electronAPI.gitGetBranchStatus();
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         setBranchStatus({
           ahead: result.ahead || 0,
@@ -228,11 +276,12 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshRebaseStatus = useCallback(async () => {
-    if (!repoPath) return;
+  const refreshRebaseStatus = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
     try {
       const result = await window.electronAPI.gitGetRebaseStatus();
-      if (repoPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         setRebaseStatus({ inProgress: result.inProgress, currentStep: result.currentStep, totalSteps: result.totalSteps });
 
@@ -268,18 +317,6 @@ export default function App() {
        console.error('Failed to check rebase status:', error);
     }
   }, [repoPath]);
-
-  useEffect(() => {
-    if (repoPath) {
-      refreshStatus();
-      refreshBranch();
-      refreshBranches();
-      refreshHistory();
-      refreshStashes();
-      refreshRebaseStatus();
-      refreshBranchStatus();
-    }
-  }, [repoPath, refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
@@ -317,9 +354,7 @@ export default function App() {
             }
           }
 
-          await refreshStatus();
-          await refreshBranch();
-          await refreshHistory();
+          await refreshAllData(path);
         } else {
           const errorMsg = result.error || 'Failed to clone repository';
           
@@ -967,14 +1002,7 @@ export default function App() {
             console.log('No remote configured for this repository');
           }
           
-          await Promise.all([
-            refreshStatus(),
-            refreshBranch(),
-            refreshHistory(),
-            refreshStashes(),
-            refreshBranchStatus(),
-            refreshRebaseStatus()
-          ]);
+          await refreshAllData(path);
         } else {
           addLog('error', result.error || 'Failed to open repository');
           toast.error(result.error || 'Failed to open repository');
@@ -989,6 +1017,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       {isLoading && <LoadingOverlay message={loadingMessage} />}
       <div className="w-full space-y-4">
                 <RepoHeader
