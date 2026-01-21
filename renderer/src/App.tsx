@@ -53,6 +53,9 @@ interface Branch {
   name: string;
   isRemote: boolean;
   isCurrent: boolean;
+  ahead?: number;
+  behind?: number;
+  upstream?: string;
 }
 
 export default function App() {
@@ -200,15 +203,20 @@ export default function App() {
     setIsRefreshingBranches(true);
     try {
       const [localResult, remoteResult] = await Promise.all([
-        window.electronAPI.gitGetBranches(),
+        window.electronAPI.gitGetBranchesDetailed(),
         window.electronAPI.getRemoteBranches(),
       ]);
       
       if (!pathOverride && targetPath !== repoPathRef.current) return;
 
       if (localResult.success && localResult.branches) {
-        setLocalBranches(localResult.branches.map(name => ({
-            name, isRemote: false, isCurrent: name === currentBranch
+        setLocalBranches(localResult.branches.map((b: any) => ({
+            name: b.name, 
+            isRemote: false, 
+            isCurrent: b.current,
+            ahead: b.ahead,
+            behind: b.behind,
+            upstream: b.upstream
         })));
       }
       if (remoteResult.success && remoteResult.branches) {

@@ -113,6 +113,14 @@ ipcMain.handle('git:deleteStash', async (_, name) => {
   return await gitService.deleteStash(name);
 });
 
+ipcMain.handle('git:getBranchesDetailed', async () => {
+  return await gitService.getBranchesDetailed();
+});
+
+ipcMain.handle('git:fetch', async (_, remote) => {
+  return await gitService.fetchRemote(remote);
+});
+
 ipcMain.handle('git:getBranches', async () => {
   return await gitService.getBranches();
 });
