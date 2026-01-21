@@ -705,6 +705,65 @@ export async function getBranches(): Promise<{ success: boolean; branches?: stri
   }
 }
 
+export async function getBranchesDetailed(): Promise<{ success: boolean; branches?: Array<{ name: string; current: boolean; upstream?: string; ahead: number; behind: number }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // %(refname:short) - Branch name
+    // %(upstream:short) - Upstream branch name
+    // %(upstream:track) - Tracking status [ahead X, behind Y]
+    // %(HEAD) - '*' if current branch
+    const { stdout } = await runGitCommand('for-each-ref --format="%(refname:short)|%(upstream:short)|%(upstream:track)|%(HEAD)" refs/heads');
+    
+    const branches = stdout.trim().split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const [name, upstream, track, head] = line.split('|');
+        
+        let ahead = 0;
+        let behind = 0;
+        
+        // Parse track info "[ahead 1, behind 2]"
+        if (track) {
+          const aheadMatch = track.match(/ahead (\d+)/);
+          if (aheadMatch) ahead = parseInt(aheadMatch[1], 10);
+          
+          const behindMatch = track.match(/behind (\d+)/);
+          if (behindMatch) behind = parseInt(behindMatch[1], 10);
+        }
+
+        return {
+          name: name || '',
+          current: head === '*',
+          upstream: upstream || undefined,
+          ahead,
+          behind
+        };
+      });
+
+    return { success: true, branches };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function fetchRemote(remote: string = 'origin'): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    return await withRemoteCredentials(remote, async () => {
+      await runGitCommand(`fetch ${remote}`);
+      return { success: true };
+    });
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function createBranch(name: string, checkout: boolean = true): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {

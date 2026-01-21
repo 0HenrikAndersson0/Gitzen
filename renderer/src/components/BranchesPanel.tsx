@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
@@ -11,6 +11,9 @@ export interface Branch {
   name: string;
   isRemote: boolean;
   isCurrent: boolean;
+  ahead?: number;
+  behind?: number;
+  upstream?: string;
 }
 
 interface BranchesPanelProps {
@@ -44,7 +47,7 @@ export function BranchesPanel({
 }: BranchesPanelProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch'; name: string } | null>(null);
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
@@ -126,22 +129,24 @@ export function BranchesPanel({
     onCheckout?.(branchName);
   };
 
-  const handleContextMenu = (e: React.MouseEvent, branchName: string) => {
-    if (branchName !== currentBranch) {
+  const handleContextMenu = (e: React.MouseEvent, branch: Branch) => {
+    if (!branch.isCurrent) {
       e.preventDefault();
       e.stopPropagation();
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        branch: branchName,
+        branch: branch.name,
+        upstream: branch.upstream
       });
     }
   };
 
-  const handleMenuAction = (action: 'merge' | 'rebase' | 'interactive-rebase') => {
+  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch') => {
     if (!contextMenu) return;
 
     const branch = contextMenu.branch;
+    const upstream = contextMenu.upstream;
     
     switch (action) {
       case 'merge':
@@ -168,6 +173,37 @@ export function BranchesPanel({
       case 'interactive-rebase':
         setRebaseTargetBranch(branch);
         setRebaseModalOpen(true);
+        break;
+      case 'fetch':
+        // Determine remote from upstream or default to origin
+        let remote = 'origin';
+        if (upstream) {
+          const parts = upstream.split('/');
+          if (parts.length > 0) remote = parts[0];
+        }
+        
+        onSetLoading?.(true, `Fetching ${remote}...`);
+        try {
+          const result = await window.electronAPI.gitFetch(remote);
+          if (result.success) {
+             toast.success(`Successfully fetched from ${remote}`);
+             // Trigger a refresh indirectly by calling parent's refresh logic if available?
+             // Since we don't have a direct refresh callback, we rely on the App.tsx auto-refresh loop or manual triggers.
+             // Ideally we'd have onRefresh() prop. 
+             // But App.tsx passes loading state which might trigger re-render.
+             // Actually, just fetching updates the remote refs. The next polling cycle (every 10s) will pick up the changes.
+             // Or we could trigger it via existing callbacks if we had one.
+             // For now, let's assume auto-refresh or user action will update UI.
+             // Or better, we can hack a refresh by deleting a non-existent stash? No.
+             // Since we modify the repo state, the next poll will pick it up.
+          } else {
+             toast.error(`Fetch failed: ${result.error}`);
+          }
+        } catch (err: any) {
+           toast.error(`Fetch failed: ${err.message}`);
+        } finally {
+           onSetLoading?.(false);
+        }
         break;
     }
 
@@ -235,7 +271,7 @@ export function BranchesPanel({
                 <div
                   key={branch.name}
                   className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
-                  onContextMenu={(e) => handleContextMenu(e, branch.name)}
+                  onContextMenu={(e) => handleContextMenu(e, branch)}
                 >
                   <button
                     onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
@@ -250,6 +286,19 @@ export function BranchesPanel({
                         </span>
                         {branch.isCurrent && (
                           <CheckCircle2 className="size-3 flex-shrink-0 text-blue-400" />
+                        )}
+                        {/* Ahead/Behind Indicators */}
+                        {(branch.ahead || 0) > 0 && (
+                          <div className="flex items-center gap-0.5 text-[10px] text-green-400 bg-green-950/30 px-1 rounded">
+                            <ArrowUp className="size-2.5" />
+                            {branch.ahead}
+                          </div>
+                        )}
+                        {(branch.behind || 0) > 0 && (
+                          <div className="flex items-center gap-0.5 text-[10px] text-amber-400 bg-amber-950/30 px-1 rounded">
+                            <ArrowDown className="size-2.5" />
+                            {branch.behind}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -435,12 +484,18 @@ export function BranchesPanel({
         >
           <div
             className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('fetch')}
+          >
+            Fetch latest changes
+          </div>
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors border-t border-zinc-700"
             onClick={() => handleMenuAction('merge')}
           >
             Merge to current
           </div>
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors border-t border-zinc-700"
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
             onClick={() => handleMenuAction('rebase')}
           >
             Rebase current onto {contextMenu.branch}
