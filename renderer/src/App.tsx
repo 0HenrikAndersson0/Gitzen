@@ -1143,7 +1143,7 @@ export default function App() {
               onCommit={handleCommit}
               onRevertFile={handleRevertFile}
               onDeleteFile={handleDeleteFile}
-              onStash={() => handleStash()}
+              onRefresh={() => refreshStatus()}
             />
             <ActivityLog logs={logs} />
           </div>

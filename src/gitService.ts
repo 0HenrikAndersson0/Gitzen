@@ -2,6 +2,7 @@ import { exec, execSync, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { shell } from 'electron';
 import { CredentialManager } from './CredentialManager';
 import * as settingsService from './settingsService';
@@ -96,6 +97,39 @@ export async function cloneRepository(url: string, localPath: string, credential
 
     currentRepoPath = localPath;
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function applyPatch(patch: string, options: { reverse?: boolean, cached?: boolean } = {}): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Create a temporary file for the patch
+    const patchPath = path.join(os.tmpdir(), `gitzen-patch-${Date.now()}.diff`);
+    fs.writeFileSync(patchPath, patch);
+
+    const args = ['apply'];
+    if (options.reverse) args.push('--reverse');
+    if (options.cached) args.push('--cached');
+
+    args.push(patchPath);
+
+    try {
+      await runGitExecFile(args, {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { success: true };
+    } finally {
+      // Clean up temp file
+      if (fs.existsSync(patchPath)) {
+        fs.unlinkSync(patchPath);
+      }
+    }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
