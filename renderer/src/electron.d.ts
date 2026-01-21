@@ -70,6 +70,7 @@ declare global {
       getRemoteBranches: () => Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }>;
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }>;
+      getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string }>;
       deleteBranch: (branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
       deleteRemoteBranch: (branchName: string) => Promise<{ success: boolean; error?: string }>;
       deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string }>;
