@@ -315,10 +315,13 @@ export default function App() {
             lastRebaseStepRef.current = currentStep;
             lastConflictCountRef.current = conflicts.length;
         } else {
-            setConflictedFiles([]);
-            setShowMergeConflictDialog(false); // Close dialog if rebase finished/aborted
-            lastRebaseStepRef.current = undefined;
-            lastConflictCountRef.current = 0;
+            // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
+            if (lastRebaseStepRef.current !== undefined) {
+                setConflictedFiles([]);
+                setShowMergeConflictDialog(false); // Close dialog if rebase finished/aborted
+                lastRebaseStepRef.current = undefined;
+                lastConflictCountRef.current = 0;
+            }
         }
       }
     } catch (error) {
