@@ -45,6 +45,7 @@ function parseDiff(diffText: string): FileChange['diff'] {
   const newContent: string[] = [];
 
   for (const line of lines) {
+    if (!line) continue;
     if (line.startsWith('@@')) {
       // New hunk
       if (currentHunk) {
