@@ -150,26 +150,18 @@ function generatePatch(filePath: string, hunks: DiffHunk[], selectedLines: Set<s
 
     if (hasChanges) {
       const newStart = hunk.newStart + accumulatedDrift;
-      // Note: original hunk.newStart is where the original hunk *claimed* to start.
-      // But since we might have modified previous hunks, we need to adjust *this* hunk's newStart relative to the *original* newStart + drift?
-      // Actually, standard patch logic:
-      // oldStart is fixed.
-      // newStart depends on previous hunks' length changes.
-      // Drift = (currentGeneratedNewLen - currentGeneratedOldLen) - (originalNewLen - originalOldLen) ?
-      // Let's use the explicit Drift calculation from previous thought.
-      
-      // Calculate drift caused by *this* hunk
-      const originalNewLen = hunk.newLines;
-      const originalOldLen = hunk.oldLines;
-      
-      // Wait, accumulatedDrift is the shift *before* this hunk starts.
-      // So the header should use hunk.newStart + accumulatedDrift.
       
       patch += `@@ -${hunk.oldStart},${oldLinesCount} +${newStart},${newLinesCount} @@\n`;
       patch += newHunkLines.join('\n') + '\n';
       
-      // Update drift for next hunk
-      const currentDrift = (newLinesCount - oldLinesCount) - (originalNewLen - originalOldLen);
+      // Update drift based on the changes we just output
+      const currentDrift = (newLinesCount - oldLinesCount) - (hunk.newLines - hunk.oldLines);
+      accumulatedDrift += currentDrift;
+    } else {
+      // If we skip the hunk entirely, we are effectively reverting it to the old state (no change).
+      // The drift is the difference between "no change" (0 length change) and the "original change" (hunk.newLines - hunk.oldLines).
+      // effectively: 0 - (originalNew - originalOld)
+      const currentDrift = -(hunk.newLines - hunk.oldLines);
       accumulatedDrift += currentDrift;
     }
   }
