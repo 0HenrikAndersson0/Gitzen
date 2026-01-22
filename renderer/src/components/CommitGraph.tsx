@@ -71,9 +71,17 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
     commits.forEach((commit, index) => {
       // 1. Identify which lane this commit belongs to
-      let laneIndex = activeLanes.indexOf(commit.id);
+      // Find ALL lanes that are expecting this commit
+      const expectingLanes: number[] = [];
+      activeLanes.forEach((hash, idx) => {
+        if (hash === commit.id) {
+          expectingLanes.push(idx);
+        }
+      });
 
-      if (laneIndex === -1) {
+      let laneIndex: number;
+
+      if (expectingLanes.length === 0) {
         // Not expected by any existing lane -> Start of a new branch (tip)
         // Find first null lane or append
         laneIndex = activeLanes.findIndex(l => l === null);
@@ -81,15 +89,21 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
           laneIndex = activeLanes.length;
           activeLanes.push(null);
         }
+      } else {
+        // Expected by one or more lanes (continuation or merge base)
+        // Pick the leftmost lane to keep graph compact
+        laneIndex = Math.min(...expectingLanes);
+        
+        // Clear ALL lanes that were expecting this commit to free them up
+        expectingLanes.forEach(idx => {
+            activeLanes[idx] = null;
+        });
       }
 
-      // Assign lane and color
+      // Assign lane
       commitLaneMap.set(commit.id, laneIndex);
-      activeLanes[laneIndex] = null; // Occupy this lane for this commit
       
-      // Determine color: Try to reuse color of the child that pointed here?
-      // Or just assign based on lane index? Lane index is unstable.
-      // Let's assign color based on lane index for now.
+      // Determine color based on lane index
       const color = COLORS[laneIndex % COLORS.length];
 
       nodes.push({
@@ -103,38 +117,33 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
       // 2. Prepare lanes for parents
       const parents = commit.parents || [];
 
-      // First parent continues the lane
+      // First parent continues the current lane
       if (parents.length > 0) {
         const p1 = parents[0];
-        activeLanes[laneIndex] = p1; // Expect P1 in this lane
+        // If the lane was cleared above, we can now reuse it for the parent
+        activeLanes[laneIndex] = p1; 
 
-        // Edges will be drawn when we verify the parent exists or just draw to calculated coords?
-        // Since we don't know parent Y yet, we can't draw edge now?
-        // Actually we can draw edges backwards if we want, or draw from Child to Parent.
-        // We know Child (current) coords.
-        // We don't know Parent coords yet.
-        // But we can store connections.
-      } else {
-        // Root commit, lane ends.
-        activeLanes[laneIndex] = null;
-      }
-
-      // Merge parents (2nd, 3rd...) need new lanes or merge into existing
-      for (let i = 1; i < parents.length; i++) {
-        const p = parents[i];
-        // Check if p is already expected in another lane?
-        let pLane = activeLanes.indexOf(p);
-        if (pLane === -1) {
-            // Find free lane
-            pLane = activeLanes.findIndex(l => l === null);
-            if (pLane === -1) {
-                pLane = activeLanes.length;
-                activeLanes.push(null);
-            }
-            activeLanes[pLane] = p;
+        // Merge parents (2nd, 3rd...) need new lanes
+        for (let i = 1; i < parents.length; i++) {
+          const p = parents[i];
+          // Find a free lane for this parent
+          // Note: We check if p is already expected by *another* lane is not strictly necessary 
+          // because the resolution step (1) will handle merging lanes later.
+          // We just need to ensure we output an expectation.
+          
+          // However, optimization: if we can find a lane ALREADY expecting p, we don't need another one?
+          // No, because valid graph structure might have parallel lines merging later.
+          // Visual separation is good.
+          
+          let pLane = activeLanes.findIndex(l => l === null);
+          if (pLane === -1) {
+              pLane = activeLanes.length;
+              activeLanes.push(null);
+          }
+          activeLanes[pLane] = p;
         }
-        // We will draw a merge line from current node to this parent lane later
       }
+      // If no parents, activeLanes[laneIndex] remains null (set in step 1 or initially), so lane ends.
     });
 
     // Second pass to create edges since we now know all coordinates
@@ -285,7 +294,7 @@ export function CommitGraph({
              {edges.map((edge, i) => (
                <path
                  key={`edge-${i}`}
-                 d={`M ${edge.fromX} ${edge.fromY} C ${edge.fromX} ${edge.fromY + 15}, ${edge.toX} ${edge.toY - 15}, ${edge.toX} ${edge.toY}`}
+                 d={`M ${edge.fromX} ${edge.fromY} L ${edge.fromX} ${edge.fromY + 10} L ${edge.toX} ${edge.fromY + 25} L ${edge.toX} ${edge.toY}`}
                  stroke={edge.color}
                  strokeWidth="2"
                  fill="none"
