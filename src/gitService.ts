@@ -1137,6 +1137,19 @@ export async function deleteCredentials(remoteUrl: string): Promise<{ success: b
   }
 }
 
+export async function listCredentials(): Promise<{ success: boolean; credentials?: string[]; error?: string }> {
+  try {
+    if (!credentialManager) {
+      credentialManager = new CredentialManager();
+    }
+
+    const credentials = await credentialManager.listCredentials();
+    return { success: true, credentials };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export function getRepoPath(): { success: boolean; path?: string; error?: string } {
   if (currentRepoPath) {
     return { success: true, path: currentRepoPath };
