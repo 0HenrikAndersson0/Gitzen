@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pushTag: (tagName, remote) => ipcRenderer.invoke('git:pushTag', tagName, remote),
   getRemoteTags: (remote) => ipcRenderer.invoke('git:getRemoteTags', remote),
   revertFileChanges: (filePath) => ipcRenderer.invoke('git:revertFileChanges', filePath),
+  applyPatch: (patch, options) => ipcRenderer.invoke('git:applyPatch', patch, options),
   deleteFile: (filePath) => ipcRenderer.invoke('git:deleteFile', filePath),
   getTagsForCommit: (commitHash) => ipcRenderer.invoke('git:getTagsForCommit', commitHash),
   hasUnpushedCommits: () => ipcRenderer.invoke('git:hasUnpushedCommits'),

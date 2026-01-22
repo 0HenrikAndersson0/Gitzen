@@ -71,6 +71,9 @@ declare global {
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }>;
       getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string }>;
+      applyPatch: (patch: string, options?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean; error?: string }>;
+      revertFileChanges: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       deleteBranch: (branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
       deleteRemoteBranch: (branchName: string) => Promise<{ success: boolean; error?: string }>;
       deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string }>;

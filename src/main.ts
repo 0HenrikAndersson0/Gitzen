@@ -209,6 +209,10 @@ ipcMain.handle('git:revertFileChanges', async (_, filePath) => {
   return await gitService.revertFileChanges(filePath);
 });
 
+ipcMain.handle('git:applyPatch', async (_, patch, options) => {
+  return await gitService.applyPatch(patch, options);
+});
+
 ipcMain.handle('git:deleteFile', async (_, filePath) => {
   return await gitService.deleteFile(filePath);
 });

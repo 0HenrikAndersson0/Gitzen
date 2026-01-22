@@ -2,6 +2,7 @@ import { exec, execSync, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { shell } from 'electron';
 import { CredentialManager } from './CredentialManager';
 import * as settingsService from './settingsService';
@@ -98,6 +99,40 @@ export async function cloneRepository(url: string, localPath: string, credential
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function applyPatch(patch: string, options: { reverse?: boolean, cached?: boolean } = {}): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Create a temporary file for the patch
+    const patchPath = path.join(os.tmpdir(), `gitzen-patch-${Date.now()}.diff`);
+    fs.writeFileSync(patchPath, patch);
+
+    const args = ['apply'];
+    if (options.reverse) args.push('--reverse');
+    if (options.cached) args.push('--cached');
+
+    args.push(patchPath);
+
+    try {
+      await runGitExecFile(args, {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { success: true };
+    } finally {
+      // Clean up temp file
+      if (fs.existsSync(patchPath)) {
+        fs.unlinkSync(patchPath);
+      }
+    }
+  } catch (error: any) {
+    const errorMsg = error.stderr || error.message || 'Unknown error';
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -1209,8 +1244,9 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
       return { success: false, error: 'No repository open' };
     }
 
-    const { stdout: statOutput } = await runGitCommand(`show --stat --format="" ${commitHash}`);
-    const { stdout: fullDiff } = await runGitCommand(`show ${commitHash}`);
+    // Use -m --first-parent to handle merge commits (showing changes relative to the branch being merged into)
+    // and standard commits uniformly.
+    const { stdout: fullDiff } = await runGitCommand(`show -m --first-parent ${commitHash}`);
 
     const diffLines = fullDiff.split('\n');
     const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
@@ -1223,25 +1259,66 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
       if (line.startsWith('diff --git')) {
         if (currentFile) {
           currentFile.diff = diffLines.slice(fileDiffStart, i).join('\n');
-          files.push(currentFile);
+          // Only push if we have a valid path (avoid empty parsing artifacts)
+          if (currentFile.path) {
+            files.push(currentFile);
+          }
         }
         fileDiffStart = i;
-        const match = line.match(/diff --git a\/(.+) b\/(.+)/);
+        currentFile = null; // Reset
+
+        // Robust parsing: try to capture path from "diff --git a/... b/..."
+        // We use a regex that allows for spaces in paths by matching non-greedily if possible,
+        // or just capturing the whole line and relying on fallback.
+        // Standard format: diff --git a/path b/path
+        // Quoted: diff --git "a/path with spaces" "b/path with spaces"
+        
+        // Strategy: Initialize with empty path. Wait for +++ or --- or extended header to confirm path.
+        // But we can try to guess from the diff line for renames/mode changes.
+        const match = line.match(/^diff --git (?:a\/|"?a\/)(.+) (?:b\/|"?b\/)(.+?)(?:"?)$/);
         if (match) {
-          const oldPath = match[1];
-          const newPath = match[2];
-          currentFile = {
-            path: newPath || oldPath,
-            status: oldPath === '/dev/null' ? 'added' : newPath === '/dev/null' ? 'deleted' : 'modified',
+           const path = match[2] || match[1];
+           currentFile = {
+            path: path.replace(/^"|"$/g, ''), 
+            status: 'modified', 
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        } else {
+           // Fallback init
+           currentFile = {
+            path: '', 
+            status: 'modified', 
             additions: 0,
             deletions: 0,
             diff: '',
           };
         }
-      } else if (currentFile && (line.startsWith('+') && !line.startsWith('+++'))) {
-        currentFile.additions++;
-      } else if (currentFile && (line.startsWith('-') && !line.startsWith('---'))) {
-        currentFile.deletions++;
+      } 
+      
+      if (currentFile) {
+        if (line.startsWith('new file mode')) {
+          currentFile.status = 'added';
+        } else if (line.startsWith('deleted file mode')) {
+          currentFile.status = 'deleted';
+        } else if (line.startsWith('+++ b/')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('--- a/') && (!currentFile.path || currentFile.status === 'deleted')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentFile.additions++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentFile.deletions++;
+        }
+      }
+    }
+
+    // Push the last file!
+    if (currentFile) {
+      currentFile.diff = diffLines.slice(fileDiffStart).join('\n');
+      if (currentFile.path) {
+        files.push(currentFile);
       }
     }
 

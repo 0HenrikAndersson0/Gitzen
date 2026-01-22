@@ -17,6 +17,7 @@ interface CommitPanelProps {
   onCommit: (message: string) => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
+  onRefresh?: () => void;
 }
 
 export function CommitPanel({
@@ -25,6 +26,7 @@ export function CommitPanel({
   onCommit,
   onRevertFile,
   onDeleteFile,
+  onRefresh,
 }: CommitPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
 
@@ -51,6 +53,7 @@ export function CommitPanel({
             onToggleStage={onToggleStage}
             onRevertFile={onRevertFile}
             onDeleteFile={onDeleteFile}
+            onRefresh={onRefresh}
           />
         </div>
 

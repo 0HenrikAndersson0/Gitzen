@@ -1,10 +1,11 @@
-import { X, FileText, FilePlus, FileX } from 'lucide-react';
+import { X, FileText, FilePlus, FileX, Check, Undo2, Save, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
 interface FileChange {
   path: string;
   status: 'modified' | 'added' | 'deleted';
+  staged: boolean;
   diff?: {
     oldContent: string[];
     newContent: string[];
@@ -30,6 +31,7 @@ interface DiffLine {
 interface FileDiffProps {
   file: FileChange;
   onClose: () => void;
+  onRefresh: () => void;
 }
 
 // Parse diff string into structured format
@@ -43,18 +45,19 @@ function parseDiff(diffText: string): FileChange['diff'] {
   const newContent: string[] = [];
 
   for (const line of lines) {
+    if (!line) continue;
     if (line.startsWith('@@')) {
       // New hunk
       if (currentHunk) {
         hunks.push(currentHunk);
       }
 
-      const match = line.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+      const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
       if (match) {
         oldLineNum = parseInt(match[1]) || 0;
         newLineNum = parseInt(match[3]) || 0;
-        const oldLines = parseInt(match[2]) || 0;
-        const newLines = parseInt(match[4]) || 0;
+        const oldLines = match[2] ? parseInt(match[2]) : 1;
+        const newLines = match[4] ? parseInt(match[4]) : 1;
 
         currentHunk = {
           oldStart: oldLineNum,
@@ -65,6 +68,7 @@ function parseDiff(diffText: string): FileChange['diff'] {
         };
       }
     } else if (currentHunk) {
+      if (line.startsWith('\\')) continue;
       const type = line[0] === '+' ? 'add' : line[0] === '-' ? 'remove' : 'context';
       const content = line.substring(1);
 
@@ -100,9 +104,77 @@ function parseDiff(diffText: string): FileChange['diff'] {
   return { oldContent, newContent, hunks };
 }
 
-export function FileDiff({ file, onClose }: FileDiffProps) {
+function generatePatch(filePath: string, hunks: DiffHunk[], selectedLines: Set<string>): string {
+  let patch = `diff --git a/${filePath} b/${filePath}\n`;
+  patch += `--- a/${filePath}\n`;
+  patch += `+++ b/${filePath}\n`;
+
+  let accumulatedDrift = 0;
+
+  for (let i = 0; i < hunks.length; i++) {
+    const hunk = hunks[i];
+    let newHunkLines: string[] = [];
+    let oldLinesCount = 0;
+    let newLinesCount = 0;
+    let hasChanges = false;
+
+    for (let j = 0; j < hunk.lines.length; j++) {
+      const line = hunk.lines[j];
+      const lineKey = `${i}-${j}`;
+      const isSelected = selectedLines.has(lineKey);
+
+      if (line.type === 'context') {
+        newHunkLines.push(` ${line.content}`);
+        oldLinesCount++;
+        newLinesCount++;
+      } else if (line.type === 'add') {
+        if (isSelected) {
+          newHunkLines.push(`+${line.content}`);
+          newLinesCount++;
+          hasChanges = true;
+        } else {
+          // Skip unselected add
+        }
+      } else if (line.type === 'remove') {
+        if (isSelected) {
+          newHunkLines.push(`-${line.content}`);
+          oldLinesCount++;
+          hasChanges = true;
+        } else {
+          // Treat unselected remove as context
+          newHunkLines.push(` ${line.content}`);
+          oldLinesCount++;
+          newLinesCount++;
+        }
+      }
+    }
+
+    if (hasChanges) {
+      const newStart = hunk.newStart + accumulatedDrift;
+      
+      patch += `@@ -${hunk.oldStart},${oldLinesCount} +${newStart},${newLinesCount} @@\n`;
+      patch += newHunkLines.join('\n') + '\n';
+      
+      // Update drift based on the changes we just output
+      const currentDrift = (newLinesCount - oldLinesCount) - (hunk.newLines - hunk.oldLines);
+      accumulatedDrift += currentDrift;
+    } else {
+      // If we skip the hunk entirely, we are effectively reverting it to the old state (no change).
+      // The drift is the difference between "no change" (0 length change) and the "original change" (hunk.newLines - hunk.oldLines).
+      // effectively: 0 - (originalNew - originalOld)
+      const currentDrift = -(hunk.newLines - hunk.oldLines);
+      accumulatedDrift += currentDrift;
+    }
+  }
+
+  return patch;
+}
+
+export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
   const [diff, setDiff] = useState<FileChange['diff'] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     const loadDiff = async () => {
@@ -110,9 +182,27 @@ export function FileDiff({ file, onClose }: FileDiffProps) {
       try {
         const result = await window.electronAPI.getFileDiff(file.path, file.staged);
         if (result.success && result.diff) {
-          setDiff(parseDiff(result.diff));
+          const parsed = parseDiff(result.diff);
+          setDiff(parsed);
+          // Auto-select all change lines initially?
+          // No, user requested "select and deselect". Defaulting to empty is safer for partial staging.
+          // Or defaulting to All is more convenient if they usually stage all?
+          // Let's default to Empty to make "Partial" explicit.
+          // Wait, if I open diff I usually want to stage everything unless I uncheck something.
+          // But the previous implementation selected none.
+          // Let's select ALL by default, so it behaves like "Stage File" but allows deselection.
+          const allLines = new Set<string>();
+          parsed.hunks.forEach((h, hIdx) => {
+            h.lines.forEach((l, lIdx) => {
+              if (l.type !== 'context') {
+                allLines.add(`${hIdx}-${lIdx}`);
+              }
+            });
+          });
+          setSelectedLines(allLines);
         } else {
-          toast.error(result.error || 'Failed to load file diff');
+           setDiff(null);
+           if (result.error) toast.error(result.error);
         }
       } catch (error) {
         console.error('Failed to load diff:', error);
@@ -124,6 +214,136 @@ export function FileDiff({ file, onClose }: FileDiffProps) {
 
     loadDiff();
   }, [file.path, file.staged]);
+
+  const toggleLine = (hunkIndex: number, lineIndex: number) => {
+    const key = `${hunkIndex}-${lineIndex}`;
+    const newSelected = new Set(selectedLines);
+    if (newSelected.has(key)) {
+      newSelected.delete(key);
+    } else {
+      newSelected.add(key);
+    }
+    setSelectedLines(newSelected);
+  };
+
+  const toggleHunk = (hunkIndex: number) => {
+    if (!diff) return;
+    const hunk = diff.hunks[hunkIndex];
+    const newSelected = new Set(selectedLines);
+    
+    // Check if all changes in hunk are selected
+    let allSelected = true;
+    let hasChanges = false;
+    
+    hunk.lines.forEach((line, lineIndex) => {
+      if (line.type !== 'context') {
+        hasChanges = true;
+        if (!newSelected.has(`${hunkIndex}-${lineIndex}`)) {
+          allSelected = false;
+        }
+      }
+    });
+    
+    if (!hasChanges) return;
+
+    // Toggle
+    hunk.lines.forEach((line, lineIndex) => {
+      if (line.type !== 'context') {
+        const key = `${hunkIndex}-${lineIndex}`;
+        if (allSelected) {
+          newSelected.delete(key);
+        } else {
+          newSelected.add(key);
+        }
+      }
+    });
+    
+    setSelectedLines(newSelected);
+  };
+
+  const handleStageSelected = async () => {
+    if (!diff || selectedLines.size === 0) return;
+    setProcessing(true);
+    try {
+      const patch = generatePatch(file.path, diff.hunks, selectedLines);
+
+      const result = await window.electronAPI.applyPatch(patch, {
+        cached: true,
+        reverse: file.staged
+      });
+
+      if (result.success) {
+        toast.success(file.staged ? 'Unstaged selected changes' : 'Staged selected changes');
+        onRefresh();
+        onClose();
+      } else {
+        toast.error(result.error || 'Failed to update changes');
+      }
+    } catch (error) {
+      console.error('Failed to apply patch:', error);
+      toast.error('An error occurred');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDiscardSelected = async () => {
+    if (!diff || selectedLines.size === 0) return;
+    if (file.staged) return;
+
+    if (!confirm('Are you sure you want to discard the selected changes? This cannot be undone.')) return;
+
+    setProcessing(true);
+    try {
+      const patch = generatePatch(file.path, diff.hunks, selectedLines);
+
+      const result = await window.electronAPI.applyPatch(patch, {
+        reverse: true
+      });
+
+      if (result.success) {
+        toast.success('Discarded selected changes');
+        onRefresh();
+        onClose();
+      } else {
+        toast.error(result.error || 'Failed to discard changes');
+      }
+    } catch (error) {
+      console.error('Failed to discard:', error);
+      toast.error('An error occurred');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDiscardFile = async () => {
+    if (!confirm(`Are you sure you want to discard all changes in ${file.path}? This cannot be undone.`)) return;
+
+    setProcessing(true);
+    try {
+      let result;
+      if (file.staged) {
+        const unstageResult = await window.electronAPI.gitUnstage([file.path]);
+        if (!unstageResult.success) throw new Error(unstageResult.error);
+        result = await window.electronAPI.revertFileChanges(file.path);
+      } else {
+        result = await window.electronAPI.revertFileChanges(file.path);
+      }
+
+      if (result.success) {
+        toast.success('Discarded file changes');
+        onRefresh();
+        onClose();
+      } else {
+        toast.error(result.error || 'Failed to discard file');
+      }
+    } catch (error: any) {
+      console.error('Failed to discard file:', error);
+      toast.error(error.message || 'An error occurred');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const getFileIcon = (status: FileChange['status']) => {
     switch (status) {
@@ -151,118 +371,207 @@ export function FileDiff({ file, onClose }: FileDiffProps) {
       <div className="flex h-[90vh] w-full max-w-7xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 p-6">
-          <div className="flex items-center gap-2">
-            {getFileIcon(file.status)}
-            <span className="font-mono text-xl text-zinc-300">{file.path}</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {getFileIcon(file.status)}
+              <span className="font-mono text-xl text-zinc-300">{file.path}</span>
+              <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${file.staged ? 'bg-emerald-900/30 text-emerald-400' : 'bg-amber-900/30 text-amber-400'}`}>
+                {file.staged ? 'Staged' : 'Unstaged'}
+              </span>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {!file.staged && (
+               <button
+                onClick={handleDiscardFile}
+                disabled={processing}
+                className="flex items-center gap-2 rounded-md bg-red-950/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Discard File
+              </button>
+            )}
+
+            {!file.staged && selectedLines.size > 0 && (
+              <button
+                onClick={handleDiscardSelected}
+                disabled={processing}
+                className="flex items-center gap-2 rounded-md bg-red-950/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Discard Selected Lines
+              </button>
+            )}
+
+            {selectedLines.size > 0 && (
+              <button
+                onClick={handleStageSelected}
+                disabled={processing}
+                className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+              >
+                {file.staged ? (
+                   <>
+                     <Undo2 className="h-4 w-4" />
+                     Unstage Selected Lines
+                   </>
+                ) : (
+                   <>
+                     <Check className="h-4 w-4" />
+                     Stage Selected Lines
+                   </>
+                )}
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="ml-4 rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex min-h-0 flex-1">
-          {/* Diff Viewer - Side by Side */}
-          <div className="flex min-w-0 flex-1 flex-col bg-zinc-950">
-            {diff ? (
-              <>
-                <div className="flex min-h-0 flex-1 overflow-hidden">
-                  {/* Side-by-side diff */}
-                  <div className="grid min-h-0 flex-1 grid-cols-2">
-                    {/* Left pane - Old content */}
-                    <div className="flex min-h-0 flex-col border-r border-zinc-800">
-                      <div className="border-b border-zinc-800 bg-red-950/20 px-4 py-2">
-                        <span className="text-xs font-medium text-red-400">Original</span>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
-                        {diff.hunks.map((hunk, hunkIndex) => (
-                          <div key={hunkIndex}>
-                            {hunk.lines.map((line, lineIndex) => {
-                              if (line.type === 'add') return null;
-                              return (
-                                <div
-                                  key={lineIndex}
-                                  className={`flex ${
-                                    line.type === 'remove'
-                                      ? 'bg-red-950/30'
-                                      : 'bg-transparent'
-                                  }`}
-                                >
-                                  <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600">
-                                    {line.oldLineNumber || ''}
-                                  </span>
-                                  <span
-                                    className={`flex-1 px-2 ${
-                                      line.type === 'remove'
-                                        ? 'bg-red-900/20 text-red-300'
-                                        : 'text-zinc-400'
-                                    }`}
-                                  >
-                                    {line.type === 'remove' && (
-                                      <span className="mr-1 text-red-400">-</span>
-                                    )}
-                                    {line.content || '\u00A0'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
+        {/* Diff Viewer */}
+        <div className="flex min-h-0 flex-1 flex-col bg-zinc-950 overflow-auto">
+          {diff ? (
+            <div className="flex min-w-full flex-col">
+              {diff.hunks.map((hunk, hunkIndex) => {
+                 // Check if all valid lines in hunk are selected
+                 let allSelected = true;
+                 let hasChanges = false;
+                 hunk.lines.forEach((l, i) => {
+                   if (l.type !== 'context') {
+                     hasChanges = true;
+                     if (!selectedLines.has(`${hunkIndex}-${i}`)) allSelected = false;
+                   }
+                 });
+
+                 return (
+                  <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
+                    {/* Hunk Header */}
+                    <div className="sticky top-0 z-10 flex items-center gap-3 bg-zinc-900/95 px-4 py-2 border-y border-zinc-800 backdrop-blur select-none">
+                       {hasChanges && (
+                         <div className="flex items-center justify-center rounded hover:bg-zinc-800 p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              onChange={() => {}} 
+                              className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
+                            />
+                         </div>
+                       )}
+                      <span className="font-mono text-xs text-zinc-500">
+                        @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                      </span>
                     </div>
 
-                    {/* Right pane - New content */}
-                    <div className="flex min-h-0 flex-col">
-                      <div className="border-b border-zinc-800 bg-emerald-950/20 px-4 py-2">
-                        <span className="text-xs font-medium text-emerald-400">Modified</span>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
-                        {diff.hunks.map((hunk, hunkIndex) => (
-                          <div key={hunkIndex}>
-                            {hunk.lines.map((line, lineIndex) => {
-                              if (line.type === 'remove') return null;
-                              return (
-                                <div
-                                  key={lineIndex}
-                                  className={`flex ${
-                                    line.type === 'add'
-                                      ? 'bg-emerald-950/30'
-                                      : 'bg-transparent'
+                    {/* Hunk Content */}
+                    <div className="grid grid-cols-2">
+                      {/* Left Pane - Original */}
+                      <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                        {hunk.lines.map((line, lineIndex) => {
+                          if (line.type === 'add') return <div key={lineIndex} className="h-5"></div>;
+                          
+                          const isSelectable = line.type === 'remove';
+                          const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
+
+                          return (
+                             <div
+                                key={lineIndex}
+                                className={`flex w-max min-w-full group ${
+                                  line.type === 'remove'
+                                    ? 'bg-red-950/30'
+                                    : 'bg-transparent'
+                                }`}
+                                onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
+                              >
+                                <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                  {isSelectable && (
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isSelected} 
+                                      onChange={() => {}}
+                                      className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                      data-checked={isSelected}
+                                    />
+                                  )}
+                                  {line.oldLineNumber || ''}
+                                </span>
+                                <span
+                                  className={`flex-1 px-2 whitespace-pre cursor-pointer ${
+                                    line.type === 'remove'
+                                      ? 'bg-red-900/20 text-red-300'
+                                      : 'text-zinc-400'
                                   }`}
                                 >
-                                  <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600">
-                                    {line.newLineNumber || ''}
-                                  </span>
-                                  <span
-                                    className={`flex-1 px-2 ${
-                                      line.type === 'add'
-                                        ? 'bg-emerald-900/20 text-emerald-300'
-                                        : 'text-zinc-400'
-                                    }`}
-                                  >
-                                    {line.type === 'add' && (
-                                      <span className="mr-1 text-emerald-400">+</span>
-                                    )}
-                                    {line.content || '\u00A0'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
+                                  {line.type === 'remove' && (
+                                    <span className="mr-1 inline-block w-3 select-none text-red-400">-</span>
+                                  )}
+                                  {line.content || '\u00A0'}
+                                </span>
+                              </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Right Pane - Modified */}
+                      <div className="bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                        {hunk.lines.map((line, lineIndex) => {
+                          if (line.type === 'remove') return <div key={lineIndex} className="h-5"></div>;
+                          
+                          const isSelectable = line.type === 'add';
+                          const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
+
+                          return (
+                             <div
+                                key={lineIndex}
+                                className={`flex w-max min-w-full group ${
+                                  line.type === 'add'
+                                    ? 'bg-emerald-950/30'
+                                    : 'bg-transparent'
+                                }`}
+                                onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
+                              >
+                                <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                  {isSelectable && (
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isSelected} 
+                                      onChange={() => {}}
+                                      className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                      data-checked={isSelected}
+                                    />
+                                  )}
+                                  {line.newLineNumber || ''}
+                                </span>
+                                <span
+                                  className={`flex-1 px-2 whitespace-pre cursor-pointer ${
+                                    line.type === 'add'
+                                      ? 'bg-emerald-900/20 text-emerald-300'
+                                      : 'text-zinc-400'
+                                  }`}
+                                >
+                                  {line.type === 'add' && (
+                                    <span className="mr-1 inline-block w-3 select-none text-emerald-400">+</span>
+                                  )}
+                                  {line.content || '\u00A0'}
+                                </span>
+                              </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-1 items-center justify-center text-zinc-500">
-                No changes in this file
-              </div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center text-zinc-500">
+              No changes in this file
+            </div>
+          )}
         </div>
       </div>
     </div>

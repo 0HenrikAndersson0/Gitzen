@@ -14,12 +14,26 @@ interface FileStagingProps {
   onToggleStage: (path: string) => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
+  onRefresh?: () => void;
 }
 
-export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile }: FileStagingProps) {
+export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, onRefresh }: FileStagingProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Update selectedFile when files change to keep diff view in sync
+  useEffect(() => {
+    if (selectedFile) {
+      const updatedFile = files.find(f => f.path === selectedFile.path);
+      if (updatedFile && updatedFile !== selectedFile) {
+        setSelectedFile(updatedFile);
+      } else if (!updatedFile) {
+        setSelectedFile(null);
+      }
+    }
+  }, [files, selectedFile]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'modified':
@@ -146,6 +160,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile }
         <FileDiff
           file={selectedFile}
           onClose={() => setSelectedFile(null)}
+          onRefresh={onRefresh || (() => {})}
         />
       )}
     </div>
