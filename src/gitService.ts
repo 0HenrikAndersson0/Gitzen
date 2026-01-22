@@ -131,7 +131,8 @@ export async function applyPatch(patch: string, options: { reverse?: boolean, ca
       }
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const errorMsg = error.stderr || error.message || 'Unknown error';
+    return { success: false, error: errorMsg };
   }
 }
 

@@ -67,6 +67,7 @@ function parseDiff(diffText: string): FileChange['diff'] {
         };
       }
     } else if (currentHunk) {
+      if (line.startsWith('\\')) continue;
       const type = line[0] === '+' ? 'add' : line[0] === '-' ? 'remove' : 'context';
       const content = line.substring(1);
 
