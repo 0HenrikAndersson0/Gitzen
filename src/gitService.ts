@@ -1244,8 +1244,9 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
       return { success: false, error: 'No repository open' };
     }
 
-    const { stdout: statOutput } = await runGitCommand(`show --stat --format="" ${commitHash}`);
-    const { stdout: fullDiff } = await runGitCommand(`show ${commitHash}`);
+    // Use -m --first-parent to handle merge commits (showing changes relative to the branch being merged into)
+    // and standard commits uniformly.
+    const { stdout: fullDiff } = await runGitCommand(`show -m --first-parent ${commitHash}`);
 
     const diffLines = fullDiff.split('\n');
     const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
@@ -1258,25 +1259,66 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
       if (line.startsWith('diff --git')) {
         if (currentFile) {
           currentFile.diff = diffLines.slice(fileDiffStart, i).join('\n');
-          files.push(currentFile);
+          // Only push if we have a valid path (avoid empty parsing artifacts)
+          if (currentFile.path) {
+            files.push(currentFile);
+          }
         }
         fileDiffStart = i;
-        const match = line.match(/diff --git a\/(.+) b\/(.+)/);
+        currentFile = null; // Reset
+
+        // Robust parsing: try to capture path from "diff --git a/... b/..."
+        // We use a regex that allows for spaces in paths by matching non-greedily if possible,
+        // or just capturing the whole line and relying on fallback.
+        // Standard format: diff --git a/path b/path
+        // Quoted: diff --git "a/path with spaces" "b/path with spaces"
+        
+        // Strategy: Initialize with empty path. Wait for +++ or --- or extended header to confirm path.
+        // But we can try to guess from the diff line for renames/mode changes.
+        const match = line.match(/^diff --git (?:a\/|"?a\/)(.+) (?:b\/|"?b\/)(.+?)(?:"?)$/);
         if (match) {
-          const oldPath = match[1];
-          const newPath = match[2];
-          currentFile = {
-            path: newPath || oldPath,
-            status: oldPath === '/dev/null' ? 'added' : newPath === '/dev/null' ? 'deleted' : 'modified',
+           const path = match[2] || match[1];
+           currentFile = {
+            path: path.replace(/^"|"$/g, ''), 
+            status: 'modified', 
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        } else {
+           // Fallback init
+           currentFile = {
+            path: '', 
+            status: 'modified', 
             additions: 0,
             deletions: 0,
             diff: '',
           };
         }
-      } else if (currentFile && (line.startsWith('+') && !line.startsWith('+++'))) {
-        currentFile.additions++;
-      } else if (currentFile && (line.startsWith('-') && !line.startsWith('---'))) {
-        currentFile.deletions++;
+      } 
+      
+      if (currentFile) {
+        if (line.startsWith('new file mode')) {
+          currentFile.status = 'added';
+        } else if (line.startsWith('deleted file mode')) {
+          currentFile.status = 'deleted';
+        } else if (line.startsWith('+++ b/')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('--- a/') && (!currentFile.path || currentFile.status === 'deleted')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentFile.additions++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentFile.deletions++;
+        }
+      }
+    }
+
+    // Push the last file!
+    if (currentFile) {
+      currentFile.diff = diffLines.slice(fileDiffStart).join('\n');
+      if (currentFile.path) {
+        files.push(currentFile);
       }
     }
 
