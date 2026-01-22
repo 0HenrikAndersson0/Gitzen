@@ -51,12 +51,12 @@ function parseDiff(diffText: string): FileChange['diff'] {
         hunks.push(currentHunk);
       }
 
-      const match = line.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+      const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
       if (match) {
         oldLineNum = parseInt(match[1]) || 0;
         newLineNum = parseInt(match[3]) || 0;
-        const oldLines = parseInt(match[2]) || 0;
-        const newLines = parseInt(match[4]) || 0;
+        const oldLines = match[2] ? parseInt(match[2]) : 1;
+        const newLines = match[4] ? parseInt(match[4]) : 1;
 
         currentHunk = {
           oldStart: oldLineNum,
