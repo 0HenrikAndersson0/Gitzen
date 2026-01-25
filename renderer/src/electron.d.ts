@@ -64,6 +64,7 @@ declare global {
       hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
       validateExistingCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
       deleteCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
+      listCredentials: () => Promise<{ success: boolean; credentials?: string[]; error?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
       getRemoteUrl: (remote?: string) => Promise<{ success: boolean; url?: string; error?: string }>;

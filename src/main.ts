@@ -153,6 +153,10 @@ ipcMain.handle('git:deleteCredentials', async (_, remoteUrl) => {
   return await gitService.deleteCredentials(remoteUrl);
 });
 
+ipcMain.handle('git:listCredentials', async () => {
+  return await gitService.listCredentials();
+});
+
 ipcMain.handle('git:getRepoPath', () => {
   return gitService.getRepoPath();
 });
