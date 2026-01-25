@@ -995,18 +995,35 @@ export default function App() {
               setRemoteUrl(remoteResult.url);
               const remoteUrlValue = remoteResult.url;
               
-              // Try to find credentials (will use fallback if needed)
-              const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
-              if (credResult.success && credResult.hasCredentials) {
-                 setHasCredentials(true);
-                 addLog('info', 'Found saved credentials');
+              // 1. Try system credentials (GCM / SSH) first
+              const testResult = await window.electronAPI.testGitCredentials(remoteUrlValue);
+
+              if (testResult.success) {
+                  setHasCredentials(true);
+                  addLog('info', 'Authenticated via system credentials or SSH');
               } else {
-                 // Even if not strictly saved for this URL, we might have them via fallback logic
-                 // But hasCredentials only checks exact match usually? 
-                 // Actually, CredentialManager fallback logic is in getRemoteCredentials.
-                 // We don't have a "test" method that uses fallback without prompt?
-                 // We can rely on push/pull handling it.
-                 addLog('info', 'No specific credentials saved for this repo (will try to reuse others if available)');
+                  // 2. If system credentials fail, check for stored PAT credentials
+                  const validateResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
+
+                  if (validateResult.success) {
+                      setHasCredentials(true);
+                      addLog('info', 'Authenticated via stored credentials');
+                  } else {
+                      // 3. Fallback: Check if we have credentials stored even if validation failed (or wasn't performed)
+                      const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
+                      if (credResult.success && credResult.hasCredentials) {
+                         if (validateResult.error === 'No credentials found') {
+                             addLog('warning', 'No credentials found. Please authenticate.');
+                             setHasCredentials(false);
+                         } else {
+                             addLog('warning', `Stored credentials validation failed: ${validateResult.error}`);
+                             setHasCredentials(false);
+                         }
+                      } else {
+                         addLog('info', 'No authentication methods available. Push/Pull may fail.');
+                         setHasCredentials(false);
+                      }
+                  }
               }
             }
           } catch (error) {
