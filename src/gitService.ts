@@ -578,6 +578,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
     parents: string[];
     refs: string;
   }>;
+  hasMore?: boolean;
   error?: string
 }> {
   try {
@@ -585,14 +586,16 @@ export async function getHistory(maxCount: number = 50): Promise<{
       return { success: false, error: 'No repository open' };
     }
 
-    // Use configured max commits (defaults to 30)
-    const configuredMaxCommits = settingsService.getMaxCommits();
-    const diagramMaxCount = Math.min(maxCount, configuredMaxCommits);
+    // Try to fetch one more than requested to see if there are more
+    const diagramMaxCount = Math.min(maxCount, 2000);
+    const fetchCount = diagramMaxCount + 1;
 
     // Use --all to show all branches regardless of which branch is checked out
-    const { stdout } = await runGitCommand(`log -n ${diagramMaxCount} --all --date-order --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso`);
+    const { stdout } = await runGitCommand(`log -n ${fetchCount} --all --date-order --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso`);
 
-    const lines = stdout.trim().split('\n').filter(line => line.trim());
+    const rawLines = stdout.trim().split('\n').filter(line => line.trim());
+    const hasMore = rawLines.length > diagramMaxCount;
+    const lines = hasMore ? rawLines.slice(0, diagramMaxCount) : rawLines;
 
     // Build a map of commit hash to branch name
     const commitToBranch: Record<string, string> = {};
@@ -713,7 +716,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
       });
     }
 
-    return { success: true, commits };
+    return { success: true, commits, hasMore };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

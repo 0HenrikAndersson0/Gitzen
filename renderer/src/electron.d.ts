@@ -40,7 +40,7 @@ declare global {
       gitCreateGitHubRepo: (token: string, name: string, isPrivate: boolean, description?: string) => Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string }>;
       gitGetBranchStatus: () => Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string }>;
-      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; error?: string }>;
+      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string }>;
       getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }>;
       createStash: () => Promise<{ success: boolean; error?: string }>;
       applyStash: (name: string) => Promise<{ success: boolean; error?: string }>;
