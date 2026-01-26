@@ -2,6 +2,8 @@ import { GitBranch, Tag } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Button } from './ui/button';
 
 interface Commit {
   id: string;
@@ -19,7 +21,9 @@ interface Commit {
 interface CommitGraphProps {
   commits?: Commit[];
   currentBranch: string;
+  hasMore?: boolean;
   onStashAction?: () => void;
+  onLoadMore?: (amount: number) => void;
 }
 
 // Layout Engine
@@ -180,10 +184,13 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
 export function CommitGraph({
   commits = [],
+  hasMore = false,
+  onLoadMore,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
+  const [loadAmount, setLoadAmount] = useState('50');
   
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commitHash: string } | null>(null);
@@ -284,7 +291,7 @@ export function CommitGraph({
       </div>
 
       <div className="flex-1 overflow-auto bg-zinc-950 relative" style={{ maxHeight: '754px' }}>
-        <div className="relative" style={{ height: height, minWidth: '100%' }}>
+        <div className="relative" style={{ height: height + 80, minWidth: '100%' }}>
            {/* Graph Layer - Absolute positioned behind content */}
            <svg
              width={width + 20}
@@ -380,6 +387,35 @@ export function CommitGraph({
               );
             })}
            </div>
+
+           {onLoadMore && hasMore && (
+            <div
+              className="absolute left-0 right-0 flex items-center justify-center gap-2 border-t border-zinc-800/30"
+              style={{ top: height, height: 80 }}
+            >
+              <span className="text-sm text-zinc-500">Load</span>
+              <Select value={loadAmount} onValueChange={setLoadAmount}>
+                <SelectTrigger className="w-[80px] h-8 bg-zinc-900 border-zinc-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-700">
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                  <SelectItem value="500">500</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-zinc-500">more commits</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onLoadMore(parseInt(loadAmount))}
+                className="ml-2 bg-zinc-900 border-zinc-700 hover:bg-zinc-800"
+              >
+                Load
+              </Button>
+            </div>
+           )}
         </div>
       </div>
 

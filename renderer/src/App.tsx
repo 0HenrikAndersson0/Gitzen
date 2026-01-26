@@ -61,6 +61,7 @@ interface Branch {
 export default function App() {
   const [repoName, setRepoName] = useState<string | null>(null);
   const [repoPath, setRepoPath] = useState<string | null>(null);
+  const [historyLimit, setHistoryLimit] = useState(50);
   const [currentBranch, setCurrentBranch] = useState('main');
   const [hasCredentials, setHasCredentials] = useState(false);
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
@@ -69,6 +70,7 @@ export default function App() {
   const [files, setFiles] = useState<FileChange[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
+  const [hasMoreCommits, setHasMoreCommits] = useState(false);
   const [stashes, setStashes] = useState<{ name: string; message: string }[]>([]);
   const [localBranches, setLocalBranches] = useState<Branch[]>([]);
   const [remoteBranches, setRemoteBranches] = useState<Branch[]>([]);
@@ -89,7 +91,16 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
-    initApp();
+    const init = async () => {
+      try {
+        const result = await window.electronAPI.getMaxCommits();
+        setHistoryLimit(result.success && result.maxCommits ? result.maxCommits : 50);
+      } catch (e) {
+        console.error('Failed to load settings', e);
+      }
+      await initApp();
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -237,17 +248,25 @@ export default function App() {
     const targetPath = pathOverride || repoPath;
     if (!targetPath) return;
     try {
-      const result = await window.electronAPI.gitGetHistory(50);
+      const result = await window.electronAPI.gitGetHistory(historyLimit);
       if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.commits) {
           setCommits(result.commits);
         }
+        setHasMoreCommits(!!result.hasMore);
       }
     } catch (error) {
       console.error('Failed to refresh history:', error);
     }
-  }, [repoPath]);
+  }, [repoPath, historyLimit]);
+
+  // Trigger refresh when history limit changes (e.g. Load More button)
+  useEffect(() => {
+    if (repoPath) {
+      refreshHistory();
+    }
+  }, [historyLimit, refreshHistory, repoPath]);
 
   const refreshStashes = useCallback(async (pathOverride?: string) => {
     const targetPath = pathOverride || repoPath;
@@ -891,6 +910,7 @@ export default function App() {
     setRepoPath(null);
     setFiles([]);
     setCommits([]);
+    setHistoryLimit(50);
     setHasCredentials(false);
     setRemoteUrl(null);
     setActiveTab('clone');
@@ -966,6 +986,15 @@ export default function App() {
     // Clear all state before opening
     setFiles([]);
     setCommits([]);
+
+    // Reset history limit to default or user setting when opening new repo
+    try {
+      const result = await window.electronAPI.getMaxCommits();
+      setHistoryLimit(result.success && result.maxCommits ? result.maxCommits : 50);
+    } catch (e) {
+      setHistoryLimit(50);
+    }
+
     setStashes([]);
     setBranchStatus(undefined);
     setRebaseStatus({ inProgress: false });
@@ -1045,7 +1074,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
-      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+      <SplashScreen visible={showSplash} />
       {isLoading && <LoadingOverlay message={loadingMessage} />}
       <div className="w-full space-y-4">
                 <RepoHeader
@@ -1149,7 +1178,9 @@ export default function App() {
               <CommitGraph
                 commits={commits}
                 currentBranch={currentBranch}
+                hasMore={hasMoreCommits}
                 onStashAction={refreshHistory}
+                onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
               />
             )}
           </div>
