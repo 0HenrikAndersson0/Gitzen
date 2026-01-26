@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { useAutoRefresh } from './hooks/useAutoRefresh';
 import { LoadingOverlay } from './components/ui/spinner';
 import { SplashScreen } from './components/SplashScreen';
+import { ForcePushDialog } from './components/ForcePushDialog';
 
 interface BranchStatus {
   ahead: number;
@@ -66,6 +67,7 @@ export default function App() {
   const [hasCredentials, setHasCredentials] = useState(false);
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [showAddRemoteDialog, setShowAddRemoteDialog] = useState(false);
+  const [showForcePushDialog, setShowForcePushDialog] = useState(false);
   const [branchStatus, setBranchStatus] = useState<BranchStatus | undefined>(undefined);
   const [files, setFiles] = useState<FileChange[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -646,6 +648,16 @@ export default function App() {
           await refreshBranchStatus();
         } else {
           const errorMsg = result.error || 'Failed to push';
+          
+          if (errorMsg.includes('Updates were rejected') || 
+              errorMsg.includes('non-fast-forward') || 
+              errorMsg.includes('failed to push some refs') ||
+              errorMsg.includes('fetch first')) {
+             setShowForcePushDialog(true);
+             addLog('warning', 'Push failed: Remote contains work that you do not have locally. Force push may be required.');
+             return; 
+          }
+
           addLog('error', errorMsg);
           toast.error(errorMsg);
           
@@ -676,6 +688,28 @@ export default function App() {
             setShowCredentialsDialog(true);
           }
         }
+      }
+    });
+  };
+
+  const handleForcePush = async (overwrite: boolean = false) => {
+    addLog('warning', `${overwrite ? 'Force' : 'Force-with-lease'} pushing to origin/${currentBranch}...`);
+    await withLoading(`${overwrite ? 'Force' : 'Force-with-lease'} pushing to origin/${currentBranch}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitPush('origin', currentBranch, true, overwrite);
+        if (result.success) {
+          addLog('success', `Successfully ${overwrite ? 'force' : 'force-with-lease'} pushed to origin/${currentBranch}`);
+          toast.success(`Changes ${overwrite ? 'force' : 'force-with-lease'} pushed successfully!`);
+          await refreshBranchStatus();
+        } else {
+          const errorMsg = result.error || 'Failed to force push';
+          addLog('error', errorMsg);
+          toast.error(errorMsg);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Force push failed: ${errorMsg}`);
+        toast.error(`Force push failed: ${errorMsg}`);
       }
     });
   };
@@ -1227,6 +1261,13 @@ export default function App() {
       <SettingsDialog
         open={showSettingsDialog}
         onClose={() => setShowSettingsDialog(false)}
+      />
+
+      <ForcePushDialog
+        open={showForcePushDialog}
+        onClose={() => setShowForcePushDialog(false)}
+        onConfirm={handleForcePush}
+        targetBranch={currentBranch}
       />
 
       <Toaster />

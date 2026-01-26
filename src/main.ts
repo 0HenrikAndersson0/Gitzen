@@ -69,8 +69,8 @@ ipcMain.handle('git:commit', async (_, message) => {
   return await gitService.commit(message);
 });
 
-ipcMain.handle('git:push', async (_, remote, branch) => {
-  return await gitService.push(remote, branch);
+ipcMain.handle('git:push', async (_, remote, branch, force, overwrite) => {
+  return await gitService.push(remote, branch, force, overwrite);
 });
 
 ipcMain.handle('git:pull', async (_, remote, branch) => {
