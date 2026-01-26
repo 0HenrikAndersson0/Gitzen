@@ -355,7 +355,7 @@ export async function commit(message: string): Promise<{ success: boolean; error
   }
 }
 
-export async function push(remote: string = 'origin', branch?: string): Promise<{ success: boolean; error?: string }> {
+export async function push(remote: string = 'origin', branch?: string, force: boolean = false, overwrite: boolean = false): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -363,7 +363,14 @@ export async function push(remote: string = 'origin', branch?: string): Promise<
 
     return await withRemoteCredentials(remote, async () => {
       const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-      await runGitCommand(`push -u ${remote} ${branchName}`);
+      let forceFlag = '';
+      if (overwrite) {
+        forceFlag = ' --force';
+      } else if (force) {
+        forceFlag = ' --force-with-lease';
+      }
+      
+      await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`);
       return { success: true };
     });
   } catch (error: any) {

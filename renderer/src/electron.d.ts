@@ -34,7 +34,7 @@ declare global {
       gitUnstage: (files: string[]) => Promise<{ success: boolean; error?: string }>;
       gitStageAll: () => Promise<{ success: boolean; error?: string }>;
       gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
-      gitPush: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
+      gitPush: (remote?: string, branch?: string, force?: boolean, overwrite?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitPull: (remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>;
       gitAddRemote: (name: string, url: string) => Promise<{ success: boolean; error?: string }>;
       gitCreateGitHubRepo: (token: string, name: string, isPrivate: boolean, description?: string) => Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string }>;
