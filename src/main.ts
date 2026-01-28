@@ -35,10 +35,11 @@ function createWindow() {
       label: 'Help',
       submenu: [
         {
-          label: 'Learn More',
+          label: 'Documentation',
           click: async () => {
             const { shell } = require('electron');
-            await shell.openExternal('https://github.com/0HenrikAndersson0/git_gui');
+            const helpPath = path.join(app.getAppPath(), 'HELP.md');
+            await shell.openPath(helpPath);
           }
         }
       ]
