@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, Shell } from 'electron';
 import * as path from 'path';
 import * as recentReposService from './recentReposService';
 import * as settingsService from './settingsService';
@@ -15,12 +15,38 @@ function createWindow() {
     height: 800,
     title: 'Gitzen',
     icon: path.join(__dirname, '..', 'icon.png'),
+    autoHideMenuBar: false, // We are setting a custom menu, so we don't need to auto-hide the default one
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true
     }
   });
+
+  // Custom Menu
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'File',
+      submenu: [
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Learn More',
+          click: async () => {
+            const { shell } = require('electron');
+            await shell.openExternal('https://github.com/0HenrikAndersson0/git_gui');
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 
   // Load the app
   if (isDev) {
