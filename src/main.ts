@@ -121,6 +121,10 @@ ipcMain.handle('git:fetch', async (_, remote) => {
   return await gitService.fetchRemote(remote);
 });
 
+ipcMain.handle('git:fetchAll', async () => {
+  return await gitService.fetchAllRemotes();
+});
+
 ipcMain.handle('git:getBranches', async () => {
   return await gitService.getBranches();
 });

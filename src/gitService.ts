@@ -1199,7 +1199,7 @@ export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success
   }
 }
 
-export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }> {
+export async function fetchAllRemotes(): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1219,6 +1219,17 @@ export async function getRemoteBranches(): Promise<{ success: boolean; branches?
         console.warn(`Failed to fetch remote ${remote}:`, e);
         // Continue with other remotes
       }
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
     }
 
     const { stdout } = await runGitCommand('branch -r');

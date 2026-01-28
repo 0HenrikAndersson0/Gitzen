@@ -53,6 +53,7 @@ declare global {
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string }>;
       gitGetBranchesDetailed: () => Promise<{ success: boolean; branches?: Array<{ name: string; current: boolean; upstream?: string; ahead: number; behind: number }>; error?: string }>;
       gitFetch: (remote?: string) => Promise<{ success: boolean; error?: string }>;
+      gitFetchAll: () => Promise<{ success: boolean; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
       gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string }>;

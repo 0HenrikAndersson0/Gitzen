@@ -246,6 +246,37 @@ export default function App() {
     }
   }, [repoPath, currentBranch]);
 
+  const refreshBranchStatus = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.gitGetBranchStatus();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success) {
+        setBranchStatus({
+          ahead: result.ahead || 0,
+          behind: result.behind || 0,
+          hasUpstream: !!result.hasUpstream,
+          upstream: result.upstream
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh branch status:', error);
+    }
+  }, [repoPath]);
+
+  const performFetch = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+          await window.electronAPI.gitFetchAll();
+          await refreshBranchStatus(targetPath);
+          await refreshBranches(targetPath);
+      } catch (e) {
+          console.error('Failed to fetch', e);
+      }
+  }, [repoPath, refreshBranchStatus, refreshBranches]);
+
   const refreshHistory = useCallback(async (pathOverride?: string) => {
     const targetPath = pathOverride || repoPath;
     if (!targetPath) return;
@@ -283,25 +314,6 @@ export default function App() {
       }
     } catch (error) {
       console.error('Failed to refresh stashes:', error);
-    }
-  }, [repoPath]);
-
-  const refreshBranchStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetBranchStatus();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        setBranchStatus({
-          ahead: result.ahead || 0,
-          behind: result.behind || 0,
-          hasUpstream: !!result.hasUpstream,
-          upstream: result.upstream
-        });
-      }
-    } catch (error) {
-      console.error('Failed to refresh branch status:', error);
     }
   }, [repoPath]);
 
@@ -354,7 +366,7 @@ export default function App() {
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus],
+    refreshFunctions: [refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus, performFetch],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -601,6 +613,7 @@ export default function App() {
           await refreshStatus();
           await refreshHistory();
           await refreshBranchStatus();
+          await refreshBranches();
         } else {
           addLog('error', result.error || 'Failed to commit');
           toast.error(result.error || 'Failed to commit');
@@ -838,6 +851,7 @@ export default function App() {
           await refreshStatus();
           await refreshBranch();
           await refreshHistory();
+          await refreshBranches();
         } else if (result.hasConflicts && result.conflictedFiles) {
           setConflictedFiles(result.conflictedFiles);
           setShowMergeConflictDialog(true);
@@ -996,7 +1010,8 @@ export default function App() {
             refreshHistory(),
             refreshStashes(),
             refreshBranchStatus(),
-            refreshRebaseStatus()
+            refreshRebaseStatus(),
+            refreshBranches()
           ]);
         } else {
           addLog('error', result.error || 'Failed to checkout branch');
@@ -1026,7 +1041,8 @@ export default function App() {
             refreshHistory(),
             refreshStashes(),
             refreshBranchStatus(),
-            refreshRebaseStatus()
+            refreshRebaseStatus(),
+            refreshBranches()
           ]);
         } else {
           addLog('error', result.error || 'Failed to create branch');
@@ -1040,7 +1056,19 @@ export default function App() {
 
   const handleDeleteBranch = async (branch: string) => {
     await withLoading(`Deleting branch ${branch}...`, async () => {
-      await refreshBranch();
+      try {
+        const result = await window.electronAPI.deleteBranch(branch);
+        if (result.success) {
+          addLog('success', `Deleted branch ${branch}`);
+          toast.success(`Deleted branch ${branch}`);
+          await refreshBranches();
+        } else {
+          addLog('error', result.error || 'Failed to delete branch');
+          toast.error(result.error || 'Failed to delete branch');
+        }
+      } catch (error) {
+        addLog('error', `Failed to delete branch: ${error}`);
+      }
     });
   };
 
