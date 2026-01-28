@@ -87,9 +87,49 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
   const [pendingClone, setPendingClone] = useState<{ url: string; path: string } | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  
+  // UI Layout State
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [showBottomPanel, setShowBottomPanel] = useState(true);
+
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
   const repoPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey) {
+        switch (e.key) {
+          case 'ArrowUp':
+            e.preventDefault();
+            // Maximize graph: Hide both panels
+            setShowLeftPanel(false);
+            setShowBottomPanel(false);
+            toast.info('Maximized Git Graph');
+            break;
+          case 'ArrowLeft':
+            e.preventDefault();
+            setShowLeftPanel(prev => {
+              const newState = !prev;
+              toast.info(newState ? 'Shown Left Panel' : 'Hidden Left Panel');
+              return newState;
+            });
+            break;
+          case 'ArrowDown':
+            e.preventDefault();
+            setShowBottomPanel(prev => {
+              const newState = !prev;
+              toast.info(newState ? 'Shown Bottom Panel' : 'Hidden Bottom Panel');
+              return newState;
+            });
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -1211,7 +1251,7 @@ export default function App() {
 
         <div className="grid grid-cols-5 gap-4">
           {/* Left Sidebar - Branches & Tags (20%) */}
-          {repoName && (
+          {repoName && showLeftPanel && (
             <div className="col-span-1 flex flex-col gap-4">
               <BranchesPanel
                 currentBranch={currentBranch}
@@ -1240,7 +1280,7 @@ export default function App() {
           )}
 
           {/* Main Content Area - Graph or Repo Selector */}
-          <div className={`${repoName ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4`}>
+          <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 transition-all duration-300 ${!showBottomPanel ? 'h-[calc(100vh-140px)]' : ''}`}>
             {!repoName ? (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
                 <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')}>
@@ -1278,7 +1318,7 @@ export default function App() {
           </div>
         </div>
 
-        {repoName ? (
+        {repoName && showBottomPanel ? (
           <div className="grid grid-cols-2 gap-4">
             <CommitPanel
               files={files}
@@ -1290,9 +1330,9 @@ export default function App() {
             />
             <ActivityLog logs={logs} />
           </div>
-        ) : (
+        ) : !repoName ? (
           <ActivityLog logs={logs} />
-        )}
+        ) : null}
       </div>
 
       <CredentialsDialog
