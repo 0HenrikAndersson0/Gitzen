@@ -25,6 +25,11 @@ interface RecentRepo {
 }
 
 declare global {
+  interface ConflictedFile {
+    path: string;
+    type: 'both-modified' | 'deleted-by-us' | 'deleted-by-them' | 'both-added' | 'both-deleted' | 'added-by-us' | 'added-by-them' | 'unknown';
+  }
+
   interface Window {
     electronAPI: {
       gitClone: (url: string, path: string, credentials?: { username: string; password: string }) => Promise<{ success: boolean; error?: string }>;
@@ -50,8 +55,9 @@ declare global {
       gitFetch: (remote?: string) => Promise<{ success: boolean; error?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
-      gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: string[]; error?: string }>;
-      getConflictedFiles: () => Promise<{ success: boolean; files?: string[]; error?: string }>;
+      gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string }>;
+      getConflictedFiles: () => Promise<{ success: boolean; files?: ConflictedFile[]; error?: string }>;
+      resolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<{ success: boolean; error?: string }>;
       abortMerge: () => Promise<{ success: boolean; error?: string }>;
       gitRebaseBranch: (branch: string) => Promise<{ success: boolean; error?: string }>;
       gitAbortRebase: () => Promise<{ success: boolean; error?: string }>;

@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hasUnpushedCommits: () => ipcRenderer.invoke('git:hasUnpushedCommits'),
   testGitCredentials: (remoteUrl) => ipcRenderer.invoke('git:testGitCredentials', remoteUrl),
   getConflictedFiles: () => ipcRenderer.invoke('git:getConflictedFiles'),
+  resolveConflict: (filePath, decision) => ipcRenderer.invoke('git:resolveConflict', filePath, decision),
   abortMerge: () => ipcRenderer.invoke('git:abortMerge'),
   openFileInMergeTool: (filePath) => ipcRenderer.invoke('git:openFileInMergeTool', filePath),
   gitRebaseBranch: (branch) => ipcRenderer.invoke('git:rebaseBranch', branch),

@@ -13,6 +13,11 @@ const execFileAsync = promisify(execFile);
 let currentRepoPath: string | null = null;
 let credentialManager: CredentialManager | null = null;
 
+export interface ConflictedFile {
+  path: string;
+  type: 'both-modified' | 'deleted-by-us' | 'deleted-by-them' | 'both-added' | 'both-deleted' | 'added-by-us' | 'added-by-them' | 'unknown';
+}
+
 export function initializeGitService() {
   credentialManager = new CredentialManager();
 }
@@ -508,7 +513,7 @@ export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpus
   }
 }
 
-export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: string[]; error?: string }> {
+export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1533,7 +1538,7 @@ export async function revertFileChanges(filePath: string): Promise<{ success: bo
   }
 }
 
-export async function getConflictedFiles(): Promise<{ success: boolean; files?: string[]; error?: string }> {
+export async function getConflictedFiles(): Promise<{ success: boolean; files?: ConflictedFile[]; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1552,7 +1557,7 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
     // Get conflicted files using git status --porcelain
     // Conflicted files have status codes like: UU (both modified), AA (both added), DD (both deleted), AU, UA, DU, UD, etc.
     const { stdout } = await runGitCommand('status --porcelain');
-    const conflictedFiles: string[] = [];
+    const conflictedFiles: ConflictedFile[] = [];
 
     for (const line of stdout.trim().split('\n').filter(l => l)) {
       const match = line.match(/^(.{1,2})\s+(.+)$/);
@@ -1579,15 +1584,51 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
         // UU = both modified, AA = both added, DD = both deleted, AU/UA = one added one modified, etc.
         if ((indexStatus === 'U' || indexStatus === 'A' || indexStatus === 'D') &&
             (worktreeStatus === 'U' || worktreeStatus === 'A' || worktreeStatus === 'D')) {
-          // Skip if both are deleted (DD) as there's nothing to resolve
-          if (indexStatus !== 'D' || worktreeStatus !== 'D') {
-            conflictedFiles.push(filePath);
-          }
+          
+          let type: ConflictedFile['type'] = 'unknown';
+
+          if (indexStatus === 'D' && worktreeStatus === 'D') type = 'both-deleted';
+          else if (indexStatus === 'A' && worktreeStatus === 'U') type = 'added-by-us'; // AU
+          else if (indexStatus === 'U' && worktreeStatus === 'D') type = 'deleted-by-them'; // UD
+          else if (indexStatus === 'U' && worktreeStatus === 'A') type = 'added-by-them'; // UA
+          else if (indexStatus === 'D' && worktreeStatus === 'U') type = 'deleted-by-us'; // DU
+          else if (indexStatus === 'A' && worktreeStatus === 'A') type = 'both-added'; // AA
+          else if (indexStatus === 'U' && worktreeStatus === 'U') type = 'both-modified'; // UU
+
+          // Skip if both are deleted (DD) as there's nothing to resolve? 
+          // Actually user might want to acknowledge it. But typically git status handles it.
+          // Let's include it so UI can show it if needed.
+          
+          conflictedFiles.push({ path: filePath, type });
         }
       }
     }
 
     return { success: true, files: conflictedFiles };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function resolveConflict(filePath: string, decision: 'keep' | 'delete'): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    if (decision === 'delete') {
+      await runGitExecFile(['rm', '--', filePath], {
+        cwd: currentRepoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    } else {
+      // keep means we add the file (accepting the content currently in worktree or index)
+      await runGitExecFile(['add', '--', filePath], {
+        cwd: currentRepoPath,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    }
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

@@ -80,7 +80,7 @@ export default function App() {
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
   const [showMergeConflictDialog, setShowMergeConflictDialog] = useState(false);
-  const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
+  const [conflictedFiles, setConflictedFiles] = useState<ConflictedFile[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
   const [isLoading, setIsLoading] = useState(false);
@@ -929,6 +929,36 @@ export default function App() {
     });
   };
 
+  const handleResolveConflict = async (filePath: string, decision: 'keep' | 'delete') => {
+    await withLoading(`Resolving conflict for ${filePath}...`, async () => {
+      try {
+        const result = await window.electronAPI.resolveConflict(filePath, decision);
+        if (result.success) {
+          toast.success(`Resolved conflict for ${filePath}`);
+          addLog('success', `Resolved conflict: ${decision} ${filePath}`);
+
+          const conflictedResult = await window.electronAPI.getConflictedFiles();
+          if (conflictedResult.success && conflictedResult.files) {
+            setConflictedFiles(conflictedResult.files);
+            
+            if (conflictedResult.files.length === 0) {
+              toast.success('All conflicts resolved! You can now complete the merge.');
+              addLog('success', 'All merge conflicts have been resolved');
+            }
+          }
+          await refreshStatus();
+        } else {
+          toast.error(result.error || 'Failed to resolve conflict');
+          addLog('error', `Failed to resolve conflict: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        const errorMessage = error.message || 'Unknown error';
+        toast.error(`Failed to resolve conflict: ${errorMessage}`);
+        addLog('error', `Failed to resolve conflict: ${errorMessage}`);
+      }
+    });
+  };
+
   const handleSwitchRepo = async (name: string, path: string) => {
     setHasCredentials(false);
     setRemoteUrl(null);
@@ -1255,6 +1285,7 @@ export default function App() {
         onOpenFile={handleOpenFileInMergeTool}
         onAbortMerge={handleAbortMerge}
         onResolveFiles={handleResolveFiles}
+        onResolveConflict={handleResolveConflict}
         onClose={() => setShowMergeConflictDialog(false)}
       />
 

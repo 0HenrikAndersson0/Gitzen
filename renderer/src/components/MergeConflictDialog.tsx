@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, FileText, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, FileText, CheckCircle2, Trash2, Save, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import {
@@ -13,10 +13,11 @@ import {
 
 interface MergeConflictDialogProps {
   open: boolean;
-  conflictedFiles: string[];
+  conflictedFiles: ConflictedFile[];
   onOpenFile: (filePath: string) => void;
   onAbortMerge: () => void;
   onResolveFiles: (filePaths: string[]) => Promise<void>;
+  onResolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<void>;
   onClose: () => void;
 }
 
@@ -26,6 +27,7 @@ export function MergeConflictDialog({
   onOpenFile, 
   onAbortMerge,
   onResolveFiles,
+  onResolveConflict,
   onClose 
 }: MergeConflictDialogProps) {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -56,10 +58,16 @@ export function MergeConflictDialog({
   };
 
   const handleSelectAll = () => {
-    if (selectedFiles.size === conflictedFiles.length) {
+    // Only select files that are standard modified conflicts (can be bulk resolved via git add)
+    // Complex conflicts (deleted/added/renamed) usually require specific decisions
+    const bulkResolvableFiles = conflictedFiles.filter(f => 
+      f.type === 'both-modified' || f.type === 'both-added' || f.type === 'both-deleted' || f.type === 'unknown'
+    ).map(f => f.path);
+
+    if (selectedFiles.size === bulkResolvableFiles.length) {
       setSelectedFiles(new Set());
     } else {
-      setSelectedFiles(new Set(conflictedFiles));
+      setSelectedFiles(new Set(bulkResolvableFiles));
     }
   };
 
@@ -77,24 +85,52 @@ export function MergeConflictDialog({
     }
   };
 
-  const allSelected = conflictedFiles.length > 0 && selectedFiles.size === conflictedFiles.length;
+  const handleSpecificResolution = async (file: ConflictedFile, decision: 'keep' | 'delete') => {
+    setResolving(true);
+    try {
+      await onResolveConflict(file.path, decision);
+    } catch (error) {
+      console.error('Failed to resolve conflict:', error);
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const bulkResolvableFiles = conflictedFiles.filter(f => 
+    f.type === 'both-modified' || f.type === 'both-added' || f.type === 'both-deleted' || f.type === 'unknown'
+  );
+  
+  const allSelected = bulkResolvableFiles.length > 0 && selectedFiles.size === bulkResolvableFiles.length;
+
+  const getConflictDescription = (type: ConflictedFile['type']) => {
+    switch (type) {
+      case 'both-modified': return 'Both modified';
+      case 'deleted-by-us': return 'Deleted by us, modified by them';
+      case 'deleted-by-them': return 'Modified by us, deleted by them';
+      case 'both-added': return 'Both added';
+      case 'both-deleted': return 'Both deleted';
+      case 'added-by-us': return 'Added by us';
+      case 'added-by-them': return 'Added by them';
+      default: return 'Conflict';
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-2xl max-h-[80vh]">
+      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-3xl max-h-[85vh]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <AlertTriangle className="size-5 text-red-400" />
+            <AlertTriangle className="size-5 text-amber-500" />
             <DialogTitle>Merge Conflict Detected</DialogTitle>
           </div>
           <DialogDescription>
-            The merge has conflicts that need to be resolved. Select resolved files and click "Mark as Resolved" to remove them from the list.
+            The merge has conflicts that need to be resolved.
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
-          {conflictedFiles.length > 0 && (
-            <div className="flex items-center justify-between">
+          {bulkResolvableFiles.length > 0 && (
+            <div className="flex items-center justify-between bg-zinc-950 p-2 rounded border border-zinc-800">
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={allSelected}
@@ -102,56 +138,91 @@ export function MergeConflictDialog({
                   className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                 />
                 <span className="text-sm text-zinc-400">
-                  {selectedFiles.size > 0 
-                    ? `${selectedFiles.size} of ${conflictedFiles.length} selected`
-                    : `Select files to mark as resolved (${conflictedFiles.length} remaining)`
-                  }
+                  Select all standard conflicts
                 </span>
               </div>
-              {selectedFiles.size > 0 && (
-                <Button
-                  onClick={handleResolveSelected}
-                  disabled={resolving}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  size="sm"
-                >
-                  <CheckCircle2 className="size-4 mr-2" />
-                  {resolving ? 'Resolving...' : `Mark ${selectedFiles.size} as Resolved`}
-                </Button>
-              )}
+              <Button
+                onClick={handleResolveSelected}
+                disabled={resolving || selectedFiles.size === 0}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                size="sm"
+              >
+                <CheckCircle2 className="size-4 mr-2" />
+                Mark Selected as Resolved
+              </Button>
             </div>
           )}
           
-          <div className="bg-zinc-950 border border-zinc-800 rounded-lg max-h-[400px] overflow-y-auto">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-lg max-h-[500px] overflow-y-auto">
             {conflictedFiles.length > 0 ? (
               <div className="divide-y divide-zinc-800">
-                {conflictedFiles.map((filePath, index) => {
-                  const isSelected = selectedFiles.has(filePath);
+                {conflictedFiles.map((file, index) => {
+                  const isSelected = selectedFiles.has(file.path);
+                  const isDeletedConflict = file.type === 'deleted-by-us' || file.type === 'deleted-by-them';
+                  
                   return (
                     <div
                       key={index}
-                      className={`flex items-center gap-3 p-3 transition-colors ${
+                      className={`flex flex-col gap-2 p-3 transition-colors ${
                         isSelected ? 'bg-blue-600/10' : 'hover:bg-zinc-900'
                       }`}
                     >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => handleToggleFile(filePath)}
-                        className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                      />
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <FileText className="size-4 text-zinc-400 flex-shrink-0" />
-                        <span className="text-sm text-zinc-200 truncate" title={filePath}>
-                          {filePath}
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {!isDeletedConflict && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleToggleFile(file.path)}
+                              className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                            />
+                          )}
+                          <div className="flex flex-col min-w-0">
+                             <div className="flex items-center gap-2">
+                                <FileText className="size-4 text-zinc-400 flex-shrink-0" />
+                                <span className="text-sm font-medium text-zinc-200 truncate" title={file.path}>
+                                  {file.path}
+                                </span>
+                             </div>
+                             <span className="text-xs text-zinc-500 flex items-center gap-1">
+                                <AlertCircle className="size-3" />
+                                {getConflictDescription(file.type)}
+                             </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isDeletedConflict ? (
+                            <>
+                              <Button
+                                onClick={() => handleSpecificResolution(file, 'keep')}
+                                disabled={resolving}
+                                className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-600/50 h-8 text-xs"
+                                size="sm"
+                              >
+                                <Save className="size-3 mr-1.5" />
+                                Keep File
+                              </Button>
+                              <Button
+                                onClick={() => handleSpecificResolution(file, 'delete')}
+                                disabled={resolving}
+                                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/50 h-8 text-xs"
+                                size="sm"
+                              >
+                                <Trash2 className="size-3 mr-1.5" />
+                                Delete File
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              onClick={() => onOpenFile(file.path)}
+                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 h-8 text-xs"
+                              size="sm"
+                            >
+                              Open Merge Tool
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <Button
-                        onClick={() => onOpenFile(filePath)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 h-auto text-sm flex-shrink-0"
-                        size="sm"
-                      >
-                        Open File
-                      </Button>
                     </div>
                   );
                 })}

@@ -237,6 +237,10 @@ ipcMain.handle('git:getConflictedFiles', async () => {
   return await gitService.getConflictedFiles();
 });
 
+ipcMain.handle('git:resolveConflict', async (_, filePath, decision) => {
+  return await gitService.resolveConflict(filePath, decision);
+});
+
 ipcMain.handle('git:abortMerge', async () => {
   return await gitService.abortMerge();
 });
