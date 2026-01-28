@@ -603,9 +603,13 @@ export async function getHistory(maxCount: number = 50): Promise<{
     const fetchCount = diagramMaxCount + 1;
 
     // Use --all to show all branches regardless of which branch is checked out
-    const { stdout } = await runGitCommand(`log -n ${fetchCount} --all --date-order --pretty=format:"%H|%s|%an|%ad|%D|%P" --date=iso`);
+    // Use -z to separate commits with NUL byte to handle multi-line messages safely
+    // Use %B for full body
+    const delimiter = '|||';
+    const { stdout } = await runGitCommand(`log -n ${fetchCount} --all --date-order --pretty=format:"%H${delimiter}%B${delimiter}%an${delimiter}%ad${delimiter}%D${delimiter}%P" --date=iso -z`);
 
-    const rawLines = stdout.trim().split('\n').filter(line => line.trim());
+    // Split by NUL byte (the last entry might be empty if ends with NUL)
+    const rawLines = stdout.split('\0').filter(line => line.trim());
     const hasMore = rawLines.length > diagramMaxCount;
     const lines = hasMore ? rawLines.slice(0, diagramMaxCount) : rawLines;
 
@@ -614,7 +618,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
 
     // First pass: collect branch info from refs
     for (const line of lines) {
-      const parts = line.split('|');
+      const parts = line.split(delimiter);
       if (parts.length < 5) continue;
 
       const hash = parts[0].trim();
@@ -664,7 +668,7 @@ export async function getHistory(maxCount: number = 50): Promise<{
       iterations++;
       const parentToChildren: Record<string, string[]> = {};
       for (const line of lines) {
-        const parts = line.split('|');
+        const parts = line.split(delimiter);
         if (parts.length < 5) continue;
         const hash = parts[0].trim();
         const parents = (parts.length > 5 ? parts[5] : '').trim();
@@ -692,11 +696,11 @@ export async function getHistory(maxCount: number = 50): Promise<{
 
     // Third pass: build commit list
     for (const line of lines) {
-      const parts = line.split('|');
+      const parts = line.split(delimiter);
       if (parts.length < 5) continue;
 
       const hash = parts[0].trim();
-      const message = parts[1] || 'No message';
+      const message = parts[1] || 'No message'; // Full message (subject + body)
       const author = parts[2] || 'Unknown';
       const dateStr = parts[3];
       const refs = parts[4] || '';
@@ -1559,8 +1563,9 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
     const mergeHeadPath = path.join(currentRepoPath, '.git', 'MERGE_HEAD');
     const rebaseMergePath = path.join(currentRepoPath, '.git', 'rebase-merge');
     const rebaseApplyPath = path.join(currentRepoPath, '.git', 'rebase-apply');
+    const cherryPickHeadPath = path.join(currentRepoPath, '.git', 'CHERRY_PICK_HEAD');
 
-    if (!fs.existsSync(mergeHeadPath) && !fs.existsSync(rebaseMergePath) && !fs.existsSync(rebaseApplyPath)) {
+    if (!fs.existsSync(mergeHeadPath) && !fs.existsSync(rebaseMergePath) && !fs.existsSync(rebaseApplyPath) && !fs.existsSync(cherryPickHeadPath)) {
       // Not in a known conflict state, but we can still check for unmerged files
       // return { success: false, error: 'Not in a merge or rebase state' };
     }
@@ -1905,6 +1910,82 @@ export async function getRebaseStatus(): Promise<{ success: boolean; inProgress:
     }
 
     return { success: true, inProgress: false };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error', inProgress: false };
+  }
+}
+
+export async function cherryPick(commitHash: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    // -x appends "(cherry picked from commit ...)" to the message
+    await runGitCommand(`cherry-pick -x ${commitHash}`);
+    return { success: true };
+  } catch (error: any) {
+    const errorMsg = error.message || error.stderr || 'Unknown error';
+    if (errorMsg.includes('conflict') || errorMsg.includes('after resolving the conflicts')) {
+       return { success: false, error: 'Cherry-pick paused due to conflicts' };
+    }
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function abortCherryPick(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand('cherry-pick --abort');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function continueCherryPick(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand('cherry-pick --continue', undefined, { GIT_EDITOR: 'true' });
+    return { success: true };
+  } catch (error: any) {
+     const errorMsg = error.message || error.stderr || 'Unknown error';
+    if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
+       // Check if it's actually an empty commit error which contains "conflict resolution" text
+       if (errorMsg.includes('The previous cherry-pick is now empty')) {
+          // If empty, we can't continue a commit, so we must skip/reset or allow empty.
+          // Usually usually users want to skip if it's already included.
+          // Let's try to run with --allow-empty? Or just fail with specific message?
+          return { success: false, error: 'The cherry-pick resulted in an empty commit (changes already exist?). Try aborting.' };
+       }
+       return { success: false, error: 'Cherry-pick paused due to conflicts' };
+    }
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function skipCherryPick(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand('cherry-pick --skip');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getCherryPickStatus(): Promise<{ success: boolean; inProgress: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open', inProgress: false };
+    }
+    const cherryPickHeadPath = path.join(currentRepoPath, '.git', 'CHERRY_PICK_HEAD');
+    return { success: true, inProgress: fs.existsSync(cherryPickHeadPath) };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error', inProgress: false };
   }

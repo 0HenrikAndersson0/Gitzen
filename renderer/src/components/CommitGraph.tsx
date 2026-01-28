@@ -1,4 +1,4 @@
-import { GitBranch, Tag } from 'lucide-react';
+import { GitBranch, Tag, ArrowRight } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
@@ -24,6 +24,7 @@ interface CommitGraphProps {
   hasMore?: boolean;
   onStashAction?: () => void;
   onLoadMore?: (amount: number) => void;
+  onCherryPick?: (commitHash: string) => void;
 }
 
 // Layout Engine
@@ -186,6 +187,7 @@ export function CommitGraph({
   commits = [],
   hasMore = false,
   onLoadMore,
+  onCherryPick,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
@@ -445,6 +447,18 @@ export function CommitGraph({
             <Tag className="size-3.5 text-amber-400" />
             Add Tag...
           </div>
+          {onCherryPick && (
+            <div
+              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => {
+                onCherryPick(contextMenu.commitHash);
+                setContextMenu(null);
+              }}
+            >
+              <ArrowRight className="size-3.5 text-blue-400" />
+              Cherry Pick Commit
+            </div>
+          )}
         </div>
       )}
 

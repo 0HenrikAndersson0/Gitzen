@@ -64,6 +64,11 @@ declare global {
       gitAbortRebase: () => Promise<{ success: boolean; error?: string }>;
       gitContinueRebase: () => Promise<{ success: boolean; error?: string }>;
       gitGetRebaseStatus: () => Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string }>;
+      gitCherryPick: (commitHash: string) => Promise<{ success: boolean; error?: string }>;
+      gitAbortCherryPick: () => Promise<{ success: boolean; error?: string }>;
+      gitContinueCherryPick: () => Promise<{ success: boolean; error?: string }>;
+      gitSkipCherryPick: () => Promise<{ success: boolean; error?: string }>;
+      gitGetCherryPickStatus: () => Promise<{ success: boolean; inProgress: boolean; error?: string }>;
       gitGetCommitsForInteractiveRebase: (targetBranch: string) => Promise<{ success: boolean; commits?: any[]; error?: string }>;
       gitInteractiveRebase: (targetBranch: string, todoLines: string[]) => Promise<{ success: boolean; error?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string }>;

@@ -269,6 +269,26 @@ ipcMain.handle('git:getRebaseStatus', async () => {
   return await gitService.getRebaseStatus();
 });
 
+ipcMain.handle('git:cherryPick', async (_, commitHash) => {
+  return await gitService.cherryPick(commitHash);
+});
+
+ipcMain.handle('git:abortCherryPick', async () => {
+  return await gitService.abortCherryPick();
+});
+
+ipcMain.handle('git:continueCherryPick', async () => {
+  return await gitService.continueCherryPick();
+});
+
+ipcMain.handle('git:skipCherryPick', async () => {
+  return await gitService.skipCherryPick();
+});
+
+ipcMain.handle('git:getCherryPickStatus', async () => {
+  return await gitService.getCherryPickStatus();
+});
+
 ipcMain.handle('git:getCommitsForInteractiveRebase', async (_, targetBranch) => {
   return await gitService.getCommitsForInteractiveRebase(targetBranch);
 });

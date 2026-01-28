@@ -83,6 +83,7 @@ export default function App() {
   const [conflictedFiles, setConflictedFiles] = useState<ConflictedFile[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
+  const [cherryPickStatus, setCherryPickStatus] = useState<{ inProgress: boolean }>({ inProgress: false });
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
   const [pendingClone, setPendingClone] = useState<{ url: string; path: string } | null>(null);
@@ -361,44 +362,59 @@ export default function App() {
     const targetPath = pathOverride || repoPath;
     if (!targetPath) return;
     try {
-      const result = await window.electronAPI.gitGetRebaseStatus();
+      const [rebaseResult, cherryPickResult] = await Promise.all([
+        window.electronAPI.gitGetRebaseStatus(),
+        window.electronAPI.gitGetCherryPickStatus()
+      ]);
+      
       if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        setRebaseStatus({ inProgress: result.inProgress, currentStep: result.currentStep, totalSteps: result.totalSteps });
+      
+      if (cherryPickResult.success) {
+        setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
+      }
 
-        // If rebase is in progress, check for conflicts
-        if (result.inProgress) {
+      if (rebaseResult.success) {
+        setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
+
+        // If rebase OR cherry-pick is in progress, check for conflicts
+        if (rebaseResult.inProgress || cherryPickResult.inProgress) {
             const conflictResult = await window.electronAPI.getConflictedFiles();
             const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
             setConflictedFiles(conflicts);
 
-            const currentStep = result.currentStep;
-            const hasConflicts = conflicts.length > 0;
-            
-            if (hasConflicts) {
-                 const stepChanged = currentStep !== lastRebaseStepRef.current;
-                 const conflictsAppeared = lastConflictCountRef.current === 0;
-                 
-                 // Show dialog if we're at a new rebase step or if conflicts just appeared
-                 if (stepChanged || conflictsAppeared) {
-                     setShowMergeConflictDialog(true);
-                 }
+            // Rebase specific logic
+            if (rebaseResult.inProgress) {
+                const currentStep = rebaseResult.currentStep;
+                const hasConflicts = conflicts.length > 0;
+                
+                if (hasConflicts) {
+                     const stepChanged = currentStep !== lastRebaseStepRef.current;
+                     const conflictsAppeared = lastConflictCountRef.current === 0;
+                     
+                     // Show dialog if we're at a new rebase step or if conflicts just appeared
+                     if (stepChanged || conflictsAppeared) {
+                         setShowMergeConflictDialog(true);
+                     }
+                }
+                lastRebaseStepRef.current = currentStep;
+            } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
+                // Show dialog for cherry-pick conflicts
+                setShowMergeConflictDialog(true);
             }
             
-            lastRebaseStepRef.current = currentStep;
             lastConflictCountRef.current = conflicts.length;
         } else {
             // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
-            if (lastRebaseStepRef.current !== undefined) {
+            if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
                 setConflictedFiles([]);
-                setShowMergeConflictDialog(false); // Close dialog if rebase finished/aborted
+                setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
                 lastRebaseStepRef.current = undefined;
                 lastConflictCountRef.current = 0;
             }
         }
       }
     } catch (error) {
-       console.error('Failed to check rebase status:', error);
+       console.error('Failed to check rebase/cherry-pick status:', error);
     }
   }, [repoPath]);
 
@@ -877,6 +893,101 @@ export default function App() {
       });
   };
 
+  const handleCherryPick = async (commitHash: string) => {
+    addLog('info', `Cherry-picking commit ${commitHash.substring(0, 7)}...`);
+    await withLoading(`Cherry-picking ${commitHash.substring(0, 7)}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitCherryPick(commitHash);
+        if (result.success) {
+          toast.success(`Successfully cherry-picked ${commitHash.substring(0, 7)}`);
+          addLog('success', `Cherry-picked ${commitHash.substring(0, 7)}`);
+          if (repoPath) await refreshAllData(repoPath);
+        } else {
+          const errorMsg = result.error || 'Failed to cherry-pick';
+          if (errorMsg.includes('conflict')) {
+             toast.warning('Cherry-pick conflict detected');
+             addLog('warning', 'Cherry-pick conflict detected. Please resolve conflicts.');
+             await refreshRebaseStatus(); // This updates conflicts too
+             await refreshStatus(); 
+          } else {
+             toast.error(errorMsg);
+             addLog('error', errorMsg);
+          }
+        }
+      } catch (error: any) {
+        const msg = error.message || 'Unknown error';
+        toast.error(`Cherry-pick failed: ${msg}`);
+        addLog('error', `Cherry-pick failed: ${msg}`);
+      }
+    });
+  };
+
+  const handleAbortCherryPick = async () => {
+    await withLoading('Aborting cherry-pick...', async () => {
+      try {
+        const result = await window.electronAPI.gitAbortCherryPick();
+        if (result.success) {
+          toast.success('Cherry-pick aborted');
+          addLog('info', 'Cherry-pick aborted');
+          if (repoPath) await refreshAllData(repoPath);
+        } else {
+          toast.error(result.error || 'Failed to abort cherry-pick');
+        }
+      } catch (error: any) {
+        toast.error(`Failed to abort cherry-pick: ${error.message}`);
+      }
+    });
+  };
+
+  const handleContinueCherryPick = async () => {
+      // Check for conflicts first
+      const conflictResult = await window.electronAPI.getConflictedFiles();
+      if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+          setConflictedFiles(conflictResult.files);
+          setShowMergeConflictDialog(true);
+          toast.warning('Please resolve conflicts before continuing');
+          return;
+      }
+
+      await withLoading('Continuing cherry-pick...', async () => {
+        try {
+            const result = await window.electronAPI.gitContinueCherryPick();
+            if (result.success) {
+                toast.success('Cherry-pick continued');
+                addLog('info', 'Cherry-pick continued');
+                if (repoPath) await refreshAllData(repoPath);
+            } else {
+               if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
+                   toast.warning('Cherry-pick paused due to conflicts');
+                   await refreshRebaseStatus();
+                   await refreshStatus();
+               } else {
+                   toast.error(result.error || 'Failed to continue cherry-pick');
+               }
+            }
+        } catch (error: any) {
+            toast.error(`Failed to continue cherry-pick: ${error.message}`);
+        }
+      });
+  };
+
+  const handleSkipCherryPick = async () => {
+    await withLoading('Skipping cherry-pick step...', async () => {
+      try {
+        const result = await window.electronAPI.gitSkipCherryPick();
+        if (result.success) {
+          toast.success('Cherry-pick step skipped');
+          addLog('info', 'Cherry-pick step skipped');
+          if (repoPath) await refreshAllData(repoPath);
+        } else {
+          toast.error(result.error || 'Failed to skip cherry-pick step');
+        }
+      } catch (error: any) {
+        toast.error(`Failed to skip cherry-pick step: ${error.message}`);
+      }
+    });
+  };
+
   const handleMergeBranch = async (branch: string) => {
     addLog('info', `Merging ${branch} into ${currentBranch}...`);
     
@@ -1249,6 +1360,36 @@ export default function App() {
             </div>
         )}
 
+        {cherryPickStatus.inProgress && (            <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="font-medium text-blue-200">
+                        Cherry-pick in progress
+                    </span>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleSkipCherryPick}
+                        className="px-3 py-1.5 text-xs font-medium bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 border border-zinc-500/20 rounded-md transition-colors"
+                    >
+                        Skip
+                    </button>
+                    <button
+                        onClick={handleAbortCherryPick}
+                        className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
+                    >
+                        Abort
+                    </button>
+                    <button
+                        onClick={handleContinueCherryPick}
+                        className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-colors"
+                    >
+                        Continue
+                    </button>
+                </div>
+            </div>
+        )}
+
         <div className="grid grid-cols-5 gap-4">
           {/* Left Sidebar - Branches & Tags (20%) */}
           {repoName && showLeftPanel && (
@@ -1313,6 +1454,7 @@ export default function App() {
                 hasMore={hasMoreCommits}
                 onStashAction={refreshHistory}
                 onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
+                onCherryPick={handleCherryPick}
               />
             )}
           </div>
