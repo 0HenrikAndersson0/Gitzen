@@ -1,4 +1,4 @@
-import { GitBranch, Tag, ArrowRight } from 'lucide-react';
+import { GitBranch, Tag, ArrowRight, Target } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
@@ -188,11 +188,13 @@ export function CommitGraph({
   hasMore = false,
   onLoadMore,
   onCherryPick,
+  currentBranch,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
   const [loadAmount, setLoadAmount] = useState('50');
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commitHash: string } | null>(null);
@@ -206,6 +208,33 @@ export function CommitGraph({
   const spacingX = 20;
   const spacingY = 36;
   const { nodes, edges, width, height } = useGraphLayout(commits, spacingX, spacingY);
+
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+
+  // Find commit corresponding to currentBranch tip
+  const currentBranchHeadId = useMemo(() => {
+    if (!currentBranch || !commits.length) return null;
+    return commits.find(c => {
+        if (!c.refs) return false;
+        // Check for "HEAD -> branchName" or just "branchName"
+        const refs = c.refs.split(',').map(r => r.trim());
+        return refs.includes(`HEAD -> ${currentBranch}`) || refs.includes(currentBranch);
+    })?.id;
+  }, [commits, currentBranch]);
+
+  // Scroll to HEAD on mount or when branch changes
+  useEffect(() => {
+    if (currentBranchHeadId && containerRef.current && nodesRef.current.length > 0) {
+      const node = nodesRef.current.find(n => n.id === currentBranchHeadId);
+      if (node) {
+        containerRef.current.scrollTo({
+          top: Math.max(0, node.y - 150),
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, [currentBranchHeadId]);
 
   // Load tags for commits
   const loadTags = async () => {
@@ -292,7 +321,11 @@ export function CommitGraph({
         </span>
       </div>
 
-      <div className="flex-1 overflow-auto bg-zinc-950 relative" style={{ maxHeight: '754px' }}>
+      <div 
+        ref={containerRef}
+        className="flex-1 overflow-auto bg-zinc-950 relative" 
+        style={{ maxHeight: '754px' }}
+      >
         <div className="relative" style={{ height: height + 80, minWidth: '100%' }}>
            {/* Graph Layer - Absolute positioned behind content */}
            <svg
@@ -312,6 +345,18 @@ export function CommitGraph({
              ))}
              {nodes.map((node) => (
                <g key={`node-${node.id}`}>
+                 {node.id === currentBranchHeadId && (
+                   <circle
+                     cx={node.x}
+                     cy={node.y}
+                     r="8"
+                     fill="none"
+                     stroke={node.color}
+                     strokeWidth="2"
+                     className="animate-pulse"
+                     opacity="0.8"
+                   />
+                 )}
                  <circle
                    cx={node.x}
                    cy={node.y}
@@ -339,13 +384,17 @@ export function CommitGraph({
            <div className="absolute top-0 left-0 right-0 z-20">
             {nodes.map((node) => {
               const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
+              const isCurrentHead = node.id === currentBranchHeadId;
+
               return (
                 <div
                   key={commit.id}
                   className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 cursor-pointer ${
                     hoveredCommitId === commit.id
                       ? 'bg-zinc-800/50'
-                      : 'hover:bg-zinc-800/30'
+                      : isCurrentHead 
+                        ? 'bg-emerald-950/20' 
+                        : 'hover:bg-zinc-800/30'
                   }`}
                   style={{
                     top: node.y - 18,
@@ -358,7 +407,8 @@ export function CommitGraph({
                   onMouseLeave={() => setHoveredCommitId(null)}
                 >
                   <div className="flex items-center gap-3">
-                    <p className="font-medium text-zinc-200 text-sm truncate flex-1">
+                    <p className="font-medium text-zinc-200 text-sm truncate flex-1 flex items-center gap-2">
+                      {isCurrentHead && <Target className="h-3 w-3 text-emerald-500 animate-pulse" />}
                       {commit.message}
                     </p>
 
