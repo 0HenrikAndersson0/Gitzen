@@ -9,6 +9,8 @@ jobs:
     # This 'if' ensures the job only runs on tags, even if 'on' is misconfigured
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write  # Allows the action to create releases and upload assets
     strategy:
       matrix:
         # We use a matrix to run Windows and Linux in parallel
@@ -37,4 +39,5 @@ jobs:
         run: npx electron-builder --publish always
         env:
           # Your PAT with access to the public release repo
+          GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
