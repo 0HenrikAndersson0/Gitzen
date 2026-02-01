@@ -71,7 +71,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitGetCherryPickStatus: () => ipcRenderer.invoke('git:getCherryPickStatus'),
   gitGetCommitsForInteractiveRebase: (targetBranch) => ipcRenderer.invoke('git:getCommitsForInteractiveRebase', targetBranch),
   gitInteractiveRebase: (targetBranch, todoLines) => ipcRenderer.invoke('git:performInteractiveRebase', targetBranch, todoLines),
-  showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
+  showOpenDialog: (options) => ipcRenderer.invoke('dialog:showOpenDialog', options),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),
   removeRecentRepo: (path) => ipcRenderer.invoke('repos:removeRecent', path),

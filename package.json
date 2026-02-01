@@ -43,8 +43,8 @@
     "icon": "icon.png",
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        "deb",
+        "AppImage"
       ],
       "category": "Utility",
       "icon": "icon.png"
@@ -62,6 +62,7 @@
       "dist/**/*",
       "node_modules/**/*",
       "package.json",
+      "preload.js",
       "!**/.env*"
     ],
     "directories": {
