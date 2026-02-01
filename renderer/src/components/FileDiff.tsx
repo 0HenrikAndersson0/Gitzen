@@ -1,4 +1,4 @@
-import { X, FileText, FilePlus, FileX, Check, Undo2, Save, Trash2 } from 'lucide-react';
+import { X, FileText, FilePlus, FileX, Check, Undo2, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -192,7 +192,7 @@ export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
           // But the previous implementation selected none.
           // Let's select ALL by default, so it behaves like "Stage File" but allows deselection.
           const allLines = new Set<string>();
-          parsed.hunks.forEach((h, hIdx) => {
+          parsed!.hunks.forEach((h, hIdx) => {
             h.lines.forEach((l, lIdx) => {
               if (l.type !== 'context') {
                 allLines.add(`${hIdx}-${lIdx}`);
@@ -368,7 +368,7 @@ export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="flex h-[90vh] w-full max-w-7xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div className="flex h-full w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 p-6">
           <div className="flex items-center gap-4">
@@ -487,7 +487,7 @@ export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
                                 }`}
                                 onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
                               >
-                                <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
                                   {isSelectable && (
                                     <input 
                                       type="checkbox" 
@@ -534,7 +534,7 @@ export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
                                 }`}
                                 onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
                               >
-                                <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
                                   {isSelectable && (
                                     <input 
                                       type="checkbox" 

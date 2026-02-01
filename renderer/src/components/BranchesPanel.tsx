@@ -260,7 +260,7 @@ export function BranchesPanel({
             New
           </button>
         </div>
-        <div className="max-h-[300px] overflow-y-auto">
+        <div className="">
           {loading && localBranches.length === 0 ? (
             <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
           ) : localBranches.length === 0 ? (
@@ -327,7 +327,7 @@ export function BranchesPanel({
           <GitMerge className="size-4" />
           <h3 className="font-semibold text-sm">Remote Branches</h3>
         </div>
-        <div className="max-h-[300px] overflow-y-auto">
+        <div className="">
           {loading && remoteBranches.length === 0 ? (
             <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
           ) : remoteBranches.length === 0 ? (

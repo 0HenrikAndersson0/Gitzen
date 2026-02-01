@@ -1,4 +1,4 @@
-import { GitBranch, Tag, ArrowRight, Target } from 'lucide-react';
+import { GitBranch, Tag, ArrowRight } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
@@ -312,7 +312,7 @@ export function CommitGraph({
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden flex flex-col">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden flex flex-col h-full">
       <div className="p-6 pb-4 flex items-center gap-2 border-b border-zinc-800">
         <GitBranch className="h-5 w-5 text-emerald-400" />
         <h2 className="font-semibold text-zinc-100">Commit History</h2>
@@ -324,7 +324,6 @@ export function CommitGraph({
       <div 
         ref={containerRef}
         className="flex-1 overflow-auto bg-zinc-950 relative" 
-        style={{ maxHeight: '754px' }}
       >
         <div className="relative" style={{ height: height + 80, minWidth: '100%' }}>
            {/* Graph Layer - Absolute positioned behind content */}
@@ -408,7 +407,6 @@ export function CommitGraph({
                 >
                   <div className="flex items-center gap-3">
                     <p className="font-medium text-zinc-200 text-sm truncate flex-1 flex items-center gap-2">
-                      {isCurrentHead && <Target className="h-3 w-3 text-emerald-500 animate-pulse" />}
                       {commit.message}
                     </p>
 
