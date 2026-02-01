@@ -11,4 +11,9 @@ build/
 test-results/
 release/
 
+# Environment variables
+.env
+.env.local
+.env.*
+
 release/

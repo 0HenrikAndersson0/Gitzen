@@ -34,11 +34,17 @@
   },
   "build": {
     "appId": "com.gitzen.app",
+    "publish": {
+    "provider": "github",
+    "owner": "0HenrikAndersson0",
+    "repo": "gitzen-release"
+  },
     "productName": "Gitzen",
     "icon": "icon.png",
     "linux": {
       "target": [
-        "AppImage"
+        "AppImage",
+        "deb"
       ],
       "category": "Utility",
       "icon": "icon.png"
@@ -52,6 +58,12 @@
     "mac": {
       "icon": "icon.png"
     },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!**/.env*"
+    ],
     "directories": {
       "output": "release"
     }
