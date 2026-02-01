@@ -37,4 +37,4 @@ jobs:
         run: npx electron-builder --publish always
         env:
           # Your PAT with access to the public release repo
-          GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
