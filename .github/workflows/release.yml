@@ -27,6 +27,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci # Use 'npm ci' for faster, cleaner installs in CI environments
 
+      - name: Compile Main Process
+        run: npm run compile
+
+      - name: Build Renderer
+        run: npm run build:renderer
+
       - name: Build & Publish to Public Repo
         run: npx electron-builder --publish always
         env:
