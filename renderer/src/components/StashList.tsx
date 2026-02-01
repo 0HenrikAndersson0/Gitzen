@@ -1,5 +1,5 @@
 
-import { Archive, Trash2, Check } from 'lucide-react';
+import { Archive } from 'lucide-react';
 import { useState } from 'react';
 
 interface Stash {
@@ -31,7 +31,7 @@ export function StashList({ stashes, onApplyStash, onDeleteStash }: StashListPro
         <Archive className="size-4" />
         <h3 className="font-semibold text-sm">Stashes</h3>
       </div>
-      <div className="max-h-[300px] overflow-y-auto">
+      <div className="">
         {stashes.length === 0 ? (
           <div className="p-4 text-center text-sm text-zinc-500">No stashes</div>
         ) : (

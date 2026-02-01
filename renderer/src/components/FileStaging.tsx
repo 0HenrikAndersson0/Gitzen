@@ -122,7 +122,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
             <span className={`font-mono ${getStatusColor(file.status)} w-4`}>
               {getStatusLabel(file.status)}
             </span>
-            <span className="flex-1 font-mono text-sm">{file.path}</span>
+            <span className="flex-1 font-mono text-sm truncate min-w-0">{file.path}</span>
             {file.status === 'deleted' && (
               <FileX className="size-4 text-red-400" />
             )}

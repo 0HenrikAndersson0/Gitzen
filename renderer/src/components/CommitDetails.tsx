@@ -186,7 +186,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="flex h-[90vh] w-full max-w-7xl flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div className="flex h-full w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 p-6">
           <div className="min-w-0 flex-1">

@@ -46,6 +46,7 @@ Communication between the React frontend and Electron backend is handled via `co
     - Compiles TypeScript.
     - Builds the Vite renderer.
     - Packages the Electron app using `electron-builder`.
+    - **Note:** For quick code verification, use `npx electron-builder --linux AppImage` to avoid building multiple targets (like .deb).
 - **Compile Main Process:** `npm run compile`
 
 ## Development Conventions

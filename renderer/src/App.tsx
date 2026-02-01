@@ -1316,10 +1316,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
+    <div className="h-screen bg-zinc-950 text-zinc-100 p-4 flex flex-col overflow-hidden">
       <SplashScreen visible={showSplash} />
       {isLoading && <LoadingOverlay message={loadingMessage} />}
-      <div className="w-full space-y-4">
+      <div className="w-full flex flex-col flex-1 min-h-0 gap-4">
                 <RepoHeader
                   repoName={repoName}
                   currentBranch={currentBranch}
@@ -1390,10 +1390,10 @@ export default function App() {
             </div>
         )}
 
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-5 gap-4 flex-1 min-h-0">
           {/* Left Sidebar - Branches & Tags (20%) */}
           {repoName && showLeftPanel && (
-            <div className="col-span-1 flex flex-col gap-4">
+            <div className="col-span-1 flex flex-col gap-4 h-full overflow-y-auto">
               <BranchesPanel
                 currentBranch={currentBranch}
                 localBranches={localBranches}
@@ -1421,7 +1421,7 @@ export default function App() {
           )}
 
           {/* Main Content Area - Graph or Repo Selector */}
-          <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 transition-all duration-300 ${!showBottomPanel ? 'h-[calc(100vh-140px)]' : ''}`}>
+          <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full overflow-hidden`}>
             {!repoName ? (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
                 <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')}>
