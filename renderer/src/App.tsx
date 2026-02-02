@@ -1316,26 +1316,29 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 p-4 flex flex-col overflow-hidden">
+    <div className="h-screen bg-zinc-950 text-zinc-100 p-4 flex flex-col gap-4">
       <SplashScreen visible={showSplash} />
       {isLoading && <LoadingOverlay message={loadingMessage} />}
-      <div className="w-full flex flex-col flex-1 min-h-0 gap-4">
-                <RepoHeader
-                  repoName={repoName}
-                  currentBranch={currentBranch}
-                  hasCredentials={hasCredentials}
-                  branchStatus={branchStatus}
-                  isDisabled={isRefreshingBranches}
-                  canStash={files.length > 0}
-                  onSwitchRepo={handleSwitchRepo}
-                  onOpenNew={handleOpenNewRepo}
-                  onOpenSettings={() => setShowSettingsDialog(true)}
-                  onPush={handlePush}
-                  onPull={handlePull}
-                  onStash={handleStash}
-                />
+      
+      <div className="flex-none">
+        <RepoHeader
+          repoName={repoName}
+          currentBranch={currentBranch}
+          hasCredentials={hasCredentials}
+          branchStatus={branchStatus}
+          isDisabled={isRefreshingBranches}
+          canStash={files.length > 0}
+          onSwitchRepo={handleSwitchRepo}
+          onOpenNew={handleOpenNewRepo}
+          onOpenSettings={() => setShowSettingsDialog(true)}
+          onPush={handlePush}
+          onPull={handlePull}
+          onStash={handleStash}
+        />
+      </div>
                 
-                {rebaseStatus.inProgress && (            <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">
+      {rebaseStatus.inProgress && (
+        <div className="flex-none bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="size-2 rounded-full bg-purple-500 animate-pulse" />
                     <span className="font-medium text-purple-200">
@@ -1360,7 +1363,8 @@ export default function App() {
             </div>
         )}
 
-        {cherryPickStatus.inProgress && (            <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 flex items-center justify-between">
+        {cherryPickStatus.inProgress && (
+          <div className="flex-none bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
                     <span className="font-medium text-blue-200">
@@ -1390,92 +1394,99 @@ export default function App() {
             </div>
         )}
 
-        <div className="grid grid-cols-5 gap-4 flex-1 min-h-0">
-          {/* Left Sidebar - Branches & Tags (20%) */}
-          {repoName && showLeftPanel && (
-            <div className="col-span-1 flex flex-col gap-4 h-full overflow-y-auto">
-              <BranchesPanel
-                currentBranch={currentBranch}
-                localBranches={localBranches}
-                remoteBranches={remoteBranches}
-                stashes={stashes}
-                loading={isRefreshingBranches}
-                onCheckout={handleCheckout}
-                onCreateBranch={handleCreateBranch}
-                onDeleteBranch={handleDeleteBranch}
-                onMergeBranch={handleMergeBranch}
-                onSetLoading={(loading, message) => {
-                  setIsLoading(loading);
-                  setLoadingMessage(message);
-                }}
-                onApplyStash={handleApplyStash}
-                onDeleteStash={handleDeleteStash}
-              />
-              <TagsPanel
-                onSetLoading={(loading, message) => {
-                  setIsLoading(loading);
-                  setLoadingMessage(message);
-                }}
-              />
-            </div>
-          )}
-
-          {/* Main Content Area - Graph or Repo Selector */}
-          <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full overflow-hidden`}>
-            {!repoName ? (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')}>
-                  <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 border-b border-zinc-800 rounded-none">
-                    <TabsTrigger 
-                      value="clone" 
-                      className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
-                    >
-                      Clone Repository
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="open"
-                      className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
-                    >
-                      Open Repository
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="clone" className="p-6 m-0">
-                    <CloneRepo onClone={handleClone} />
-                  </TabsContent>
-                  <TabsContent value="open" className="p-6 m-0">
-                    <OpenRepo onOpen={handleOpenRepo} />
-                  </TabsContent>
-                </Tabs>
+        <div className="flex-1 min-h-dvh max-h-dvh">
+          <div className="grid grid-cols-5 gap-4 h-full min-h-0">
+            {/* Left Sidebar - Branches & Tags (20%) */}
+            {repoName && showLeftPanel && (
+              <div className="col-span-1 flex flex-col gap-4 h-full overflow-y-auto min-h-0">
+                <BranchesPanel
+                  currentBranch={currentBranch}
+                  localBranches={localBranches}
+                  remoteBranches={remoteBranches}
+                  stashes={stashes}
+                  loading={isRefreshingBranches}
+                  onCheckout={handleCheckout}
+                  onCreateBranch={handleCreateBranch}
+                  onDeleteBranch={handleDeleteBranch}
+                  onMergeBranch={handleMergeBranch}
+                  onSetLoading={(loading, message) => {
+                    setIsLoading(loading);
+                    setLoadingMessage(message);
+                  }}
+                  onApplyStash={handleApplyStash}
+                  onDeleteStash={handleDeleteStash}
+                />
+                <TagsPanel
+                  onSetLoading={(loading, message) => {
+                    setIsLoading(loading);
+                    setLoadingMessage(message);
+                  }}
+                />
               </div>
-            ) : (
-              <CommitGraph
-                commits={commits}
-                currentBranch={currentBranch}
-                hasMore={hasMoreCommits}
-                onStashAction={refreshHistory}
-                onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
-                onCherryPick={handleCherryPick}
-              />
             )}
+
+            {/* Main Content Area - Graph or Repo Selector */}
+            <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full min-h-0`}>
+              {!repoName ? (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden h-full">
+                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
+                    <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 border-b border-zinc-800 rounded-none flex-none">
+                      <TabsTrigger 
+                        value="clone" 
+                        className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+                      >
+                        Clone Repository
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="open"
+                        className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+                      >
+                        Open Repository
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="clone" className="p-6 m-0 flex-1 overflow-y-auto">
+                      <CloneRepo onClone={handleClone} />
+                    </TabsContent>
+                    <TabsContent value="open" className="p-6 m-0 flex-1 overflow-y-auto">
+                      <OpenRepo onOpen={handleOpenRepo} />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              ) : (
+                <CommitGraph
+                  commits={commits}
+                  currentBranch={currentBranch}
+                  hasMore={hasMoreCommits}
+                  onStashAction={refreshHistory}
+                  onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
+                  onCherryPick={handleCherryPick}
+                />
+              )}
+            </div>
           </div>
         </div>
 
         {repoName && showBottomPanel ? (
-          <div className="grid grid-cols-2 gap-4">
-            <CommitPanel
-              files={files}
-              onToggleStage={handleToggleStage}
-              onCommit={handleCommit}
-              onRevertFile={handleRevertFile}
-              onDeleteFile={handleDeleteFile}
-              onRefresh={() => refreshStatus()}
-            />
-            <ActivityLog logs={logs} />
+          <div className="flex-none grid grid-cols-2 gap-4 h-auto min-h-0">
+            <div className="min-h-0 h-full">
+              <CommitPanel
+                files={files}
+                onToggleStage={handleToggleStage}
+                onCommit={handleCommit}
+                onRevertFile={handleRevertFile}
+                onDeleteFile={handleDeleteFile}
+                onRefresh={() => refreshStatus()}
+              />
+            </div>
+            <div className="min-h-0 h-full">
+              <ActivityLog logs={logs} />
+            </div>
           </div>
         ) : !repoName ? (
-          <ActivityLog logs={logs} />
+          <div className="flex-none max-h-[20%]">
+            <ActivityLog logs={logs} />
+          </div>
         ) : null}
-      </div>
 
       <CredentialsDialog
         open={showCredentialsDialog}

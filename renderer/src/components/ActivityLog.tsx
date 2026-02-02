@@ -39,13 +39,13 @@ export function ActivityLog({ logs }: ActivityLogProps) {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6">
-      <div className="mb-4 flex items-center gap-2">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col h-full overflow-hidden">
+      <div className="mb-4 flex items-center gap-2 flex-none">
         <Terminal className="size-5 text-purple-400" />
-        <h2>Activity Log</h2>
+        <h2 className="font-semibold">Activity Log</h2>
       </div>
 
-      <ScrollArea className="h-48 rounded-md border border-zinc-800 bg-zinc-950 p-3">
+      <ScrollArea className="flex-1 rounded-md border border-zinc-800 bg-zinc-950 p-3 min-h-0">
         <div className="space-y-1 font-mono text-sm">
           {logs.length === 0 ? (
             <div className="text-zinc-600">No activity yet...</div>
