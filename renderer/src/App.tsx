@@ -1468,7 +1468,7 @@ export default function App() {
 
         {repoName && showBottomPanel ? (
           <div className="flex-none grid grid-cols-2 gap-4 h-auto min-h-0">
-            <div className="min-h-0 h-full">
+            <div className="min-h-0">
               <CommitPanel
                 files={files}
                 onToggleStage={handleToggleStage}
@@ -1478,7 +1478,7 @@ export default function App() {
                 onRefresh={() => refreshStatus()}
               />
             </div>
-            <div className="min-h-0 h-full">
+            <div className="h-0 min-h-full">
               <ActivityLog logs={logs} />
             </div>
           </div>

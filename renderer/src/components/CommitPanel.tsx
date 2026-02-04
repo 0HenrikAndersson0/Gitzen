@@ -40,7 +40,7 @@ export function CommitPanel({
   const stagedFiles = files.filter((f) => f.staged);
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col h-full overflow-hidden">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col">
       <div className="mb-4 flex items-center gap-2 flex-none">
         <GitCommitHorizontal className="size-5 text-green-400" />
         <h2 className="font-semibold">Changes</h2>
