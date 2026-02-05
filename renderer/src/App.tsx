@@ -251,10 +251,10 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const refreshBranches = useCallback(async (pathOverride?: string) => {
+  const refreshBranches = useCallback(async (pathOverride?: string, silent = false) => {
     const targetPath = pathOverride || repoPath;
     if (!targetPath) return;
-    setIsRefreshingBranches(true);
+    if (!silent) setIsRefreshingBranches(true);
     try {
       const [localResult, remoteResult] = await Promise.all([
         window.electronAPI.gitGetBranchesDetailed(),
@@ -306,13 +306,13 @@ export default function App() {
     }
   }, [repoPath]);
 
-  const performFetch = useCallback(async (pathOverride?: string) => {
+  const performFetch = useCallback(async (pathOverride?: string, silent = false) => {
       const targetPath = pathOverride || repoPath;
       if (!targetPath) return;
       try {
           await window.electronAPI.gitFetchAll();
           await refreshBranchStatus(targetPath);
-          await refreshBranches(targetPath);
+          await refreshBranches(targetPath, silent);
       } catch (e) {
           console.error('Failed to fetch', e);
       }
@@ -418,11 +418,23 @@ export default function App() {
     }
   }, [repoPath]);
 
+  const refreshBranchesSilent = useCallback(() => refreshBranches(undefined, true), [refreshBranches]);
+  const performFetchSilent = useCallback(() => performFetch(undefined, true), [performFetch]);
+
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus, performFetch],
+    refreshFunctions: [
+      refreshStatus,
+      refreshBranch,
+      refreshBranchesSilent,
+      refreshHistory,
+      refreshStashes,
+      refreshRebaseStatus,
+      refreshBranchStatus,
+      performFetchSilent
+    ],
   });
 
   const handleClone = async (url: string, path: string) => {
