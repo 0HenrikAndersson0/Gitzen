@@ -149,9 +149,11 @@ export async function createStash(): Promise<{ success: boolean; error?: string 
     const branchResult = await getCurrentBranch();
     const branchName = branchResult.branch || 'unknown';
     const message = `WIP on ${branchName}`;
-    const escapedMessage = message.replace(/"/g, '\\"');
-    const command = `stash push -m "${escapedMessage}"`;
-    await runGitCommand(command);
+
+    await runGitExecFile(['stash', 'push', '-m', message], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -352,8 +354,10 @@ export async function commit(message: string): Promise<{ success: boolean; error
       return { success: false, error: 'No repository open' };
     }
 
-    const escapedMessage = message.replace(/"/g, '\\"');
-    await runGitCommand(`commit -m "${escapedMessage}"`);
+    await runGitExecFile(['commit', '-m', message], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -367,15 +371,24 @@ export async function push(remote: string = 'origin', branch?: string, force: bo
     }
 
     return await withRemoteCredentials(remote, async () => {
-      const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-      let forceFlag = '';
-      if (overwrite) {
-        forceFlag = ' --force';
-      } else if (force) {
-        forceFlag = ' --force-with-lease';
+      let branchName = branch;
+      if (!branchName) {
+        const result = await getCurrentBranch();
+        branchName = result.branch || 'main';
       }
+
+      const args = ['push'];
+      if (overwrite) {
+        args.push('--force');
+      } else if (force) {
+        args.push('--force-with-lease');
+      }
+      args.push('-u', remote, branchName);
       
-      await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`);
+      await runGitExecFile(args, {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
       return { success: true };
     });
   } catch (error: any) {
@@ -388,7 +401,10 @@ export async function addRemote(name: string, url: string): Promise<{ success: b
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand(`remote add ${name} ${url}`);
+    await runGitExecFile(['remote', 'add', name, url], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -468,8 +484,16 @@ export async function pull(remote: string = 'origin', branch?: string): Promise<
     }
 
     return await withRemoteCredentials(remote, async () => {
-      const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-      await runGitCommand(`pull ${remote} ${branchName}`);
+      let branchName = branch;
+      if (!branchName) {
+        const result = await getCurrentBranch();
+        branchName = result.branch || 'main';
+      }
+
+      await runGitExecFile(['pull', remote, branchName], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
       return { success: true };
     });
   } catch (error: any) {
@@ -825,9 +849,15 @@ export async function createBranch(name: string, checkout: boolean = true): Prom
     }
 
     if (checkout) {
-      await runGitCommand(`checkout -b ${name}`);
+      await runGitExecFile(['checkout', '-b', name], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
     } else {
-      await runGitCommand(`branch ${name}`);
+      await runGitExecFile(['branch', name], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
     }
     return { success: true };
   } catch (error: any) {
@@ -1413,8 +1443,10 @@ export async function deleteBranch(branchName: string, force: boolean = false): 
       return { success: false, error: 'No repository open' };
     }
 
-    const command = force ? `branch -D ${branchName}` : `branch -d ${branchName}`;
-    await runGitCommand(command);
+    await runGitExecFile(['branch', force ? '-D' : '-d', branchName], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -1462,7 +1494,10 @@ export async function deleteTag(tagName: string): Promise<{ success: boolean; er
       return { success: false, error: 'No repository open' };
     }
 
-    await runGitCommand(`tag -d ${tagName}`);
+    await runGitExecFile(['tag', '-d', tagName], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -1475,8 +1510,15 @@ export async function createTag(name: string, commitHash?: string): Promise<{ su
       return { success: false, error: 'No repository open' };
     }
 
-    const command = commitHash ? `tag ${name} ${commitHash}` : `tag ${name}`;
-    await runGitCommand(command);
+    const args = ['tag', name];
+    if (commitHash) {
+      args.push(commitHash);
+    }
+
+    await runGitExecFile(args, {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
@@ -1494,7 +1536,10 @@ export async function pushTag(tagName: string, remote: string = 'origin'): Promi
     }
 
     return await withRemoteCredentials(remote, async () => {
-      await runGitCommand(`push ${remote} ${tagName}`);
+      await runGitExecFile(['push', remote, tagName], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
       return { success: true };
     });
   } catch (error: any) {
@@ -1796,7 +1841,10 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
     try {
       // Try git ls-remote without explicit credentials
       // Git will use credential helper, SSH keys, or prompt
-      await runGitCommand(`ls-remote "${remoteUrl}"`);
+      await runGitExecFile(['ls-remote', remoteUrl], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
       return { success: true };
     } catch (error: any) {
       const errorMsg = error.message || error.stderr || String(error);
@@ -1829,7 +1877,10 @@ export async function rebaseBranch(branch: string): Promise<{ success: boolean; 
       return { success: false, error: 'No repository open' };
     }
 
-    await runGitCommand(`rebase ${branch}`);
+    await runGitExecFile(['rebase', branch], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
@@ -1846,7 +1897,10 @@ export async function abortRebase(): Promise<{ success: boolean; error?: string 
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand('rebase --abort');
+    await runGitExecFile(['rebase', '--abort'], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -1861,7 +1915,11 @@ export async function continueRebase(): Promise<{ success: boolean; error?: stri
     // We need to set GIT_EDITOR to true (or cat) to handle "resolved" commits that might pop up an editor
     // but typically continue just goes.
     // However, if there are changes, it might ask for commit message.
-    await runGitCommand('rebase --continue', undefined, { GIT_EDITOR: 'true' });
+    await runGitExecFile(['rebase', '--continue'], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+      env: { ...process.env, GIT_EDITOR: 'true' }
+    });
     return { success: true };
   } catch (error: any) {
      const errorMsg = error.message || error.stderr || 'Unknown error';
@@ -1921,7 +1979,10 @@ export async function cherryPick(commitHash: string): Promise<{ success: boolean
       return { success: false, error: 'No repository open' };
     }
     // -x appends "(cherry picked from commit ...)" to the message
-    await runGitCommand(`cherry-pick -x ${commitHash}`);
+    await runGitExecFile(['cherry-pick', '-x', commitHash], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
@@ -1937,7 +1998,10 @@ export async function abortCherryPick(): Promise<{ success: boolean; error?: str
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand('cherry-pick --abort');
+    await runGitExecFile(['cherry-pick', '--abort'], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -1949,7 +2013,11 @@ export async function continueCherryPick(): Promise<{ success: boolean; error?: 
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand('cherry-pick --continue', undefined, { GIT_EDITOR: 'true' });
+    await runGitExecFile(['cherry-pick', '--continue'], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+      env: { ...process.env, GIT_EDITOR: 'true' }
+    });
     return { success: true };
   } catch (error: any) {
      const errorMsg = error.message || error.stderr || 'Unknown error';
@@ -1972,7 +2040,10 @@ export async function skipCherryPick(): Promise<{ success: boolean; error?: stri
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
-    await runGitCommand('cherry-pick --skip');
+    await runGitExecFile(['cherry-pick', '--skip'], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -2072,7 +2143,11 @@ export async function performInteractiveRebase(targetBranch: string, todoLines: 
       GIT_EDITOR: 'node -e "process.exit(0)"'
     };
 
-    await runGitCommand(`rebase -i ${targetBranch}`, undefined, env);
+    await runGitExecFile(['rebase', '-i', targetBranch], {
+      cwd: currentRepoPath!,
+      maxBuffer: 10 * 1024 * 1024,
+      env: env
+    });
 
     // Cleanup
     if (fs.existsSync(tempTodoPath)) fs.unlinkSync(tempTodoPath);
