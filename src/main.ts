@@ -264,6 +264,14 @@ ipcMain.handle('git:testGitCredentials', async (_, remoteUrl) => {
   return await gitService.testGitCredentials(remoteUrl);
 });
 
+ipcMain.handle('git:getGitUserConfig', async () => {
+  return await gitService.getGitUserConfig();
+});
+
+ipcMain.handle('git:setGitUserConfig', async (_, name, email, isGlobal) => {
+  return await gitService.setGitUserConfig(name, email, isGlobal);
+});
+
 ipcMain.handle('git:getConflictedFiles', async () => {
   return await gitService.getConflictedFiles();
 });
