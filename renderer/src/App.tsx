@@ -1083,6 +1083,9 @@ export default function App() {
         const result = await window.electronAPI.openFileInMergeTool(filePath);
         if (result.success) {
           addLog('info', `Opened ${filePath} in merge tool`);
+        } else if (result.error === 'NO_MERGE_TOOL_CONFIGURED') {
+          toast.info('No merge tool configured. Please select one in settings.');
+          setShowSettingsDialog(true);
         } else {
           toast.error(`Failed to open file: ${result.error}`);
           addLog('error', `Failed to open ${filePath}: ${result.error}`);

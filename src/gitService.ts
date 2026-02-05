@@ -22,14 +22,20 @@ export function initializeGitService() {
   credentialManager = new CredentialManager();
 }
 
-async function runGitExecFile(args: string[], options: any = {}) {
+interface GitExecResult {
+  stdout: string;
+  stderr: string;
+}
+
+async function runGitExecFile(args: string[], options: any = {}): Promise<GitExecResult> {
   const cmdStr = `git ${args.join(' ')}`;
   // Mask potential credentials in log (basic check for URL with password)
   // This regex looks for ://user:pass@ and masks pass
   const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
   console.log(`[GIT] ${maskedCmd}`);
   
-  return await execFileAsync('git', args, { encoding: 'utf8', ...options });
+  const result = await execFileAsync('git', args, { encoding: 'utf8', ...options });
+  return result as unknown as GitExecResult;
 }
 
 async function runGitCommand(command: string, cwd?: string, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
@@ -1764,7 +1770,10 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
 
     // First, check if user has configured a custom merge tool path
     const customMergeToolPath = settingsService.getMergeToolPath();
+    let hasTool = false;
+
     if (customMergeToolPath && fs.existsSync(customMergeToolPath)) {
+      hasTool = true;
       try {
         // Execute the custom merge tool with the file path
         await execFileAsync(customMergeToolPath, [fullPath], {
@@ -1778,9 +1787,27 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
       }
     }
 
+    // Check if git has a merge tool configured
+    if (!hasTool) {
+      try {
+        const { stdout } = await runGitExecFile(['config', 'merge.tool'], {
+          cwd: currentRepoPath!,
+        });
+        if (stdout.trim()) {
+          hasTool = true;
+        }
+      } catch (error) {
+        // Not configured in git
+      }
+    }
+
+    if (!hasTool) {
+      return { success: false, error: 'NO_MERGE_TOOL_CONFIGURED' };
+    }
+
     // Try to use git mergetool, which respects user's merge.tool configuration
     try {
-      await runGitExecFile(['mergetool', '--', filePath], {
+      await runGitExecFile(['mergetool', '--no-prompt', '--', filePath], {
         cwd: currentRepoPath!,
         maxBuffer: 10 * 1024 * 1024,
       });
