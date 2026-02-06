@@ -190,6 +190,8 @@ export function CommitGraph({
   hasMore = false,
   onLoadMore,
   onCherryPick,
+  onRevertCommit,
+  onResetCommits,
   currentBranch,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
