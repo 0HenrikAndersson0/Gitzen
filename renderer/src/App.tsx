@@ -20,8 +20,7 @@ import { SplashScreen } from './components/SplashScreen';
 import { ForcePushDialog } from './components/ForcePushDialog';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@radix-ui/react-dialog';
-import { DialogHeader } from './components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './components/ui/dialog';
 
 interface BranchStatus {
   ahead: number;
