@@ -29,6 +29,7 @@ interface BranchesPanelProps {
   onSetLoading?: (loading: boolean, message?: string) => void;
   onApplyStash: (name: string) => void;
   onDeleteStash: (name: string) => void;
+  onRefresh?: () => void;
 }
 
 export function BranchesPanel({
@@ -44,6 +45,7 @@ export function BranchesPanel({
   onSetLoading,
   onApplyStash,
   onDeleteStash,
+  onRefresh,
 }: BranchesPanelProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
@@ -130,19 +132,17 @@ export function BranchesPanel({
   };
 
   const handleContextMenu = (e: React.MouseEvent, branch: Branch) => {
-    if (!branch.isCurrent) {
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        branch: branch.name,
-        upstream: branch.upstream
-      });
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      branch: branch.name,
+      upstream: branch.upstream
+    });
   };
 
-  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch') => {
+  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull') => {
     if (!contextMenu) return;
 
     const branch = contextMenu.branch;
@@ -175,32 +175,58 @@ export function BranchesPanel({
         setRebaseModalOpen(true);
         break;
       case 'fetch':
-        // Determine remote from upstream or default to origin
-        let remote = 'origin';
+        // Determine remote from upstream or branch name or default to origin
+        let fetchRemote = 'origin';
         if (upstream) {
           const parts = upstream.split('/');
-          if (parts.length > 0) remote = parts[0];
+          if (parts.length > 0) fetchRemote = parts[0];
+        } else if (branch.includes('/')) {
+          fetchRemote = branch.split('/')[0];
         }
         
-        onSetLoading?.(true, `Fetching ${remote}...`);
+        onSetLoading?.(true, `Fetching ${fetchRemote}...`);
         try {
-          const result = await window.electronAPI.gitFetch(remote);
+          const result = await window.electronAPI.gitFetch(fetchRemote);
           if (result.success) {
-             toast.success(`Successfully fetched from ${remote}`);
-             // Trigger a refresh indirectly by calling parent's refresh logic if available?
-             // Since we don't have a direct refresh callback, we rely on the App.tsx auto-refresh loop or manual triggers.
-             // Ideally we'd have onRefresh() prop. 
-             // But App.tsx passes loading state which might trigger re-render.
-             // Actually, just fetching updates the remote refs. The next polling cycle (every 10s) will pick up the changes.
-             // Or we could trigger it via existing callbacks if we had one.
-             // For now, let's assume auto-refresh or user action will update UI.
-             // Or better, we can hack a refresh by deleting a non-existent stash? No.
-             // Since we modify the repo state, the next poll will pick it up.
+             toast.success(`Successfully fetched from ${fetchRemote}`);
+             onRefresh?.();
           } else {
              toast.error(`Fetch failed: ${result.error}`);
           }
         } catch (err: any) {
            toast.error(`Fetch failed: ${err.message}`);
+        } finally {
+           onSetLoading?.(false);
+        }
+        break;
+      case 'pull':
+        // Determine remote and branch from upstream or branch name or default to origin
+        let pullRemote = 'origin';
+        let pullBranch = branch;
+
+        if (upstream) {
+          const parts = upstream.split('/');
+          if (parts.length > 1) {
+            pullRemote = parts[0];
+            pullBranch = parts.slice(1).join('/');
+          }
+        } else if (branch.includes('/')) {
+          const parts = branch.split('/');
+          pullRemote = parts[0];
+          pullBranch = parts.slice(1).join('/');
+        }
+
+        onSetLoading?.(true, `Pulling ${pullRemote}/${pullBranch}...`);
+        try {
+          const result = await window.electronAPI.gitPull(pullRemote, pullBranch);
+          if (result.success) {
+             toast.success(`Successfully pulled ${pullRemote}/${pullBranch}`);
+             onRefresh?.();
+          } else {
+             toast.error(`Pull failed: ${result.error}`);
+          }
+        } catch (err: any) {
+           toast.error(`Pull failed: ${err.message}`);
         } finally {
            onSetLoading?.(false);
         }
@@ -342,6 +368,7 @@ export function BranchesPanel({
                   <div
                     key={branch.name}
                     className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
+                    onContextMenu={(e) => handleContextMenu(e, branch)}
                   >
                     <div
                       className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
@@ -479,9 +506,15 @@ export function BranchesPanel({
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
+          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
+          <div
+            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('pull')}
+          >
+            Pull latest changes
+          </div>
           <div
             className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
             onClick={() => handleMenuAction('fetch')}

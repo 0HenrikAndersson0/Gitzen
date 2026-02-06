@@ -1475,6 +1475,7 @@ export default function App() {
                   }}
                   onApplyStash={handleApplyStash}
                   onDeleteStash={handleDeleteStash}
+                  onRefresh={() => repoPath && refreshAllData(repoPath)}
                 />
                 <TagsPanel
                   onSetLoading={(loading, message) => {
