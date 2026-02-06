@@ -487,9 +487,9 @@ export async function pull(remote: string = 'origin', branch?: string, targetBra
         return { success: true };
       } else {
         // Normal pull into current branch
-        // Use --no-rebase to default to merge strategy and avoid "divergent branches" error
-        // on newer git versions when no config is set.
-        await runGitCommand(`pull --no-rebase ${remote} ${remoteBranchName}`);
+        // Use --no-rebase to default to merge strategy.
+        // Use --ff to explicitly request fast-forward if possible (avoiding merge commit if not needed).
+        await runGitCommand(`pull --no-rebase --ff ${remote} ${remoteBranchName}`);
         return { success: true };
       }
     });
