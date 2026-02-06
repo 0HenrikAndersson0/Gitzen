@@ -1169,6 +1169,79 @@ export async function listCredentials(): Promise<{ success: boolean; credentials
   }
 }
 
+export async function getGitUserConfig(): Promise<{ success: boolean; name?: string; email?: string; isGlobal?: boolean; error?: string }> {
+  try {
+    // Try to get name and email. If they are not set, git config returns error code 1.
+    // We'll try to get them using runGitExecFile directly to handle cases where no repo is open.
+
+    let name = '';
+    let email = '';
+    let isGlobal = true;
+
+    try {
+      const result = await (currentRepoPath
+        ? runGitExecFile(['config', '--show-scope', 'user.name'], { cwd: currentRepoPath })
+        : runGitExecFile(['config', '--global', 'user.name']));
+
+      const stdout = (result.stdout as unknown as string).trim();
+      if (currentRepoPath && stdout.includes('\t')) {
+        const [scope, value] = stdout.split('\t');
+        isGlobal = scope === 'global';
+        name = value;
+      } else {
+        name = stdout;
+        isGlobal = true;
+      }
+    } catch (e) {
+      // Not set, ignore
+    }
+
+    try {
+      const result = await (currentRepoPath
+        ? runGitExecFile(['config', 'user.email'], { cwd: currentRepoPath })
+        : runGitExecFile(['config', '--global', 'user.email']));
+      email = (result.stdout as unknown as string).trim();
+    } catch (e) {
+      // Not set, ignore
+    }
+
+    return { success: true, name, email, isGlobal };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function setGitUserConfig(name: string, email: string, isGlobal: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!isGlobal && !currentRepoPath) {
+      return { success: false, error: 'No repository open to save local configuration' };
+    }
+
+    const args = ['config'];
+    if (isGlobal) {
+      args.push('--global');
+    } else {
+      args.push('--local');
+    }
+
+    // Set user.name
+    const nameArgs = [...args, 'user.name', name];
+    await (isGlobal
+      ? runGitExecFile(nameArgs)
+      : runGitExecFile(nameArgs, { cwd: currentRepoPath! }));
+
+    // Set user.email
+    const emailArgs = [...args, 'user.email', email];
+    await (isGlobal
+      ? runGitExecFile(emailArgs)
+      : runGitExecFile(emailArgs, { cwd: currentRepoPath! }));
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export function getRepoPath(): { success: boolean; path?: string; error?: string } {
   if (currentRepoPath) {
     return { success: true, path: currentRepoPath };

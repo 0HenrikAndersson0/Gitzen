@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, Key, Trash2 } from 'lucide-react';
+import { Settings, FolderOpen, Key, Trash2, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Checkbox } from './ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,9 @@ interface SettingsDialogProps {
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [mergeToolPath, setMergeToolPath] = useState('');
   const [maxCommits, setMaxCommits] = useState(30);
+  const [gitName, setGitName] = useState('');
+  const [gitEmail, setGitEmail] = useState('');
+  const [isGlobalConfig, setIsGlobalConfig] = useState(true);
   const [credentials, setCredentials] = useState<string[]>([]);
   const [selectedCredential, setSelectedCredential] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -42,10 +46,11 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [mergeToolResult, maxCommitsResult, credentialsResult] = await Promise.all([
+      const [mergeToolResult, maxCommitsResult, credentialsResult, gitUserResult] = await Promise.all([
         window.electronAPI.getMergeToolPath(),
         window.electronAPI.getMaxCommits(),
         window.electronAPI.listCredentials(),
+        window.electronAPI.getGitUserConfig(),
       ]);
       if (mergeToolResult.success) {
         setMergeToolPath(mergeToolResult.mergeToolPath || '');
@@ -55,6 +60,11 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       }
       if (credentialsResult.success) {
         setCredentials(credentialsResult.credentials || []);
+      }
+      if (gitUserResult.success) {
+        setGitName(gitUserResult.name || '');
+        setGitEmail(gitUserResult.email || '');
+        setIsGlobalConfig(gitUserResult.isGlobal !== false);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -106,14 +116,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const [mergeToolResult, maxCommitsResult] = await Promise.all([
+      const [mergeToolResult, maxCommitsResult, gitUserResult] = await Promise.all([
         window.electronAPI.setMergeToolPath(mergeToolPath),
         window.electronAPI.setMaxCommits(maxCommits),
+        window.electronAPI.setGitUserConfig(gitName, gitEmail, isGlobalConfig),
       ]);
-      if (mergeToolResult.success && maxCommitsResult.success) {
+      if (mergeToolResult.success && maxCommitsResult.success && gitUserResult.success) {
         onClose();
       } else {
-        console.error('Failed to save settings:', mergeToolResult.error || maxCommitsResult.error);
+        console.error('Failed to save settings:', mergeToolResult.error || maxCommitsResult.error || gitUserResult.error);
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -131,11 +142,63 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             <DialogTitle>Settings</DialogTitle>
           </div>
           <DialogDescription>
-            Configure your Git merge tool preferences.
+            Configure your Git identity and merge tool preferences.
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-2">
+          <div className="space-y-4 border-b border-zinc-800 pb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <User className="size-4 text-blue-400" />
+              <h3 className="text-sm font-medium text-zinc-300">Git Identity</h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="gitName">User Name</Label>
+                <Input
+                  id="gitName"
+                  type="text"
+                  placeholder="John Doe"
+                  value={gitName}
+                  onChange={(e) => setGitName(e.target.value)}
+                  className="bg-zinc-950 border-zinc-700"
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gitEmail">User Email</Label>
+                <Input
+                  id="gitEmail"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={gitEmail}
+                  onChange={(e) => setGitEmail(e.target.value)}
+                  className="bg-zinc-950 border-zinc-700"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isGlobal"
+                checked={isGlobalConfig}
+                onCheckedChange={(checked) => setIsGlobalConfig(!!checked)}
+                disabled={loading}
+              />
+              <label
+                htmlFor="isGlobal"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-zinc-400"
+              >
+                Save as global configuration
+              </label>
+            </div>
+            <p className="text-xs text-zinc-500">
+              This will update your user.name and user.email in your Git configuration.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="mergeToolPath">Merge Tool Path</Label>
             <div className="flex gap-2">
