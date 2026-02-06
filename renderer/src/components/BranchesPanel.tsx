@@ -220,7 +220,8 @@ export function BranchesPanel({
 
         onSetLoading?.(true, `Pulling ${pullRemote}/${pullBranch}...`);
         try {
-          const result = await window.electronAPI.gitPull(pullRemote, pullBranch);
+          // Pass the local branch name ('branch') as the target branch
+          const result = await window.electronAPI.gitPull(pullRemote, pullBranch, branch);
           if (result.success) {
              toast.success(`Successfully pulled ${pullRemote}/${pullBranch}`);
              onRefresh?.();

@@ -467,16 +467,29 @@ export async function getBranchStatus(): Promise<{ success: boolean; ahead?: num
   }
 }
 
-export async function pull(remote: string = 'origin', branch?: string): Promise<{ success: boolean; error?: string }> {
+export async function pull(remote: string = 'origin', branch?: string, targetBranch?: string): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
     return await withRemoteCredentials(remote, async () => {
-      const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-      await runGitCommand(`pull ${remote} ${branchName}`);
-      return { success: true };
+      const currentBranchResult = await getCurrentBranch();
+      const currentBranch = currentBranchResult.branch;
+      const remoteBranchName = branch || (currentBranch || 'main');
+
+      // If targetBranch is specified and is NOT the current branch, we fetch to update it
+      // This mimics "pull" behavior for non-checked-out branches by updating the ref to the remote's version
+      if (targetBranch && targetBranch !== currentBranch) {
+        // Fetch remote branch into local branch: git fetch remote remoteBranch:localBranch
+        // Note: This handles fast-forward updates. If divergent, it will fail, which is correct (needs merge).
+        await runGitCommand(`fetch ${remote} ${remoteBranchName}:${targetBranch}`);
+        return { success: true };
+      } else {
+        // Normal pull into current branch
+        await runGitCommand(`pull ${remote} ${remoteBranchName}`);
+        return { success: true };
+      }
     });
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };

@@ -100,8 +100,8 @@ ipcMain.handle('git:push', async (_, remote, branch, force, overwrite) => {
   return await gitService.push(remote, branch, force, overwrite);
 });
 
-ipcMain.handle('git:pull', async (_, remote, branch) => {
-  return await gitService.pull(remote, branch);
+ipcMain.handle('git:pull', async (_, remote, branch, targetBranch) => {
+  return await gitService.pull(remote, branch, targetBranch);
 });
 
 ipcMain.handle('git:addRemote', async (_, name, url) => {
