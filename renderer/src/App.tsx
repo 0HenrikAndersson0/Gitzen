@@ -96,6 +96,16 @@ export default function App() {
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
   const repoPathRef = useRef<string | null>(null);
+  const gitOperationQueue = useRef<Promise<any>>(Promise.resolve());
+
+  const runQueued = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const nextOp = gitOperationQueue.current.then(operation);
+    gitOperationQueue.current = nextOp.then(
+      () => {},
+      () => {} // Continue queue even if operation fails
+    );
+    return nextOp;
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -167,7 +177,7 @@ export default function App() {
     setIsLoading(true);
     setLoadingMessage(message);
     try {
-      await fn();
+      await runQueued(fn);
     } finally {
       setIsLoading(false);
       setLoadingMessage(undefined);
@@ -220,120 +230,138 @@ export default function App() {
       ]);
   };
 
-  const refreshStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitStatus();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success && result.files) {
-        setFiles(result.files);
-      }
-    } catch (error) {
-      console.error('Failed to refresh status:', error);
-    }
-  }, [repoPath]);
-
-  const refreshBranch = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetCurrentBranch();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success && result.branch && result.branch.trim()) {
-        const newBranch = result.branch.trim();
-        setCurrentBranch((prevBranch) => {
-          return newBranch !== prevBranch ? newBranch : prevBranch;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to refresh branch:', error);
-    }
-  }, [repoPath]);
-
-  const refreshBranches = useCallback(async (pathOverride?: string, silent = false) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    if (!silent) setIsRefreshingBranches(true);
-    try {
-      const [localResult, remoteResult] = await Promise.all([
-        window.electronAPI.gitGetBranchesDetailed(),
-        window.electronAPI.getRemoteBranches(),
-      ]);
-      
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-
-      if (localResult.success && localResult.branches) {
-        setLocalBranches(localResult.branches.map((b: any) => ({
-            name: b.name, 
-            isRemote: false, 
-            isCurrent: b.current,
-            ahead: b.ahead,
-            behind: b.behind,
-            upstream: b.upstream
-        })));
-      }
-      if (remoteResult.success && remoteResult.branches) {
-        setRemoteBranches(remoteResult.branches.map(b => ({
-            name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
-        })));
-      }
-    } catch (e) {
-        console.error('Failed to refresh branches', e);
-    } finally {
-        if (targetPath === repoPathRef.current) {
-             setIsRefreshingBranches(false);
+  const refreshStatus = useCallback((pathOverride?: string) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitStatus();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success && result.files) {
+          setFiles(result.files);
         }
-    }
-  }, [repoPath, currentBranch]);
-
-  const refreshBranchStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetBranchStatus();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        setBranchStatus({
-          ahead: result.ahead || 0,
-          behind: result.behind || 0,
-          hasUpstream: !!result.hasUpstream,
-          upstream: result.upstream
-        });
+      } catch (error) {
+        console.error('Failed to refresh status:', error);
       }
-    } catch (error) {
-      console.error('Failed to refresh branch status:', error);
-    }
-  }, [repoPath]);
+    });
+  }, [repoPath, runQueued]);
 
-  const performFetch = useCallback(async (pathOverride?: string, silent = false) => {
+  const refreshBranch = useCallback((pathOverride?: string) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitGetCurrentBranch();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success && result.branch && result.branch.trim()) {
+          const newBranch = result.branch.trim();
+          setCurrentBranch((prevBranch) => {
+            return newBranch !== prevBranch ? newBranch : prevBranch;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to refresh branch:', error);
+      }
+    });
+  }, [repoPath, runQueued]);
+
+  const refreshBranches = useCallback((pathOverride?: string, silent = false) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      if (!silent) setIsRefreshingBranches(true);
+      try {
+        const [localResult, remoteResult] = await Promise.all([
+          window.electronAPI.gitGetBranchesDetailed(),
+          window.electronAPI.getRemoteBranches(),
+        ]);
+
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+
+        if (localResult.success && localResult.branches) {
+          setLocalBranches(localResult.branches.map((b: any) => ({
+              name: b.name,
+              isRemote: false,
+              isCurrent: b.current,
+              ahead: b.ahead,
+              behind: b.behind,
+              upstream: b.upstream
+          })));
+        }
+        if (remoteResult.success && remoteResult.branches) {
+          setRemoteBranches(remoteResult.branches.map(b => ({
+              name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
+          })));
+        }
+      } catch (e) {
+          console.error('Failed to refresh branches', e);
+      } finally {
+          if (targetPath === repoPathRef.current) {
+              setIsRefreshingBranches(false);
+          }
+      }
+    });
+  }, [repoPath, runQueued]);
+
+  const refreshBranchStatus = useCallback((pathOverride?: string) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitGetBranchStatus();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success) {
+          setBranchStatus({
+            ahead: result.ahead || 0,
+            behind: result.behind || 0,
+            hasUpstream: !!result.hasUpstream,
+            upstream: result.upstream
+          });
+        }
+      } catch (error) {
+        console.error('Failed to refresh branch status:', error);
+      }
+    });
+  }, [repoPath, runQueued]);
+
+  const performFetch = useCallback((pathOverride?: string, silent = false) => {
+    return runQueued(async () => {
       const targetPath = pathOverride || repoPath;
       if (!targetPath) return;
       try {
           await window.electronAPI.gitFetchAll();
-          await refreshBranchStatus(targetPath);
-          await refreshBranches(targetPath, silent);
+          // We don't use the wrapped ones here because we are already in the queue
+          // Actually, we should use the inner logic or just call them and they will be enqueued.
+          // But enqueuing them from within the queue will cause a deadlock if they await.
+          // Wait, runQueued(async () => { await runQueued(...) }) will deadlock!
       } catch (e) {
           console.error('Failed to fetch', e);
       }
-  }, [repoPath, refreshBranchStatus, refreshBranches]);
+    }).then(() => {
+        // Run these AFTER fetch completes, they will be enqueued
+        refreshBranchStatus(pathOverride || repoPath || undefined);
+        refreshBranches(pathOverride || repoPath || undefined, silent);
+    });
+  }, [repoPath, refreshBranchStatus, refreshBranches, runQueued]);
 
-  const refreshHistory = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetHistory(historyLimit);
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        if (result.commits) {
-          setCommits(result.commits);
+  const refreshHistory = useCallback((pathOverride?: string) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitGetHistory(historyLimit);
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success) {
+          if (result.commits) {
+            setCommits(result.commits);
+          }
+          setHasMoreCommits(!!result.hasMore);
         }
-        setHasMoreCommits(!!result.hasMore);
+      } catch (error) {
+        console.error('Failed to refresh history:', error);
       }
-    } catch (error) {
-      console.error('Failed to refresh history:', error);
-    }
-  }, [repoPath, historyLimit]);
+    });
+  }, [repoPath, historyLimit, runQueued]);
 
   // Trigger refresh when history limit changes (e.g. Load More button)
   useEffect(() => {
@@ -342,81 +370,85 @@ export default function App() {
     }
   }, [historyLimit, refreshHistory, repoPath]);
 
-  const refreshStashes = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await (window.electronAPI as any).getStashes();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        if (result.stashes) {
-          setStashes(result.stashes);
+  const refreshStashes = useCallback((pathOverride?: string) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await (window.electronAPI as any).getStashes();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success) {
+          if (result.stashes) {
+            setStashes(result.stashes);
+          }
         }
+      } catch (error) {
+        console.error('Failed to refresh stashes:', error);
       }
-    } catch (error) {
-      console.error('Failed to refresh stashes:', error);
-    }
-  }, [repoPath]);
+    });
+  }, [repoPath, runQueued]);
 
-  const refreshRebaseStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const [rebaseResult, cherryPickResult] = await Promise.all([
-        window.electronAPI.gitGetRebaseStatus(),
-        window.electronAPI.gitGetCherryPickStatus()
-      ]);
-      
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      
-      if (cherryPickResult.success) {
-        setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
-      }
+  const refreshRebaseStatus = useCallback((pathOverride?: string) => {
+    return runQueued(async () => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const [rebaseResult, cherryPickResult] = await Promise.all([
+          window.electronAPI.gitGetRebaseStatus(),
+          window.electronAPI.gitGetCherryPickStatus()
+        ]);
 
-      if (rebaseResult.success) {
-        setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
 
-        // If rebase OR cherry-pick is in progress, check for conflicts
-        if (rebaseResult.inProgress || cherryPickResult.inProgress) {
-            const conflictResult = await window.electronAPI.getConflictedFiles();
-            const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
-            setConflictedFiles(conflicts);
-
-            // Rebase specific logic
-            if (rebaseResult.inProgress) {
-                const currentStep = rebaseResult.currentStep;
-                const hasConflicts = conflicts.length > 0;
-                
-                if (hasConflicts) {
-                     const stepChanged = currentStep !== lastRebaseStepRef.current;
-                     const conflictsAppeared = lastConflictCountRef.current === 0;
-                     
-                     // Show dialog if we're at a new rebase step or if conflicts just appeared
-                     if (stepChanged || conflictsAppeared) {
-                         setShowMergeConflictDialog(true);
-                     }
-                }
-                lastRebaseStepRef.current = currentStep;
-            } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
-                // Show dialog for cherry-pick conflicts
-                setShowMergeConflictDialog(true);
-            }
-            
-            lastConflictCountRef.current = conflicts.length;
-        } else {
-            // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
-            if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
-                setConflictedFiles([]);
-                setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
-                lastRebaseStepRef.current = undefined;
-                lastConflictCountRef.current = 0;
-            }
+        if (cherryPickResult.success) {
+          setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
         }
+
+        if (rebaseResult.success) {
+          setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
+
+          // If rebase OR cherry-pick is in progress, check for conflicts
+          if (rebaseResult.inProgress || cherryPickResult.inProgress) {
+              const conflictResult = await window.electronAPI.getConflictedFiles();
+              const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
+              setConflictedFiles(conflicts);
+
+              // Rebase specific logic
+              if (rebaseResult.inProgress) {
+                  const currentStep = rebaseResult.currentStep;
+                  const hasConflicts = conflicts.length > 0;
+
+                  if (hasConflicts) {
+                      const stepChanged = currentStep !== lastRebaseStepRef.current;
+                      const conflictsAppeared = lastConflictCountRef.current === 0;
+
+                      // Show dialog if we're at a new rebase step or if conflicts just appeared
+                      if (stepChanged || conflictsAppeared) {
+                          setShowMergeConflictDialog(true);
+                      }
+                  }
+                  lastRebaseStepRef.current = currentStep;
+              } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
+                  // Show dialog for cherry-pick conflicts
+                  setShowMergeConflictDialog(true);
+              }
+
+              lastConflictCountRef.current = conflicts.length;
+          } else {
+              // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
+              if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
+                  setConflictedFiles([]);
+                  setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
+                  lastRebaseStepRef.current = undefined;
+                  lastConflictCountRef.current = 0;
+              }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check rebase/cherry-pick status:', error);
       }
-    } catch (error) {
-       console.error('Failed to check rebase/cherry-pick status:', error);
-    }
-  }, [repoPath]);
+    });
+  }, [repoPath, runQueued]);
 
   const refreshBranchesSilent = useCallback(() => refreshBranches(undefined, true), [refreshBranches]);
   const performFetchSilent = useCallback(() => performFetch(undefined, true), [performFetch]);
