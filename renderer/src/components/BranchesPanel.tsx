@@ -132,14 +132,16 @@ export function BranchesPanel({
   };
 
   const handleContextMenu = (e: React.MouseEvent, branch: Branch) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      branch: branch.name,
-      upstream: branch.upstream
-    });
+    if (!branch.isCurrent) {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        branch: branch.name,
+        upstream: branch.upstream
+      });
+    }
   };
 
   const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull') => {
