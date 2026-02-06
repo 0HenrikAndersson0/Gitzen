@@ -12,7 +12,8 @@
     "build:linux": "npm run compile && npm run build:renderer && electron-builder --linux",
     "build:win": "npm run compile && npm run build:renderer && electron-builder --win",
     "compile": "tsc",
-    "compile:watch": "tsc --watch"
+    "compile:watch": "tsc --watch",
+    "test": "vitest run --dir src"
   },
   "keywords": [
     "electron",
@@ -30,15 +31,16 @@
     "electron-builder": "^24.9.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
+    "vitest": "^4.0.18",
     "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.gitzen.app",
     "publish": {
-    "provider": "github",
-    "owner": "0HenrikAndersson0",
-    "repo": "gitzen-release"
-  },
+      "provider": "github",
+      "owner": "0HenrikAndersson0",
+      "repo": "gitzen-release"
+    },
     "productName": "Gitzen",
     "icon": "icon.png",
     "linux": {

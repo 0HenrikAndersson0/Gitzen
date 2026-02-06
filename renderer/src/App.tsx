@@ -96,6 +96,16 @@ export default function App() {
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
   const repoPathRef = useRef<string | null>(null);
+  const gitOperationQueue = useRef<Promise<any>>(Promise.resolve());
+
+  const runQueued = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const nextOp = gitOperationQueue.current.then(operation);
+    gitOperationQueue.current = nextOp.then(
+      () => {},
+      () => {} // Continue queue even if operation fails
+    );
+    return nextOp;
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -167,7 +177,7 @@ export default function App() {
     setIsLoading(true);
     setLoadingMessage(message);
     try {
-      await fn();
+      await runQueued(fn);
     } finally {
       setIsLoading(false);
       setLoadingMessage(undefined);
@@ -210,130 +220,157 @@ export default function App() {
       repoPathRef.current = path; 
       
       await Promise.all([
-          refreshStatus(path),
-          refreshBranch(path),
-          refreshBranches(path),
-          refreshHistory(path),
-          refreshStashes(path),
-          refreshBranchStatus(path),
-          refreshRebaseStatus(path)
+          refreshStatusInternal(path),
+          refreshBranchInternal(path),
+          refreshBranchesInternal(path),
+          refreshHistoryInternal(path),
+          refreshStashesInternal(path),
+          refreshBranchStatusInternal(path),
+          refreshRebaseStatusInternal(path)
       ]);
   };
 
-  const refreshStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitStatus();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success && result.files) {
-        setFiles(result.files);
-      }
-    } catch (error) {
-      console.error('Failed to refresh status:', error);
-    }
-  }, [repoPath]);
-
-  const refreshBranch = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetCurrentBranch();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success && result.branch && result.branch.trim()) {
-        const newBranch = result.branch.trim();
-        setCurrentBranch((prevBranch) => {
-          return newBranch !== prevBranch ? newBranch : prevBranch;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to refresh branch:', error);
-    }
-  }, [repoPath]);
-
-  const refreshBranches = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    setIsRefreshingBranches(true);
-    try {
-      const [localResult, remoteResult] = await Promise.all([
-        window.electronAPI.gitGetBranchesDetailed(),
-        window.electronAPI.getRemoteBranches(),
-      ]);
-      
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-
-      if (localResult.success && localResult.branches) {
-        setLocalBranches(localResult.branches.map((b: any) => ({
-            name: b.name, 
-            isRemote: false, 
-            isCurrent: b.current,
-            ahead: b.ahead,
-            behind: b.behind,
-            upstream: b.upstream
-        })));
-      }
-      if (remoteResult.success && remoteResult.branches) {
-        setRemoteBranches(remoteResult.branches.map(b => ({
-            name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
-        })));
-      }
-    } catch (e) {
-        console.error('Failed to refresh branches', e);
-    } finally {
-        if (targetPath === repoPathRef.current) {
-             setIsRefreshingBranches(false);
+  const refreshStatusInternal = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitStatus();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success && result.files) {
+          setFiles(result.files);
         }
-    }
-  }, [repoPath, currentBranch]);
-
-  const refreshBranchStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetBranchStatus();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        setBranchStatus({
-          ahead: result.ahead || 0,
-          behind: result.behind || 0,
-          hasUpstream: !!result.hasUpstream,
-          upstream: result.upstream
-        });
+      } catch (error) {
+        console.error('Failed to refresh status:', error);
       }
-    } catch (error) {
-      console.error('Failed to refresh branch status:', error);
-    }
   }, [repoPath]);
 
-  const performFetch = useCallback(async (pathOverride?: string) => {
+  const refreshStatus = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshStatusInternal(pathOverride));
+  }, [refreshStatusInternal, runQueued]);
+
+  const refreshBranchInternal = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitGetCurrentBranch();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success && result.branch && result.branch.trim()) {
+          const newBranch = result.branch.trim();
+          setCurrentBranch((prevBranch) => {
+            return newBranch !== prevBranch ? newBranch : prevBranch;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to refresh branch:', error);
+      }
+  }, [repoPath]);
+
+  const refreshBranch = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshBranchInternal(pathOverride));
+  }, [refreshBranchInternal, runQueued]);
+
+  const refreshBranchesInternal = useCallback(async (pathOverride?: string, silent = false) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      if (!silent) setIsRefreshingBranches(true);
+      try {
+        const [localResult, remoteResult] = await Promise.all([
+          window.electronAPI.gitGetBranchesDetailed(),
+          window.electronAPI.getRemoteBranches(),
+        ]);
+
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+
+        if (localResult.success && localResult.branches) {
+          setLocalBranches(localResult.branches.map((b: any) => ({
+              name: b.name,
+              isRemote: false,
+              isCurrent: b.current,
+              ahead: b.ahead,
+              behind: b.behind,
+              upstream: b.upstream
+          })));
+        }
+        if (remoteResult.success && remoteResult.branches) {
+          setRemoteBranches(remoteResult.branches.map(b => ({
+              name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
+          })));
+        }
+      } catch (e) {
+          console.error('Failed to refresh branches', e);
+      } finally {
+          if (targetPath === repoPathRef.current) {
+              setIsRefreshingBranches(false);
+          }
+      }
+  }, [repoPath]);
+
+  const refreshBranches = useCallback((pathOverride?: string, silent = false) => {
+    return runQueued(() => refreshBranchesInternal(pathOverride, silent));
+  }, [refreshBranchesInternal, runQueued]);
+
+  const refreshBranchStatusInternal = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitGetBranchStatus();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success) {
+          setBranchStatus({
+            ahead: result.ahead || 0,
+            behind: result.behind || 0,
+            hasUpstream: !!result.hasUpstream,
+            upstream: result.upstream
+          });
+        }
+      } catch (error) {
+        console.error('Failed to refresh branch status:', error);
+      }
+  }, [repoPath]);
+
+  const refreshBranchStatus = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshBranchStatusInternal(pathOverride));
+  }, [refreshBranchStatusInternal, runQueued]);
+
+  const performFetchInternal = useCallback(async (pathOverride?: string) => {
       const targetPath = pathOverride || repoPath;
       if (!targetPath) return;
       try {
           await window.electronAPI.gitFetchAll();
-          await refreshBranchStatus(targetPath);
-          await refreshBranches(targetPath);
       } catch (e) {
           console.error('Failed to fetch', e);
       }
-  }, [repoPath, refreshBranchStatus, refreshBranches]);
+  }, [repoPath]);
 
-  const refreshHistory = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await window.electronAPI.gitGetHistory(historyLimit);
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        if (result.commits) {
-          setCommits(result.commits);
+  const performFetch = useCallback((pathOverride?: string, silent = false) => {
+    return runQueued(async () => {
+      await performFetchInternal(pathOverride);
+      // We run these sequentially within the same queued task to ensure consistency
+      await refreshBranchStatusInternal(pathOverride || repoPath || undefined);
+      await refreshBranchesInternal(pathOverride || repoPath || undefined, silent);
+    });
+  }, [performFetchInternal, refreshBranchStatusInternal, refreshBranchesInternal, runQueued, repoPath]);
+
+  const refreshHistoryInternal = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await window.electronAPI.gitGetHistory(historyLimit);
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success) {
+          if (result.commits) {
+            setCommits(result.commits);
+          }
+          setHasMoreCommits(!!result.hasMore);
         }
-        setHasMoreCommits(!!result.hasMore);
+      } catch (error) {
+        console.error('Failed to refresh history:', error);
       }
-    } catch (error) {
-      console.error('Failed to refresh history:', error);
-    }
   }, [repoPath, historyLimit]);
+
+  const refreshHistory = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshHistoryInternal(pathOverride));
+  }, [refreshHistoryInternal, runQueued]);
 
   // Trigger refresh when history limit changes (e.g. Load More button)
   useEffect(() => {
@@ -342,87 +379,107 @@ export default function App() {
     }
   }, [historyLimit, refreshHistory, repoPath]);
 
-  const refreshStashes = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await (window.electronAPI as any).getStashes();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        if (result.stashes) {
-          setStashes(result.stashes);
+  const refreshStashesInternal = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const result = await (window.electronAPI as any).getStashes();
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
+        if (result.success) {
+          if (result.stashes) {
+            setStashes(result.stashes);
+          }
         }
+      } catch (error) {
+        console.error('Failed to refresh stashes:', error);
       }
-    } catch (error) {
-      console.error('Failed to refresh stashes:', error);
-    }
   }, [repoPath]);
 
-  const refreshRebaseStatus = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const [rebaseResult, cherryPickResult] = await Promise.all([
-        window.electronAPI.gitGetRebaseStatus(),
-        window.electronAPI.gitGetCherryPickStatus()
-      ]);
-      
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      
-      if (cherryPickResult.success) {
-        setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
-      }
+  const refreshStashes = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshStashesInternal(pathOverride));
+  }, [refreshStashesInternal, runQueued]);
 
-      if (rebaseResult.success) {
-        setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
+  const refreshRebaseStatusInternal = useCallback(async (pathOverride?: string) => {
+      const targetPath = pathOverride || repoPath;
+      if (!targetPath) return;
+      try {
+        const [rebaseResult, cherryPickResult] = await Promise.all([
+          window.electronAPI.gitGetRebaseStatus(),
+          window.electronAPI.gitGetCherryPickStatus()
+        ]);
 
-        // If rebase OR cherry-pick is in progress, check for conflicts
-        if (rebaseResult.inProgress || cherryPickResult.inProgress) {
-            const conflictResult = await window.electronAPI.getConflictedFiles();
-            const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
-            setConflictedFiles(conflicts);
+        if (!pathOverride && targetPath !== repoPathRef.current) return;
 
-            // Rebase specific logic
-            if (rebaseResult.inProgress) {
-                const currentStep = rebaseResult.currentStep;
-                const hasConflicts = conflicts.length > 0;
-                
-                if (hasConflicts) {
-                     const stepChanged = currentStep !== lastRebaseStepRef.current;
-                     const conflictsAppeared = lastConflictCountRef.current === 0;
-                     
-                     // Show dialog if we're at a new rebase step or if conflicts just appeared
-                     if (stepChanged || conflictsAppeared) {
-                         setShowMergeConflictDialog(true);
-                     }
-                }
-                lastRebaseStepRef.current = currentStep;
-            } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
-                // Show dialog for cherry-pick conflicts
-                setShowMergeConflictDialog(true);
-            }
-            
-            lastConflictCountRef.current = conflicts.length;
-        } else {
-            // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
-            if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
-                setConflictedFiles([]);
-                setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
-                lastRebaseStepRef.current = undefined;
-                lastConflictCountRef.current = 0;
-            }
+        if (cherryPickResult.success) {
+          setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
         }
+
+        if (rebaseResult.success) {
+          setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
+
+          // If rebase OR cherry-pick is in progress, check for conflicts
+          if (rebaseResult.inProgress || cherryPickResult.inProgress) {
+              const conflictResult = await window.electronAPI.getConflictedFiles();
+              const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
+              setConflictedFiles(conflicts);
+
+              // Rebase specific logic
+              if (rebaseResult.inProgress) {
+                  const currentStep = rebaseResult.currentStep;
+                  const hasConflicts = conflicts.length > 0;
+
+                  if (hasConflicts) {
+                      const stepChanged = currentStep !== lastRebaseStepRef.current;
+                      const conflictsAppeared = lastConflictCountRef.current === 0;
+
+                      // Show dialog if we're at a new rebase step or if conflicts just appeared
+                      if (stepChanged || conflictsAppeared) {
+                          setShowMergeConflictDialog(true);
+                      }
+                  }
+                  lastRebaseStepRef.current = currentStep;
+              } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
+                  // Show dialog for cherry-pick conflicts
+                  setShowMergeConflictDialog(true);
+              }
+
+              lastConflictCountRef.current = conflicts.length;
+          } else {
+              // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
+              if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
+                  setConflictedFiles([]);
+                  setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
+                  lastRebaseStepRef.current = undefined;
+                  lastConflictCountRef.current = 0;
+              }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check rebase/cherry-pick status:', error);
       }
-    } catch (error) {
-       console.error('Failed to check rebase/cherry-pick status:', error);
-    }
   }, [repoPath]);
+
+  const refreshRebaseStatus = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshRebaseStatusInternal(pathOverride));
+  }, [refreshRebaseStatusInternal, runQueued]);
+
+  const refreshBranchesSilent = useCallback(() => refreshBranches(undefined, true), [refreshBranches]);
+  const performFetchSilent = useCallback(() => performFetch(undefined, true), [performFetch]);
 
   // Auto-refresh every 10 seconds when repository is open
   useAutoRefresh({
     enabled: !!repoPath,
     intervalMs: 10000, // 10 seconds
-    refreshFunctions: [refreshStatus, refreshBranch, refreshBranches, refreshHistory, refreshStashes, refreshRebaseStatus, refreshBranchStatus, performFetch],
+    refreshFunctions: [
+      refreshStatus,
+      refreshBranch,
+      refreshBranchesSilent,
+      refreshHistory,
+      refreshStashes,
+      refreshRebaseStatus,
+      refreshBranchStatus,
+      performFetchSilent
+    ],
   });
 
   const handleClone = async (url: string, path: string) => {
@@ -490,14 +547,14 @@ export default function App() {
         if (file.staged) {
           const result = await window.electronAPI.gitUnstage([path]);
           if (result.success) {
-            await refreshStatus();
+            await refreshStatusInternal();
           } else {
             addLog('error', result.error || 'Failed to unstage file');
           }
         } else {
           const result = await window.electronAPI.gitStage([path]);
           if (result.success) {
-            await refreshStatus();
+            await refreshStatusInternal();
           } else {
             addLog('error', result.error || 'Failed to stage file');
           }
@@ -515,7 +572,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Reverted changes to ${path}`);
           toast.success(`Reverted changes to ${path}`);
-          await refreshStatus();
+          await refreshStatusInternal();
         } else {
           addLog('error', result.error || 'Failed to revert file changes');
           toast.error(result.error || 'Failed to revert file changes');
@@ -534,7 +591,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Deleted file ${path}`);
           toast.success(`Deleted file ${path}`);
-          await refreshStatus();
+          await refreshStatusInternal();
         } else {
           addLog('error', result.error || 'Failed to delete file');
           toast.error(result.error || 'Failed to delete file');
@@ -554,8 +611,8 @@ export default function App() {
         if (result.success) {
           addLog('success', 'Changes stashed successfully');
           toast.success('Changes stashed successfully!');
-          await refreshStatus();
-          await refreshStashes();
+          await refreshStatusInternal();
+          await refreshStashesInternal();
         } else {
           addLog('error', result.error || 'Failed to stash changes');
           toast.error(result.error || 'Failed to stash changes');
@@ -576,8 +633,8 @@ export default function App() {
         if (result.success) {
           addLog('success', `Stash ${name} applied successfully`);
           toast.success(`Stash ${name} applied successfully!`);
-          await refreshStatus();
-          await refreshStashes();
+          await refreshStatusInternal();
+          await refreshStashesInternal();
         } else {
           addLog('error', result.error || 'Failed to apply stash');
           toast.error(result.error || 'Failed to apply stash');
@@ -598,7 +655,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Stash ${name} deleted successfully`);
           toast.success(`Stash ${name} deleted successfully!`);
-          await refreshStashes();
+          await refreshStashesInternal();
         } else {
           addLog('error', result.error || 'Failed to delete stash');
           toast.error(result.error || 'Failed to delete stash');
@@ -620,7 +677,7 @@ export default function App() {
           toast.success(`Remote ${name} added successfully`);
           setRemoteUrl(url);
           // Try to fetch to set up tracking if possible, or just refresh
-          await refreshBranchStatus();
+          await refreshBranchStatusInternal();
         } else {
           addLog('error', result.error || 'Failed to add remote');
           toast.error(result.error || 'Failed to add remote');
@@ -639,9 +696,9 @@ export default function App() {
         if (result.success) {
           addLog('success', `Successfully pulled from origin/${currentBranch}`);
           toast.success('Pulled successfully!');
-          await refreshStatus();
-          await refreshHistory();
-          await refreshBranchStatus();
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchStatusInternal();
         } else {
           const errorMsg = result.error || 'Failed to pull';
           addLog('error', errorMsg);
@@ -666,10 +723,10 @@ export default function App() {
           addLog('success', `Committed: "${message}"`);
           toast.success('Changes committed successfully!');
           
-          await refreshStatus();
-          await refreshHistory();
-          await refreshBranchStatus();
-          await refreshBranches();
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchStatusInternal();
+          await refreshBranchesInternal();
         } else {
           addLog('error', result.error || 'Failed to commit');
           toast.error(result.error || 'Failed to commit');
@@ -714,7 +771,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Successfully pushed to origin/${currentBranch}`);
           toast.success('Changes pushed successfully!');
-          await refreshBranchStatus();
+          await refreshBranchStatusInternal();
         } else {
           const errorMsg = result.error || 'Failed to push';
           
@@ -769,7 +826,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Successfully ${overwrite ? 'force' : 'force-with-lease'} pushed to origin/${currentBranch}`);
           toast.success(`Changes ${overwrite ? 'force' : 'force-with-lease'} pushed successfully!`);
-          await refreshBranchStatus();
+          await refreshBranchStatusInternal();
         } else {
           const errorMsg = result.error || 'Failed to force push';
           addLog('error', errorMsg);
@@ -810,9 +867,9 @@ export default function App() {
               toast.success('Repository cloned successfully!');
               setPendingClone(null);
               
-              await refreshStatus();
-              await refreshBranch();
-              await refreshHistory();
+              await refreshStatusInternal();
+              await refreshBranchInternal();
+              await refreshHistoryInternal();
             } else {
               addLog('error', `Clone failed: ${cloneResult.error}`);
               toast.error(`Clone failed: ${cloneResult.error}`);
@@ -845,10 +902,10 @@ export default function App() {
           if (result.success) {
               toast.success('Rebase aborted');
               addLog('info', 'Rebase aborted');
-              await refreshRebaseStatus();
-              await refreshStatus();
-              await refreshHistory();
-              await refreshBranch();
+              await refreshRebaseStatusInternal();
+              await refreshStatusInternal();
+              await refreshHistoryInternal();
+              await refreshBranchInternal();
           } else {
               toast.error(result.error || 'Failed to abort rebase');
           }
@@ -874,15 +931,15 @@ export default function App() {
             if (result.success) {
                 toast.success('Rebase continued');
                 addLog('info', 'Rebase continued');
-                await refreshRebaseStatus();
-                await refreshStatus();
-                await refreshHistory();
-                await refreshBranch();
+                await refreshRebaseStatusInternal();
+                await refreshStatusInternal();
+                await refreshHistoryInternal();
+                await refreshBranchInternal();
             } else {
                if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
                    toast.warning('Rebase paused due to conflicts');
-                   await refreshRebaseStatus();
-                   await refreshStatus(); // To show conflicted files
+                   await refreshRebaseStatusInternal();
+                   await refreshStatusInternal(); // To show conflicted files
                } else {
                    toast.error(result.error || 'Failed to continue rebase');
                }
@@ -907,8 +964,8 @@ export default function App() {
           if (errorMsg.includes('conflict')) {
              toast.warning('Cherry-pick conflict detected');
              addLog('warning', 'Cherry-pick conflict detected. Please resolve conflicts.');
-             await refreshRebaseStatus(); // This updates conflicts too
-             await refreshStatus(); 
+             await refreshRebaseStatusInternal(); // This updates conflicts too
+             await refreshStatusInternal(); 
           } else {
              toast.error(errorMsg);
              addLog('error', errorMsg);
@@ -959,8 +1016,8 @@ export default function App() {
             } else {
                if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
                    toast.warning('Cherry-pick paused due to conflicts');
-                   await refreshRebaseStatus();
-                   await refreshStatus();
+                   await refreshRebaseStatusInternal();
+                   await refreshStatusInternal();
                } else {
                    toast.error(result.error || 'Failed to continue cherry-pick');
                }
@@ -999,10 +1056,10 @@ export default function App() {
           toast.success(`Successfully merged ${branch} into ${currentBranch}`);
           addLog('success', `Merged ${branch} into ${currentBranch}`);
           
-          await refreshStatus();
-          await refreshBranch();
-          await refreshHistory();
-          await refreshBranches();
+          await refreshStatusInternal();
+          await refreshBranchInternal();
+          await refreshHistoryInternal();
+          await refreshBranchesInternal();
         } else if (result.hasConflicts && result.conflictedFiles) {
           setConflictedFiles(result.conflictedFiles);
           setShowMergeConflictDialog(true);
@@ -1048,9 +1105,9 @@ export default function App() {
           setShowMergeConflictDialog(false);
           setConflictedFiles([]);
           
-          await refreshStatus();
-          await refreshBranch();
-          await refreshHistory();
+          await refreshStatusInternal();
+          await refreshBranchInternal();
+          await refreshHistoryInternal();
         } else {
           toast.error(result.error || 'Failed to abort merge');
           addLog('error', `Failed to abort merge: ${result.error || 'Unknown error'}`);
@@ -1081,7 +1138,7 @@ export default function App() {
             }
           }
           
-          await refreshStatus();
+          await refreshStatusInternal();
         } else {
           toast.error(result.error || 'Failed to mark files as resolved');
           addLog('error', `Failed to resolve files: ${result.error || 'Unknown error'}`);
@@ -1111,7 +1168,7 @@ export default function App() {
               addLog('success', 'All merge conflicts have been resolved');
             }
           }
-          await refreshStatus();
+          await refreshStatusInternal();
         } else {
           toast.error(result.error || 'Failed to resolve conflict');
           addLog('error', `Failed to resolve conflict: ${result.error || 'Unknown error'}`);
@@ -1156,25 +1213,25 @@ export default function App() {
           setCurrentBranch(branch);
           // Refresh everything
           await Promise.all([
-            refreshBranch(),
-            refreshStatus(),
-            refreshHistory(),
-            refreshStashes(),
-            refreshBranchStatus(),
-            refreshRebaseStatus(),
-            refreshBranches()
+            refreshBranchInternal(),
+            refreshStatusInternal(),
+            refreshHistoryInternal(),
+            refreshStashesInternal(),
+            refreshBranchStatusInternal(),
+            refreshRebaseStatusInternal(),
+            refreshBranchesInternal()
           ]);
         } else {
           addLog('error', result.error || 'Failed to checkout branch');
           toast.error(result.error || 'Failed to checkout branch');
           // If failed, reload history to restore graph
-          await refreshHistory();
+          await refreshHistoryInternal();
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Checkout failed: ${msg}`);
         toast.error(`Checkout failed: ${msg}`);
-        await refreshHistory();
+        await refreshHistoryInternal();
       }
     });
   };
@@ -1187,13 +1244,13 @@ export default function App() {
           addLog('success', `Created and checked out branch: ${name}`);
           setCurrentBranch(name);
           await Promise.all([
-            refreshBranch(),
-            refreshStatus(),
-            refreshHistory(),
-            refreshStashes(),
-            refreshBranchStatus(),
-            refreshRebaseStatus(),
-            refreshBranches()
+            refreshBranchInternal(),
+            refreshStatusInternal(),
+            refreshHistoryInternal(),
+            refreshStashesInternal(),
+            refreshBranchStatusInternal(),
+            refreshRebaseStatusInternal(),
+            refreshBranchesInternal()
           ]);
         } else {
           addLog('error', result.error || 'Failed to create branch');
@@ -1212,7 +1269,7 @@ export default function App() {
         if (result.success) {
           addLog('success', `Deleted branch ${branch}`);
           toast.success(`Deleted branch ${branch}`);
-          await refreshBranches();
+          await refreshBranchesInternal();
         } else {
           addLog('error', result.error || 'Failed to delete branch');
           toast.error(result.error || 'Failed to delete branch');
