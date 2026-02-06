@@ -20,6 +20,8 @@ import { SplashScreen } from './components/SplashScreen';
 import { ForcePushDialog } from './components/ForcePushDialog';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@radix-ui/react-dialog';
+import { DialogHeader } from './components/ui/dialog';
 
 interface BranchStatus {
   ahead: number;
@@ -70,6 +72,8 @@ export default function App() {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [showAddRemoteDialog, setShowAddRemoteDialog] = useState(false);
   const [showForcePushDialog, setShowForcePushDialog] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetTargetCommit, setResetTargetCommit] = useState<string | null>(null);
   const [branchStatus, setBranchStatus] = useState<BranchStatus | undefined>(undefined);
   const [files, setFiles] = useState<FileChange[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -1315,6 +1319,79 @@ export default function App() {
     });
   };
 
+  const handleRevertCommit = async (commitHash: string) => {
+    addLog('info', `Reverting commit ${commitHash.substring(0, 7)}...`);
+    await withLoading(`Reverting commit ${commitHash.substring(0, 7)}...`, async () => {
+      try {
+        const result = await window.electronAPI.gitRevertCommit(commitHash);
+        if (result.success) {
+          toast.success(`Successfully reverted commit ${commitHash.substring(0, 7)}`);
+          addLog('success', `Reverted commit ${commitHash.substring(0, 7)}`);
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+        } else {
+          const errorMsg = result.error || 'Failed to revert commit';
+          if (errorMsg.includes('conflict')) {
+             toast.warning('Revert conflict detected');
+             addLog('warning', 'Revert conflict detected. Please resolve conflicts.');
+             
+             // Check for conflicts explicitly to update UI state
+             const conflictResult = await window.electronAPI.getConflictedFiles();
+             if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+                 setConflictedFiles(conflictResult.files);
+                 setShowMergeConflictDialog(true);
+             }
+             
+             await refreshStatusInternal();
+          } else {
+             toast.error(errorMsg);
+             addLog('error', errorMsg);
+          }
+        }
+      } catch (error: any) {
+        const msg = error.message || 'Unknown error';
+        toast.error(`Revert failed: ${msg}`);
+        addLog('error', `Revert failed: ${msg}`);
+      }
+    });
+  };
+
+  const handleResetCommits = (commitHash: string) => {
+    setResetTargetCommit(commitHash);
+    setShowResetDialog(true);
+  };
+
+  const handleConfirmReset = async (mode: 'soft' | 'mixed' | 'hard') => {
+    if (!resetTargetCommit) return;
+    
+    const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+    addLog('warning', `${modeLabel} resetting to ${resetTargetCommit.substring(0, 7)}...`);
+    
+    setShowResetDialog(false);
+    
+    await withLoading(`${modeLabel} resetting branch...`, async () => {
+      try {
+        const result = await window.electronAPI.gitResetCommits(resetTargetCommit, mode);
+        if (result.success) {
+          toast.success(`Successfully reset branch to ${resetTargetCommit.substring(0, 7)}`);
+          addLog('success', `Reset branch (${mode}) to ${resetTargetCommit.substring(0, 7)}`);
+          setResetTargetCommit(null);
+          
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchStatusInternal();
+        } else {
+          toast.error(result.error || 'Failed to reset branch');
+          addLog('error', result.error || 'Failed to reset branch');
+        }
+      } catch (error: any) {
+        const msg = error.message || 'Unknown error';
+        toast.error(`Reset failed: ${msg}`);
+        addLog('error', `Reset failed: ${msg}`);
+      }
+    });
+  };
+
   const handleOpenRepo = async (path: string) => {
     addLog('info', `Opening repository from ${path}...`);
     
@@ -1556,6 +1633,8 @@ export default function App() {
                   onStashAction={refreshHistory}
                   onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
                   onCherryPick={handleCherryPick}
+                  onRevertCommit={handleRevertCommit}
+                  onResetCommits={handleResetCommits}
                 />
               )}
             </div>
@@ -1626,6 +1705,47 @@ export default function App() {
         open={showShortcutsModal}
         onClose={() => setShowShortcutsModal(false)}
       />
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">Reset Branch</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Choose how you want to reset the current branch to this commit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 gap-4">
+              <button
+                onClick={() => handleConfirmReset('soft')}
+                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 transition-colors text-left"
+              >
+                <span className="font-semibold text-emerald-400">Soft Reset</span>
+                <span className="text-xs text-zinc-400">
+                  Keeps all changes in the staging area (Index). Useful if you want to recommit changes.
+                </span>
+              </button>
+              <button
+                onClick={() => handleConfirmReset('mixed')}
+                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 transition-colors text-left"
+              >
+                <span className="font-semibold text-blue-400">Mixed Reset (Default)</span>
+                <span className="text-xs text-zinc-400">
+                  Keeps changes in Working Directory but unstages them.
+                </span>
+              </button>
+              <button
+                onClick={() => handleConfirmReset('hard')}
+                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-red-900/30 bg-red-950/10 hover:bg-red-900/20 transition-colors text-left"
+              >
+                <span className="font-semibold text-red-400">Hard Reset</span>
+                <span className="text-xs text-red-300/70">
+                  DISCARDS all changes. Resets Index and Working Directory to match the commit. Any uncommitted changes will be lost.
+                </span>
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Toaster />
     </div>

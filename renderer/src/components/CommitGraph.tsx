@@ -25,6 +25,8 @@ interface CommitGraphProps {
   onStashAction?: () => void;
   onLoadMore?: (amount: number) => void;
   onCherryPick?: (commitHash: string) => void;
+  onRevertCommit?: (commitHash: string) => void;
+  onResetCommits?: (commitHash: string) => void;
 }
 
 // Layout Engine
@@ -505,6 +507,30 @@ export function CommitGraph({
             >
               <ArrowRight className="size-3.5 text-blue-400" />
               Cherry Pick Commit
+            </div>
+          )}
+          {onRevertCommit && (
+            <div
+              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => {
+                onRevertCommit(contextMenu.commitHash);
+                setContextMenu(null);
+              }}
+            >
+              <div className="size-3.5 flex items-center justify-center font-bold text-red-400 text-xs">R</div>
+              Revert Commit
+            </div>
+          )}
+          {onResetCommits && (
+            <div
+              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2 border-t border-zinc-700 mt-1 pt-1"
+              onClick={() => {
+                onResetCommits(contextMenu.commitHash);
+                setContextMenu(null);
+              }}
+            >
+              <div className="size-3.5 flex items-center justify-center font-bold text-orange-400 text-xs">X</div>
+              Reset Branch to Here...
             </div>
           )}
         </div>
