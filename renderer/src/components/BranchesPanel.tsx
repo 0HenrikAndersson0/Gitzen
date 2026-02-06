@@ -49,7 +49,7 @@ export function BranchesPanel({
 }: BranchesPanelProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string; isRemote: boolean } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch'; name: string } | null>(null);
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
@@ -139,7 +139,8 @@ export function BranchesPanel({
         x: e.clientX,
         y: e.clientY,
         branch: branch.name,
-        upstream: branch.upstream
+        upstream: branch.upstream,
+        isRemote: branch.isRemote
       });
     }
   };
@@ -149,6 +150,7 @@ export function BranchesPanel({
 
     const branch = contextMenu.branch;
     const upstream = contextMenu.upstream;
+    const isRemote = contextMenu.isRemote;
     
     switch (action) {
       case 'merge':
@@ -182,7 +184,7 @@ export function BranchesPanel({
         if (upstream) {
           const parts = upstream.split('/');
           if (parts.length > 0) fetchRemote = parts[0];
-        } else if (branch.includes('/')) {
+        } else if (isRemote && branch.includes('/')) {
           fetchRemote = branch.split('/')[0];
         }
         
@@ -212,11 +214,14 @@ export function BranchesPanel({
             pullRemote = parts[0];
             pullBranch = parts.slice(1).join('/');
           }
-        } else if (branch.includes('/')) {
+        } else if (isRemote && branch.includes('/')) {
+          // If it's a remote branch, parse remote/branch
           const parts = branch.split('/');
           pullRemote = parts[0];
           pullBranch = parts.slice(1).join('/');
         }
+        // If it's a local branch without upstream, we default to origin and branch name.
+        // This handles cases like 'feature/login' correctly (remote='origin', branch='feature/login')
 
         onSetLoading?.(true, `Pulling ${pullRemote}/${pullBranch}...`);
         try {
