@@ -30,6 +30,9 @@ interface BranchesPanelProps {
   onApplyStash: (name: string) => void;
   onDeleteStash: (name: string) => void;
   onRefresh?: () => void;
+  isCreateDialogOpen?: boolean;
+  onCloseCreateDialog?: () => void;
+  onOpenCreateDialog?: () => void;
 }
 
 export function BranchesPanel({
@@ -46,8 +49,11 @@ export function BranchesPanel({
   onApplyStash,
   onDeleteStash,
   onRefresh,
+  isCreateDialogOpen,
+  onCloseCreateDialog,
+  onOpenCreateDialog,
 }: BranchesPanelProps) {
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [internalShowCreateDialog, setInternalShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string; isRemote: boolean } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch'; name: string } | null>(null);
@@ -55,9 +61,13 @@ export function BranchesPanel({
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const isDialogOpen = isCreateDialogOpen !== undefined ? isCreateDialogOpen : internalShowCreateDialog;
+  const closeDialog = onCloseCreateDialog || (() => setInternalShowCreateDialog(false));
+  const openDialog = onOpenCreateDialog || (() => setInternalShowCreateDialog(true));
+
   const handleCreateBranchClick = () => {
     setNewBranchName('');
-    setShowCreateDialog(true);
+    openDialog();
   };
 
   const handleCreateBranch = async () => {
@@ -73,7 +83,7 @@ export function BranchesPanel({
     }
 
     onCreateBranch?.(name);
-    setShowCreateDialog(false);
+    closeDialog();
     setNewBranchName('');
   };
 
@@ -466,7 +476,7 @@ export function BranchesPanel({
       </Dialog>
 
       {/* Create Branch Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
             <DialogTitle className="text-zinc-100">Create New Branch</DialogTitle>
@@ -491,7 +501,7 @@ export function BranchesPanel({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setShowCreateDialog(false);
+                  closeDialog();
                   setNewBranchName('');
                 }}
                 className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
