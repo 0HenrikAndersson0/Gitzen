@@ -1,6 +1,6 @@
 
 import { Archive } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface Stash {
   name: string;
@@ -15,6 +15,7 @@ interface StashListProps {
 
 export function StashList({ stashes, onApplyStash, onDeleteStash }: StashListProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; stash: Stash } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleContextMenu = (e: React.MouseEvent, stash: Stash) => {
     e.preventDefault();
@@ -24,6 +25,19 @@ export function StashList({ stashes, onApplyStash, onDeleteStash }: StashListPro
   const handleCloseContextMenu = () => {
     setContextMenu(null);
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [contextMenu]);
 
   return (
     <>
@@ -56,6 +70,7 @@ export function StashList({ stashes, onApplyStash, onDeleteStash }: StashListPro
       </div>
       {contextMenu && (
         <div
+          ref={menuRef}
           className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
