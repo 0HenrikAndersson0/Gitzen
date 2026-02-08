@@ -102,6 +102,7 @@ declare global {
         getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
       getMaxCommits: () => Promise<{ success: boolean; maxCommits?: number; error?: string }>;
       setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string }>;
+      onShowShortcuts: (callback: () => void) => void;
     };
   }
 }

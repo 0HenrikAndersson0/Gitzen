@@ -145,6 +145,13 @@ export default function App() {
   }, [runQueued]);
 
   useEffect(() => {
+    // Listen for menu events
+    if (window.electronAPI && window.electronAPI.onShowShortcuts) {
+       window.electronAPI.onShowShortcuts(() => {
+          setShowShortcutsModal(true);
+       });
+    }
+
     document.documentElement.classList.add('dark');
     const init = async () => {
       try {

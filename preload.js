@@ -81,4 +81,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setMergeToolPath: (path) => ipcRenderer.invoke('settings:setMergeToolPath', path),
   getMaxCommits: () => ipcRenderer.invoke('settings:getMaxCommits'),
   setMaxCommits: (maxCommits) => ipcRenderer.invoke('settings:setMaxCommits', maxCommits),
+  onShowShortcuts: (callback) => ipcRenderer.on('menu:show-shortcuts', callback),
 });

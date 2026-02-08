@@ -9,9 +9,7 @@ export function ShortcutsModal({ open, onClose }: ShortcutsModalProps) {
   const shortcuts = [
     { action: 'Create branch', mac: '⌘B', win: 'Ctrl+B' },
     { action: 'Fetch all', mac: '⌘L', win: 'Ctrl+L' },
-    { action: 'Stage the current file', mac: 'S', win: 'S' },
     { action: 'Stage all files', mac: '⌘ShiftS', win: 'Ctrl+Shift+S' },
-    { action: 'Unstage the current file', mac: 'U', win: 'U' },
     { action: 'Unstage all files', mac: '⌘ShiftU', win: 'Ctrl+Shift+U' },
     { action: 'Commit staged files', mac: '⌘Enter', win: 'Ctrl+Enter' },
     { action: 'Stage all & Commit', mac: '⌘ShiftEnter', win: 'Ctrl+Shift+Enter' },

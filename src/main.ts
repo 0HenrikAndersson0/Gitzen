@@ -35,11 +35,20 @@ function createWindow() {
       label: 'Help',
       submenu: [
         {
+          label: 'Keyboard Shortcuts',
+          accelerator: 'CmdOrCtrl+/',
+          click: () => {
+             const win = BrowserWindow.getFocusedWindow();
+             if (win) {
+                win.webContents.send('menu:show-shortcuts');
+             }
+          }
+        },
+        {
           label: 'Documentation',
           click: async () => {
             const { shell } = require('electron');
-            const helpPath = path.join(app.getAppPath(), 'HELP.md');
-            await shell.openPath(helpPath);
+            await shell.openExternal('https://gitzen-web.henrikandersson84.workers.dev');
           }
         }
       ]

@@ -171,32 +171,6 @@ export function useKeyboardShortcuts({
 
         if (!isInput) {
             switch (e.key) {
-                case 's':
-                case 'S':
-                    // Stage current file
-                    if (selectedFileIndexRef.current !== undefined && filesRef.current[selectedFileIndexRef.current]) {
-                        const file = filesRef.current[selectedFileIndexRef.current];
-                        if (!file.staged) {
-                            withLoading('Staging file...', async () => {
-                                await window.electronAPI.gitStage([file.path]);
-                                await refreshStatusInternal();
-                            });
-                        }
-                    }
-                    break;
-                case 'u':
-                case 'U':
-                     // Unstage current file
-                    if (selectedFileIndexRef.current !== undefined && filesRef.current[selectedFileIndexRef.current]) {
-                        const file = filesRef.current[selectedFileIndexRef.current];
-                        if (file.staged) {
-                            withLoading('Unstaging file...', async () => {
-                                await window.electronAPI.gitUnstage([file.path]);
-                                await refreshStatusInternal();
-                            });
-                        }
-                    }
-                    break;
                 case 'ArrowUp':
                     e.preventDefault();
                     setSelectedFileIndex(prev => {
