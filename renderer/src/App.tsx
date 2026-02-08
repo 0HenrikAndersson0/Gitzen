@@ -19,6 +19,7 @@ import { LoadingOverlay } from './components/ui/spinner';
 import { SplashScreen } from './components/SplashScreen';
 import { ForcePushDialog } from './components/ForcePushDialog';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 interface BranchStatus {
   ahead: number;
@@ -142,8 +143,6 @@ export default function App() {
       setLoadingMessage(undefined);
     }
   }, [runQueued]);
-
-  // We define the keydown handler later to close over functions defined below
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -513,186 +512,27 @@ export default function App() {
     });
   }, [withLoading, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal]);
 
-  // Define handleKeyDown Effect with access to all handlers
-  useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-      const shift = e.shiftKey;
-
-      if (cmdOrCtrl) {
-        switch (e.key.toLowerCase()) {
-          case 'b': // Create branch
-            e.preventDefault();
-            setShowCreateBranchDialog(true);
-            break;
-          case 'l': // Fetch all
-            e.preventDefault();
-            performFetch();
-            break;
-          case 's': // Stage all (if shift)
-            if (shift) {
-              e.preventDefault();
-              const allPaths = filesRef.current.map(f => f.path);
-              if (allPaths.length > 0) {
-                await withLoading('Staging all files...', async () => {
-                  await window.electronAPI.gitStage(allPaths);
-                  await refreshStatusInternal();
-                });
-              }
-            }
-            break;
-          case 'u': // Unstage all (if shift)
-            if (shift) {
-              e.preventDefault();
-              const allPaths = filesRef.current.map(f => f.path);
-              if (allPaths.length > 0) {
-                await withLoading('Unstaging all files...', async () => {
-                  await window.electronAPI.gitUnstage(allPaths);
-                  await refreshStatusInternal();
-                });
-              }
-            }
-            break;
-          case 'enter': // Commit
-            e.preventDefault();
-            if (shift) {
-              // Stage all and commit
-              const allPaths = filesRef.current.map(f => f.path);
-              if (allPaths.length > 0) {
-                // We do this manually to avoid race conditions with state updates
-                await withLoading('Staging and Committing...', async () => {
-                  // Stage
-                  await window.electronAPI.gitStage(allPaths);
-                  // Refresh status (internal, silentish)
-                  await refreshStatusInternal();
-
-                  // Commit
-                  if (commitMessageRef.current.trim()) {
-                      const result = await window.electronAPI.gitCommit(commitMessageRef.current);
-                      if (result.success) {
-                        addLog('success', `Committed: "${commitMessageRef.current}"`);
-                        toast.success('Changes committed successfully!');
-                        setCommitMessage('');
-                        await Promise.all([
-                            refreshStatusInternal(),
-                            refreshHistoryInternal(),
-                            refreshBranchStatusInternal(),
-                            refreshBranchesInternal()
-                        ]);
-                      } else {
-                        addLog('error', result.error || 'Failed to commit');
-                        toast.error(result.error || 'Failed to commit');
-                      }
-                  } else {
-                      toast.warning('Please enter a commit message');
-                      commitMessageTextareaRef.current?.focus();
-                  }
-                });
-              }
-            } else {
-              // Commit staged
-              handleCommit(commitMessageRef.current);
-            }
-            break;
-          case 'm': // Focus commit message
-             if (shift) {
-                 e.preventDefault();
-                 commitMessageTextareaRef.current?.focus();
-             }
-             break;
-           case '/': // Open shortcuts
-             e.preventDefault();
-             setShowShortcutsModal(true);
-             break;
-
-            // Existing Layout Shortcuts (preserved)
-           case 'arrowup':
-            if (!shift && !e.altKey) {
-                e.preventDefault();
-                setShowLeftPanel(false);
-                setShowBottomPanel(false);
-                toast.info('Maximized Git Graph');
-            }
-            break;
-           case 'arrowleft':
-            if (!shift && !e.altKey) {
-                e.preventDefault();
-                setShowLeftPanel(prev => {
-                  const newState = !prev;
-                  toast.info(newState ? 'Shown Left Panel' : 'Hidden Left Panel');
-                  return newState;
-                });
-            }
-            break;
-           case 'arrowdown':
-            if (!shift && !e.altKey) {
-                e.preventDefault();
-                setShowBottomPanel(prev => {
-                  const newState = !prev;
-                  toast.info(newState ? 'Shown Bottom Panel' : 'Hidden Bottom Panel');
-                  return newState;
-                });
-            }
-            break;
-        }
-      } else {
-        // No modifier (except shift maybe)
-        const target = e.target as HTMLElement;
-        const isInput = ['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable;
-
-        if (!isInput) {
-            switch (e.key) {
-                case 's':
-                case 'S':
-                    // Stage current file
-                    if (selectedFileIndexRef.current !== undefined && filesRef.current[selectedFileIndexRef.current]) {
-                        const file = filesRef.current[selectedFileIndexRef.current];
-                        if (!file.staged) {
-                            withLoading('Staging file...', async () => {
-                                await window.electronAPI.gitStage([file.path]);
-                                await refreshStatusInternal();
-                            });
-                        }
-                    }
-                    break;
-                case 'u':
-                case 'U':
-                     // Unstage current file
-                    if (selectedFileIndexRef.current !== undefined && filesRef.current[selectedFileIndexRef.current]) {
-                        const file = filesRef.current[selectedFileIndexRef.current];
-                        if (file.staged) {
-                            withLoading('Unstaging file...', async () => {
-                                await window.electronAPI.gitUnstage([file.path]);
-                                await refreshStatusInternal();
-                            });
-                        }
-                    }
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    setSelectedFileIndex(prev => {
-                        if (filesRef.current.length === 0) return undefined;
-                        if (prev === undefined) return filesRef.current.length - 1;
-                        return Math.max(0, prev - 1);
-                    });
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    setSelectedFileIndex(prev => {
-                         if (filesRef.current.length === 0) return undefined;
-                         if (prev === undefined) return 0;
-                         return Math.min(filesRef.current.length - 1, prev + 1);
-                    });
-                    break;
-            }
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [performFetch, refreshStatusInternal, handleCommit, withLoading]);
+  // Use the custom hook for keyboard shortcuts
+  useKeyboardShortcuts({
+    filesRef,
+    selectedFileIndexRef,
+    commitMessageRef,
+    commitMessageTextareaRef,
+    setSelectedFileIndex,
+    setCommitMessage,
+    setShowCreateBranchDialog: setShowCreateBranchDialog,
+    setShowShortcutsModal: setShowShortcutsModal,
+    setShowLeftPanel: setShowLeftPanel,
+    setShowBottomPanel: setShowBottomPanel,
+    performFetch,
+    handleCommit,
+    refreshStatusInternal,
+    refreshHistoryInternal,
+    refreshBranchStatusInternal,
+    refreshBranchesInternal,
+    withLoading,
+    addLog,
+  });
 
   const handleClone = async (url: string, path: string) => {
     addLog('info', `Cloning repository from ${url}...`);
