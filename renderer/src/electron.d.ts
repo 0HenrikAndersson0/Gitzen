@@ -60,6 +60,11 @@ declare global {
       getConflictedFiles: () => Promise<{ success: boolean; files?: ConflictedFile[]; error?: string }>;
       resolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<{ success: boolean; error?: string }>;
       abortMerge: () => Promise<{ success: boolean; error?: string }>;
+      gitRevertCommit: (commitHash: string) => Promise<{ success: boolean; error?: string }>;
+      gitResetCommits: (commitHash: string, mode: 'soft' | 'mixed' | 'hard') => Promise<{ success: boolean; error?: string }>;
+      gitGetRevertStatus: () => Promise<{ success: boolean; inProgress: boolean; error?: string }>;
+      gitAbortRevert: () => Promise<{ success: boolean; error?: string }>;
+      gitContinueRevert: () => Promise<{ success: boolean; error?: string }>;
       gitRebaseBranch: (branch: string) => Promise<{ success: boolean; error?: string }>;
       gitAbortRebase: () => Promise<{ success: boolean; error?: string }>;
       gitContinueRebase: () => Promise<{ success: boolean; error?: string }>;

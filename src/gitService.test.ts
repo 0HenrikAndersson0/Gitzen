@@ -147,4 +147,109 @@ describe('gitService', () => {
 
     expect(fs.existsSync(path.join(tempDir, 'feature.txt'))).toBe(true);
   });
+
+  it('should revert a commit', async () => {
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'initial');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "initial commit"', { cwd: tempDir });
+
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'changed');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "change commit"', { cwd: tempDir });
+
+    // Get hash of the last commit
+    const history1 = await gitService.getHistory();
+    const lastCommitHash = history1.commits?.[0].hash;
+    expect(lastCommitHash).toBeDefined();
+
+    const revertResult = await gitService.revertCommit(lastCommitHash!);
+    expect(revertResult.success).toBe(true);
+
+    const content = fs.readFileSync(path.join(tempDir, 'test.txt'), 'utf8');
+    expect(content).toBe('initial');
+
+    const history2 = await gitService.getHistory();
+    expect(history2.commits?.[0].message).toContain('Revert "change commit"');
+  });
+
+  it('should hard reset branch', async () => {
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'v1');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "commit v1"', { cwd: tempDir });
+
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'v2');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "commit v2"', { cwd: tempDir });
+
+    const history = await gitService.getHistory();
+    const v1Hash = history.commits?.[1].hash; // Second commit is v1 (newest first)
+    expect(v1Hash).toBeDefined();
+
+    const resetResult = await gitService.resetCommits(v1Hash!, 'hard');
+    expect(resetResult.success).toBe(true);
+
+    const content = fs.readFileSync(path.join(tempDir, 'test.txt'), 'utf8');
+    expect(content).toBe('v1');
+
+    const historyAfter = await gitService.getHistory();
+    expect(historyAfter.commits?.[0].message).toContain('commit v1');
+  });
+
+  it('should soft reset branch', async () => {
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'v1');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "commit v1"', { cwd: tempDir });
+
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'v2');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "commit v2"', { cwd: tempDir });
+
+    const history = await gitService.getHistory();
+    const v1Hash = history.commits?.[1].hash;
+    expect(v1Hash).toBeDefined();
+
+    const resetResult = await gitService.resetCommits(v1Hash!, 'soft');
+    expect(resetResult.success).toBe(true);
+
+    // Head should be at v1
+    const historyAfter = await gitService.getHistory();
+    expect(historyAfter.commits?.[0].message).toContain('commit v1');
+
+    // Content should be v2 (kept in index)
+    const content = fs.readFileSync(path.join(tempDir, 'test.txt'), 'utf8');
+    expect(content).toBe('v2');
+
+    // Status should be staged
+    const status = await gitService.getStatus();
+    expect(status.files?.[0].staged).toBe(true);
+  });
+
+  it('should mixed reset branch', async () => {
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'v1');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "commit v1"', { cwd: tempDir });
+
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'v2');
+    execSync('git add .', { cwd: tempDir });
+    execSync('git commit -m "commit v2"', { cwd: tempDir });
+
+    const history = await gitService.getHistory();
+    const v1Hash = history.commits?.[1].hash;
+    expect(v1Hash).toBeDefined();
+
+    const resetResult = await gitService.resetCommits(v1Hash!, 'mixed');
+    expect(resetResult.success).toBe(true);
+
+    // Head should be at v1
+    const historyAfter = await gitService.getHistory();
+    expect(historyAfter.commits?.[0].message).toContain('commit v1');
+
+    // Content should be v2 (kept in working dir)
+    const content = fs.readFileSync(path.join(tempDir, 'test.txt'), 'utf8');
+    expect(content).toBe('v2');
+
+    // Status should be unstaged
+    const status = await gitService.getStatus();
+    expect(status.files?.[0].staged).toBe(false);
+  });
 });

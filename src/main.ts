@@ -313,6 +313,26 @@ ipcMain.handle('git:getRebaseStatus', async () => {
   return await gitService.getRebaseStatus();
 });
 
+ipcMain.handle('git:revertCommit', async (_, commitHash) => {
+  return await gitService.revertCommit(commitHash);
+});
+
+ipcMain.handle('git:resetCommits', async (_, commitHash, mode) => {
+  return await gitService.resetCommits(commitHash, mode);
+});
+
+ipcMain.handle('git:getRevertStatus', async () => {
+  return await gitService.getRevertStatus();
+});
+
+ipcMain.handle('git:abortRevert', async () => {
+  return await gitService.abortRevert();
+});
+
+ipcMain.handle('git:continueRevert', async () => {
+  return await gitService.continueRevert();
+});
+
 ipcMain.handle('git:cherryPick', async (_, commitHash) => {
   return await gitService.cherryPick(commitHash);
 });

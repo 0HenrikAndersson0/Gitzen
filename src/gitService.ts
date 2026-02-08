@@ -2014,10 +2014,10 @@ export async function getRebaseStatus(): Promise<{ success: boolean; inProgress:
        let current = 0;
        let total = 0;
        try {
-         const next = fs.readFileSync(path.join(rebaseApplyPath, 'next'), 'utf8').trim();
-         const last = fs.readFileSync(path.join(rebaseApplyPath, 'last'), 'utf8').trim();
-         current = parseInt(next, 10);
-         total = parseInt(last, 10);
+        const next = fs.readFileSync(path.join(rebaseApplyPath, 'next'), 'utf8').trim();
+        const last = fs.readFileSync(path.join(rebaseApplyPath, 'last'), 'utf8').trim();
+        current = parseInt(next, 10);
+        total = parseInt(last, 10);
        } catch (e) {
          // ignore
        }
@@ -2027,6 +2027,81 @@ export async function getRebaseStatus(): Promise<{ success: boolean; inProgress:
     return { success: true, inProgress: false };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error', inProgress: false };
+  }
+}
+
+export async function revertCommit(commitHash: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Attempt revert
+    // Use --no-edit to avoid launching editor for commit message (uses default)
+    try {
+      await runGitCommand(`revert --no-edit ${commitHash}`);
+      return { success: true };
+    } catch (revertError: any) {
+      // Check if we are in a conflict state
+      const conflictedResult = await getConflictedFiles();
+      
+      if (conflictedResult.success && conflictedResult.files && conflictedResult.files.length > 0) {
+         return { success: false, error: 'Revert conflict detected. Please resolve conflicts.' };
+      }
+      
+      return { success: false, error: revertError.message || revertError.stderr || 'Revert failed' };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function resetCommits(commitHash: string, mode: 'soft' | 'mixed' | 'hard'): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await runGitCommand(`reset --${mode} ${commitHash}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getRevertStatus(): Promise<{ success: boolean; inProgress: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open', inProgress: false };
+    }
+    const revertHeadPath = path.join(currentRepoPath, '.git', 'REVERT_HEAD');
+    return { success: true, inProgress: fs.existsSync(revertHeadPath) };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error', inProgress: false };
+  }
+}
+
+export async function abortRevert(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand('revert --abort');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function continueRevert(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    await runGitCommand('revert --continue', undefined, { GIT_EDITOR: 'true' });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 
