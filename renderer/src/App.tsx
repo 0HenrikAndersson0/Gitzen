@@ -18,6 +18,8 @@ import { useAutoRefresh } from './hooks/useAutoRefresh';
 import { LoadingOverlay } from './components/ui/spinner';
 import { SplashScreen } from './components/SplashScreen';
 import { ForcePushDialog } from './components/ForcePushDialog';
+import { ShortcutsModal } from './components/ShortcutsModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 interface BranchStatus {
   ahead: number;
@@ -93,10 +95,34 @@ export default function App() {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showBottomPanel, setShowBottomPanel] = useState(true);
 
+  // Keyboard Shortcuts State
+  const [commitMessage, setCommitMessage] = useState('');
+  const [selectedFileIndex, setSelectedFileIndex] = useState<number | undefined>(undefined);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showCreateBranchDialog, setShowCreateBranchDialog] = useState(false);
+
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
   const repoPathRef = useRef<string | null>(null);
   const gitOperationQueue = useRef<Promise<any>>(Promise.resolve());
+
+  // Refs for shortcuts
+  const filesRef = useRef(files);
+  const selectedFileIndexRef = useRef(selectedFileIndex);
+  const commitMessageRef = useRef(commitMessage);
+  const commitMessageTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { filesRef.current = files; }, [files]);
+  useEffect(() => { selectedFileIndexRef.current = selectedFileIndex; }, [selectedFileIndex]);
+  useEffect(() => { commitMessageRef.current = commitMessage; }, [commitMessage]);
+
+  // Keep selected file index in bounds
+  useEffect(() => {
+    if (selectedFileIndex !== undefined) {
+       if (files.length === 0) setSelectedFileIndex(undefined);
+       else if (selectedFileIndex >= files.length) setSelectedFileIndex(files.length - 1);
+    }
+  }, [files.length]); // Intentionally not including selectedFileIndex to avoid loops
 
   const runQueued = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const nextOp = gitOperationQueue.current.then(operation);
@@ -107,42 +133,25 @@ export default function App() {
     return nextOp;
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey) {
-        switch (e.key) {
-          case 'ArrowUp':
-            e.preventDefault();
-            // Maximize graph: Hide both panels
-            setShowLeftPanel(false);
-            setShowBottomPanel(false);
-            toast.info('Maximized Git Graph');
-            break;
-          case 'ArrowLeft':
-            e.preventDefault();
-            setShowLeftPanel(prev => {
-              const newState = !prev;
-              toast.info(newState ? 'Shown Left Panel' : 'Hidden Left Panel');
-              return newState;
-            });
-            break;
-          case 'ArrowDown':
-            e.preventDefault();
-            setShowBottomPanel(prev => {
-              const newState = !prev;
-              toast.info(newState ? 'Shown Bottom Panel' : 'Hidden Bottom Panel');
-              return newState;
-            });
-            break;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const withLoading = useCallback(async (message: string, fn: () => Promise<void>) => {
+    setIsLoading(true);
+    setLoadingMessage(message);
+    try {
+      await runQueued(fn);
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage(undefined);
+    }
+  }, [runQueued]);
 
   useEffect(() => {
+    // Listen for menu events
+    if (window.electronAPI && window.electronAPI.onShowShortcuts) {
+       window.electronAPI.onShowShortcuts(() => {
+          setShowShortcutsModal(true);
+       });
+    }
+
     document.documentElement.classList.add('dark');
     const init = async () => {
       try {
@@ -171,17 +180,6 @@ export default function App() {
 
   const addLog = (type: LogEntry['type'], message: string) => {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
-  };
-
-  const withLoading = async (message: string, fn: () => Promise<void>) => {
-    setIsLoading(true);
-    setLoadingMessage(message);
-    try {
-      await runQueued(fn);
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage(undefined);
-    }
   };
 
   const loadRepository = async (): Promise<string | null> => {
@@ -482,6 +480,67 @@ export default function App() {
     ],
   });
 
+  // ... Handlers ...
+
+  const handleCommit = useCallback(async (message: string) => {
+    // Note: This relies on 'files' state for counting, but not for the actual commit since git commits the index.
+    // However, the count log might be slightly off if called from a shortcut that just staged things without a render cycle.
+    // We can use filesRef for better accuracy in logging if needed, or just accept the visual state.
+    // Better to use filesRef if possible, but 'files' dependency is okay here.
+
+    // Actually, let's use filesRef for the count if we want it to be accurate after a quick stage-then-commit
+    const currentFiles = filesRef.current;
+    const stagedFiles = currentFiles.filter((f) => f.staged);
+    addLog('info', `Committing ${stagedFiles.length} file(s)...`);
+
+    await withLoading('Committing changes...', async () => {
+      try {
+        const result = await window.electronAPI.gitCommit(message);
+        if (result.success) {
+          addLog('success', `Committed: "${message}"`);
+          toast.success('Changes committed successfully!');
+
+          // Clear commit message if it was successful
+          setCommitMessage('');
+
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchStatusInternal();
+          await refreshBranchesInternal();
+        } else {
+          addLog('error', result.error || 'Failed to commit');
+          toast.error(result.error || 'Failed to commit');
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Commit failed: ${errorMsg}`);
+        toast.error(`Commit failed: ${errorMsg}`);
+      }
+    });
+  }, [withLoading, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal]);
+
+  // Use the custom hook for keyboard shortcuts
+  useKeyboardShortcuts({
+    filesRef,
+    selectedFileIndexRef,
+    commitMessageRef,
+    commitMessageTextareaRef,
+    setSelectedFileIndex,
+    setCommitMessage,
+    setShowCreateBranchDialog: setShowCreateBranchDialog,
+    setShowShortcutsModal: setShowShortcutsModal,
+    setShowLeftPanel: setShowLeftPanel,
+    setShowBottomPanel: setShowBottomPanel,
+    performFetch,
+    handleCommit,
+    refreshStatusInternal,
+    refreshHistoryInternal,
+    refreshBranchStatusInternal,
+    refreshBranchesInternal,
+    withLoading,
+    addLog,
+  });
+
   const handleClone = async (url: string, path: string) => {
     addLog('info', `Cloning repository from ${url}...`);
     setRemoteUrl(url);
@@ -708,33 +767,6 @@ export default function App() {
          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
          addLog('error', `Pull failed: ${errorMsg}`);
          toast.error(`Pull failed: ${errorMsg}`);
-      }
-    });
-  };
-
-  const handleCommit = async (message: string) => {
-    const stagedFiles = files.filter((f) => f.staged);
-    addLog('info', `Committing ${stagedFiles.length} file(s)...`);
-    
-    await withLoading('Committing changes...', async () => {
-      try {
-        const result = await window.electronAPI.gitCommit(message);
-        if (result.success) {
-          addLog('success', `Committed: "${message}"`);
-          toast.success('Changes committed successfully!');
-          
-          await refreshStatusInternal();
-          await refreshHistoryInternal();
-          await refreshBranchStatusInternal();
-          await refreshBranchesInternal();
-        } else {
-          addLog('error', result.error || 'Failed to commit');
-          toast.error(result.error || 'Failed to commit');
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        addLog('error', `Commit failed: ${errorMsg}`);
-        toast.error(`Commit failed: ${errorMsg}`);
       }
     });
   };
@@ -1476,6 +1508,9 @@ export default function App() {
                   onApplyStash={handleApplyStash}
                   onDeleteStash={handleDeleteStash}
                   onRefresh={() => repoPath && refreshAllData(repoPath)}
+                  isCreateDialogOpen={showCreateBranchDialog}
+                  onCloseCreateDialog={() => setShowCreateBranchDialog(false)}
+                  onOpenCreateDialog={() => setShowCreateBranchDialog(true)}
                 />
                 <TagsPanel
                   onSetLoading={(loading, message) => {
@@ -1531,12 +1566,16 @@ export default function App() {
           <div className="flex-none grid grid-cols-2 gap-4 h-auto min-h-0">
             <div className="min-h-0">
               <CommitPanel
+                ref={commitMessageTextareaRef}
                 files={files}
                 onToggleStage={handleToggleStage}
                 onCommit={handleCommit}
                 onRevertFile={handleRevertFile}
                 onDeleteFile={handleDeleteFile}
                 onRefresh={() => refreshStatus()}
+                commitMessage={commitMessage}
+                onCommitMessageChange={setCommitMessage}
+                selectedFileIndex={selectedFileIndex}
               />
             </div>
             <div className="h-0 min-h-full">
@@ -1581,6 +1620,11 @@ export default function App() {
         onClose={() => setShowForcePushDialog(false)}
         onConfirm={handleForcePush}
         targetBranch={currentBranch}
+      />
+
+      <ShortcutsModal
+        open={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
       />
 
       <Toaster />

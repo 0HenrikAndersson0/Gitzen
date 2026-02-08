@@ -15,12 +15,14 @@ interface FileStagingProps {
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
   onRefresh?: () => void;
+  selectedFileIndex?: number;
 }
 
-export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, onRefresh }: FileStagingProps) {
+export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, onRefresh, selectedFileIndex }: FileStagingProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Update selectedFile when files change to keep diff view in sync
   useEffect(() => {
@@ -33,6 +35,16 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
       }
     }
   }, [files, selectedFile]);
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedFileIndex !== undefined && selectedFileIndex >= 0 && selectedFileIndex < files.length) {
+      itemRefs.current[selectedFileIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+  }, [selectedFileIndex, files.length]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -106,10 +118,15 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
           <p>No changes to commit</p>
         </div>
       ) : (
-        files.map((file) => (
+        files.map((file, index) => (
           <div
             key={file.path}
-            className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950/50 p-3 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+            ref={(el) => (itemRefs.current[index] = el)}
+            className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${
+              selectedFileIndex === index
+                ? 'border-blue-500/50 bg-blue-900/20'
+                : 'border-zinc-800 bg-zinc-950/50 hover:bg-zinc-900/50'
+            }`}
             onContextMenu={(e) => handleContextMenu(e, file)}
             onClick={() => setSelectedFile(file)}
           >
@@ -166,4 +183,3 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
     </div>
   );
 }
-

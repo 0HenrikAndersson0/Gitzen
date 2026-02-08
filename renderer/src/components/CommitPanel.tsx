@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef } from 'react';
 import { GitCommitHorizontal, Archive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -18,22 +18,26 @@ interface CommitPanelProps {
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
   onRefresh?: () => void;
+  commitMessage: string;
+  onCommitMessageChange: (message: string) => void;
+  selectedFileIndex?: number;
 }
 
-export function CommitPanel({
+export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   files,
   onToggleStage,
   onCommit,
   onRevertFile,
   onDeleteFile,
   onRefresh,
-}: CommitPanelProps) {
-  const [commitMessage, setCommitMessage] = useState('');
+  commitMessage,
+  onCommitMessageChange,
+  selectedFileIndex,
+}, ref) => {
 
   const handleCommit = () => {
     if (commitMessage.trim()) {
       onCommit(commitMessage);
-      setCommitMessage('');
     }
   };
 
@@ -54,16 +58,18 @@ export function CommitPanel({
             onRevertFile={onRevertFile}
             onDeleteFile={onDeleteFile}
             onRefresh={onRefresh}
+            selectedFileIndex={selectedFileIndex}
           />
         </div>
 
         <div className="space-y-2 flex-none">
           <Label htmlFor="commit-message">Commit Message</Label>
           <Textarea
+            ref={ref}
             id="commit-message"
             placeholder="Enter your commit message..."
             value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
+            onChange={(e) => onCommitMessageChange(e.target.value)}
             className="h-20 bg-zinc-950 border-zinc-700 font-mono resize-none"
           />
         </div>
@@ -81,5 +87,6 @@ export function CommitPanel({
       </div>
     </div>
   );
-}
+});
 
+CommitPanel.displayName = 'CommitPanel';
