@@ -19,6 +19,7 @@ export function useAutoRefresh({
 }: UseAutoRefreshOptions) {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const functionsRef = useRef(refreshFunctions);
+  const isRefreshingRef = useRef(false);
 
   // Update functions ref when they change
   useEffect(() => {
@@ -37,6 +38,9 @@ export function useAutoRefresh({
 
     // Initial refresh
     const performRefresh = async () => {
+      if (isRefreshingRef.current) return;
+      
+      isRefreshingRef.current = true;
       try {
         await Promise.all(
           functionsRef.current.map((fn) => {
@@ -50,6 +54,8 @@ export function useAutoRefresh({
         );
       } catch (error) {
         console.error('Error during auto-refresh:', error);
+      } finally {
+        isRefreshingRef.current = false;
       }
     };
 
