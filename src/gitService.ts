@@ -831,7 +831,7 @@ export async function fetchRemote(remote: string = 'origin'): Promise<{ success:
     }
 
     return await withRemoteCredentials(remote, async () => {
-      await runGitCommand(`fetch ${remote}`);
+      await runGitCommand(`fetch ${remote} --prune`);
       return { success: true };
     });
   } catch (error: any) {
@@ -1311,7 +1311,7 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
     for (const remote of remotes) {
       try {
         await withRemoteCredentials(remote, async () => {
-          await runGitCommand(`fetch ${remote}`);
+          await runGitCommand(`fetch ${remote} --prune`);
         });
       } catch (e) {
         console.warn(`Failed to fetch remote ${remote}:`, e);
@@ -1507,6 +1507,11 @@ export async function deleteBranch(branchName: string, force: boolean = false): 
       return { success: false, error: 'No repository open' };
     }
 
+    const currentResult = await getCurrentBranch();
+    if (currentResult.success && currentResult.branch === branchName) {
+      return { success: false, error: `Cannot delete branch '${branchName}' because it is currently checked out.` };
+    }
+
     const command = force ? `branch -D ${branchName}` : `branch -d ${branchName}`;
     await runGitCommand(command);
     return { success: true };
@@ -1533,18 +1538,35 @@ export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ su
     const repoPath = currentRepoPath;
 
     // Delete remote branch using git push --delete
-    return await withRemoteCredentials(remoteName, async () => {
-      await runGitExecFile(['push', remoteName, '--delete', branchName], {
-        cwd: repoPath,
-        maxBuffer: 10 * 1024 * 1024,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: '0',
-          LC_ALL: 'C',
-        },
+    try {
+      await withRemoteCredentials(remoteName, async () => {
+        await runGitExecFile(['push', remoteName, '--delete', branchName], {
+          cwd: repoPath,
+          maxBuffer: 10 * 1024 * 1024,
+          env: {
+            ...process.env,
+            GIT_TERMINAL_PROMPT: '0',
+            LC_ALL: 'C',
+          },
+        });
       });
-      return { success: true };
-    });
+    } catch (error: any) {
+      const errorMsg = error.message || '';
+      // If the branch is already gone from remote, we consider it a success for the user
+      // but we still want to prune our local tracking branch
+      if (!errorMsg.includes('unable to delete') && !errorMsg.includes('remote ref does not exist')) {
+        throw error;
+      }
+    }
+
+    // Also prune the local tracking branch to be sure
+    try {
+      await runGitCommand(`branch -dr ${remoteName}/${branchName}`);
+    } catch (e) {
+      // Ignore errors if local tracking ref is already gone
+    }
+
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

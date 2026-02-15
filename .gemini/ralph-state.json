@@ -1,0 +1,6 @@
+{
+  "iteration": 1,
+  "max_iterations": 10,
+  "completion_promise": "Verified that remote branch pruning works correctly, deletion of non-existent remote branches is handled gracefully, and checked-out branches are preserved.",
+  "prompt": "Fix the bug when deleting a branch that no longer exists in the remote repository. Additionally, when fetching, ensure that remote branches no longer existing on the remote are pruned from the local tracking list. Do not automatically delete checked-out branches."
+}
