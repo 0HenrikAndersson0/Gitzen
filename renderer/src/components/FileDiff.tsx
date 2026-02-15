@@ -1,4 +1,4 @@
-import { X, FileText, FilePlus, FileX, Check, Undo2, Trash2 } from 'lucide-react';
+import { X, FileText, FilePlus, FileX, Check, Undo2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -32,6 +32,8 @@ interface FileDiffProps {
   file: FileChange;
   onClose: () => void;
   onRefresh: () => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }
 
 // Parse diff string into structured format
@@ -170,11 +172,26 @@ function generatePatch(filePath: string, hunks: DiffHunk[], selectedLines: Set<s
   return patch;
 }
 
-export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
+export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileDiffProps) {
   const [diff, setDiff] = useState<FileChange['diff'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' && onNext) {
+        onNext();
+      } else if (e.key === 'ArrowLeft' && onPrevious) {
+        onPrevious();
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNext, onPrevious, onClose]);
 
   useEffect(() => {
     const loadDiff = async () => {
@@ -371,7 +388,25 @@ export function FileDiff({ file, onClose, onRefresh }: FileDiffProps) {
       <div className="flex h-full w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 p-6">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 border-r border-zinc-800 pr-6">
+              <button
+                onClick={onPrevious}
+                disabled={!onPrevious || processing}
+                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-20"
+                title="Previous file (Left Arrow)"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                onClick={onNext}
+                disabled={!onNext || processing}
+                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-20"
+                title="Next file (Right Arrow)"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               {getFileIcon(file.status)}
               <span className="font-mono text-xl text-zinc-300">{file.path}</span>

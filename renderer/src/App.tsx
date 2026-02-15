@@ -600,6 +600,36 @@ export default function App() {
     });
   };
 
+  const handleStageAll = async () => {
+    await withLoading('Staging all files...', async () => {
+      try {
+        const result = await window.electronAPI.gitStageAll();
+        if (result.success) {
+          await refreshStatusInternal();
+        } else {
+          addLog('error', result.error || 'Failed to stage all files');
+        }
+      } catch (error) {
+        addLog('error', `Failed to stage all: ${error}`);
+      }
+    });
+  };
+
+  const handleUnstageAll = async () => {
+    await withLoading('Unstaging all files...', async () => {
+      try {
+        const result = await window.electronAPI.gitUnstageAll();
+        if (result.success) {
+          await refreshStatusInternal();
+        } else {
+          addLog('error', result.error || 'Failed to unstage all files');
+        }
+      } catch (error) {
+        addLog('error', `Failed to unstage all: ${error}`);
+      }
+    });
+  };
+
   const handleToggleStage = async (path: string) => {
     const file = files.find(f => f.path === path);
     if (!file) return;
@@ -1647,6 +1677,8 @@ export default function App() {
                 ref={commitMessageTextareaRef}
                 files={files}
                 onToggleStage={handleToggleStage}
+                onStageAll={handleStageAll}
+                onUnstageAll={handleUnstageAll}
                 onCommit={handleCommit}
                 onRevertFile={handleRevertFile}
                 onDeleteFile={handleDeleteFile}

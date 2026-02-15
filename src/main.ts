@@ -97,12 +97,15 @@ ipcMain.handle('git:unstage', async (_, files) => {
   return await gitService.unstageFiles(files);
 });
 
-ipcMain.handle('git:stageAll', async () => {
-  return await gitService.stageAll();
-});
+  ipcMain.handle('git:stageAll', async () => {
+    return await gitService.stageAll();
+  });
 
-ipcMain.handle('git:commit', async (_, message) => {
-  return await gitService.commit(message);
+  ipcMain.handle('git:unstageAll', async () => {
+    return await gitService.unstageAll();
+  });
+
+  ipcMain.handle('git:commit', async (_, message) => {  return await gitService.commit(message);
 });
 
 ipcMain.handle('git:push', async (_, remote, branch, force, overwrite) => {
