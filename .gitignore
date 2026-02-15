@@ -17,3 +17,7 @@ release/
 .env.*
 
 release/
+
+# Gemini CLI
+.gemini/
+*.skill

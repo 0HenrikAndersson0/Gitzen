@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Tag, Trash2, Plus, CloudUpload } from 'lucide-react';
+import { Tag, Trash2, Plus, CloudUpload, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { CreateTagDialog } from './CreateTagDialog';
 
@@ -27,6 +28,8 @@ export function TagsPanel({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<string | null>(null);
   const [hasRemote, setHasRemote] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [filter, setFilter] = useState('');
 
   const loadTags = useCallback(async (showLoading: boolean = false) => {
     if (showLoading) {
@@ -134,73 +137,93 @@ export function TagsPanel({
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
-      <div className="border-b border-zinc-800 p-3 flex items-center justify-between">
+      <div className="border-b border-zinc-800 p-3 flex items-center justify-between cursor-pointer hover:bg-zinc-800/30 transition-colors"
+           onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex items-center gap-2 text-zinc-100">
+          {isExpanded ? <ChevronDown className="size-4 text-zinc-500" /> : <ChevronRight className="size-4 text-zinc-500" />}
           <Tag className="size-4" />
           <h3 className="font-semibold text-sm">Tags</h3>
         </div>
         <button
-          onClick={handleCreateTagClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCreateTagClick();
+          }}
           className="flex items-center gap-1.5 rounded-md bg-amber-600/10 px-2 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-600/20"
         >
           <Plus className="size-3" />
           New
         </button>
       </div>
-      <div className="max-h-[300px] overflow-y-auto">
-        {loading && tags.length === 0 ? (
-          <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
-        ) : tags.length === 0 ? (
-          <div className="p-4 text-center text-sm text-zinc-500">No tags</div>
-        ) : (
-          <div className="divide-y divide-zinc-800">
-            {tags.map((tag) => (
-              <div
-                key={tag.name}
-                className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
-              >
-                <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                  <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-zinc-300">
-                      {tag.name}
+      {isExpanded && (
+        <div className="flex flex-col">
+          <div className="p-2 border-b border-zinc-800">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-zinc-500" />
+              <Input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter tags..."
+                className="h-7 pl-7 text-xs bg-zinc-800/50 border-zinc-700 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
+              />
+            </div>
+          </div>
+          <div className="max-h-[300px] overflow-y-auto">
+            {loading && tags.length === 0 ? (
+              <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+            ) : (
+              <div className="divide-y divide-zinc-800">
+                {tags
+                  .filter(t => t.name.toLowerCase().includes(filter.toLowerCase()))
+                  .map((tag) => (
+                  <div
+                    key={tag.name}
+                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
+                  >
+                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                      <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm text-zinc-300">
+                          {tag.name}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                          <span className="font-mono">{tag.commit.substring(0, 7)}</span>
+                          <span>•</span>
+                          <span>{tag.date.toLocaleDateString()}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                      <span className="font-mono">{tag.commit.substring(0, 7)}</span>
-                      <span>•</span>
-                      <span>{tag.date.toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    {hasRemote && tag.isPushed === false && (
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        {hasRemote && tag.isPushed === false && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePushTag(tag.name);
+                                }}
+                                title="Push to origin"
+                                className="p-1 rounded-md hover:bg-zinc-700 text-blue-400 hover:text-blue-300"
+                            >
+                                <CloudUpload className="size-3.5" />
+                            </button>
+                        )}
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                handlePushTag(tag.name);
+                                handleDeleteTag(tag.name);
                             }}
-                            title="Push to origin"
-                            className="p-1 rounded-md hover:bg-zinc-700 text-blue-400 hover:text-blue-300"
+                            title="Delete tag"
+                            className="p-1 rounded-md hover:bg-zinc-700 text-red-400 hover:text-red-300"
                         >
-                            <CloudUpload className="size-3.5" />
+                            <Trash2 className="size-3.5" />
                         </button>
-                    )}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTag(tag.name);
-                        }}
-                        title="Delete tag"
-                        className="p-1 rounded-md hover:bg-zinc-700 text-red-400 hover:text-red-300"
-                    >
-                        <Trash2 className="size-3.5" />
-                    </button>
-                </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteDialog} onOpenChange={(open) => !open && setDeleteDialog(null)}>
