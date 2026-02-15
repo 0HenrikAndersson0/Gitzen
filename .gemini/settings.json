@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "AfterAgent": [
+      {
+        "name": "ralph-loop",
+        "type": "command",
+        "command": "$GEMINI_PROJECT_DIR/.gemini/hooks/ralph-hook.sh"
+      }
+    ]
+  }
+}
