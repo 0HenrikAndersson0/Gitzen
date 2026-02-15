@@ -181,6 +181,7 @@ export function BranchesPanel({
         }).catch(err => {
            toast.error(`Rebase failed: ${err.message}`);
         }).finally(() => {
+           onRefresh?.();
            onSetLoading?.(false);
         });
         break;
@@ -270,6 +271,7 @@ export function BranchesPanel({
       } catch (error: any) {
         toast.error(`Rebase failed: ${error.message}`);
       } finally {
+        onRefresh?.();
         onSetLoading?.(false);
       }
   };
