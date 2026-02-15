@@ -14,6 +14,8 @@ interface FileChange {
 interface CommitPanelProps {
   files: FileChange[];
   onToggleStage: (path: string) => void;
+  onStageAll?: () => void;
+  onUnstageAll?: () => void;
   onCommit: (message: string) => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
@@ -26,6 +28,8 @@ interface CommitPanelProps {
 export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   files,
   onToggleStage,
+  onStageAll,
+  onUnstageAll,
   onCommit,
   onRevertFile,
   onDeleteFile,
@@ -42,6 +46,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   };
 
   const stagedFiles = files.filter((f) => f.staged);
+  const unstagedFiles = files.filter((f) => !f.staged);
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col">
@@ -60,6 +65,26 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
             onRefresh={onRefresh}
             selectedFileIndex={selectedFileIndex}
           />
+          {files.length > 0 && (
+            <div className="p-3 border-t border-zinc-800/50 flex gap-4">
+              {unstagedFiles.length > 0 && (
+                <button
+                  onClick={onStageAll}
+                  className="text-xs text-zinc-400 hover:text-green-400 transition-colors flex items-center gap-1"
+                >
+                  Stage All
+                </button>
+              )}
+              {stagedFiles.length > 0 && (
+                <button
+                  onClick={onUnstageAll}
+                  className="text-xs text-zinc-400 hover:text-yellow-400 transition-colors flex items-center gap-1"
+                >
+                  Unstage All
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2 flex-none">

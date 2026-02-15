@@ -110,6 +110,22 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
     }
   }, [contextMenu]);
 
+  const handleNextFile = () => {
+    if (!selectedFile) return;
+    const currentIndex = files.findIndex(f => f.path === selectedFile.path);
+    if (currentIndex === -1) return;
+    const nextIndex = (currentIndex + 1) % files.length;
+    setSelectedFile(files[nextIndex]);
+  };
+
+  const handlePrevFile = () => {
+    if (!selectedFile) return;
+    const currentIndex = files.findIndex(f => f.path === selectedFile.path);
+    if (currentIndex === -1) return;
+    const prevIndex = (currentIndex - 1 + files.length) % files.length;
+    setSelectedFile(files[prevIndex]);
+  };
+
   return (
     <div className="space-y-2">
       {files.length === 0 ? (
@@ -178,6 +194,8 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
           file={selectedFile}
           onClose={() => setSelectedFile(null)}
           onRefresh={onRefresh || (() => {})}
+          onNext={files.length > 1 ? handleNextFile : undefined}
+          onPrevious={files.length > 1 ? handlePrevFile : undefined}
         />
       )}
     </div>
