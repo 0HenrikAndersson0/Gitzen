@@ -418,29 +418,6 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="mr-4 flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5">
-              <button
-                onClick={() => setViewMode('split')}
-                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
-                  viewMode === 'split'
-                    ? 'bg-zinc-700 text-zinc-100'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Side-by-Side
-              </button>
-              <button
-                onClick={() => setViewMode('unified')}
-                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
-                  viewMode === 'unified'
-                    ? 'bg-zinc-700 text-zinc-100'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Unified
-              </button>
-            </div>
-
             {!file.staged && (
                <button
                 onClick={handleDiscardFile}
@@ -488,6 +465,32 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
               className="ml-4 rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
             >
               <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center justify-end border-b border-zinc-800 bg-zinc-900/50 px-6 py-2">
+          <div className="flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5">
+            <button
+              onClick={() => setViewMode('split')}
+              className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                viewMode === 'split'
+                  ? 'bg-zinc-700 text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Side-by-Side
+            </button>
+            <button
+              onClick={() => setViewMode('unified')}
+              className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                viewMode === 'unified'
+                  ? 'bg-zinc-700 text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Unified
             </button>
           </div>
         </div>
