@@ -156,66 +156,58 @@ async function run() {
             markdown += `| \`${res.name}\` | ${status} | ${res.stats.malicious}/${total} | [View Report](${res.permalink}) |\n`;
         }
 
-        console.log(`Updating GitHub Release notes for ${TAG} in ${REPO}...`);
+            console.log(`Updating GitHub Release notes for ${TAG} in ${REPO}...`);
         try {
-            const ghEnv = { ...process.env, GH_TOKEN: GITHUB_TOKEN };
+            const baseUrl = `https://api.github.com/repos/${REPO}/releases`;
+            const headers = {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'VirusTotal-Scan-Script'
+            };
             
             let currentBody = '';
             let releaseId = '';
             const normalize = (t) => (t || '').replace(/^v\.?/, '').replace(/[-._]/g, '.').toLowerCase().trim();
             const normalizedSearch = normalize(TAG);
 
-            try {
-                console.log(`Attempting direct lookup for release with tag ${TAG}...`);
-                const viewResult = execSync(`gh release view ${TAG} --repo ${REPO} --json body,id,tagName`, { 
-                    encoding: 'utf8',
-                    env: ghEnv
-                });
-                const viewData = JSON.parse(viewResult);
-                currentBody = viewData.body;
-                releaseId = viewData.id;
-                console.log(`Found release via direct lookup: ${viewData.tagName} (ID: ${releaseId})`);
-            } catch (e) {
-                console.log(`Direct lookup for ${TAG} failed, searching via API with fuzzy matching and retries...`);
-                
-                let releases = [];
-                let match = null;
-                const maxRetries = 5;
-                
-                for (let i = 0; i < maxRetries; i++) {
-                    try {
-                        const releasesJson = execSync(`gh api repos/${REPO}/releases`, {
-                            encoding: 'utf8',
-                            env: ghEnv
-                        });
-                        releases = JSON.parse(releasesJson);
-                        
-                        match = releases.find(r => 
-                            normalize(r.tag_name) === normalizedSearch ||
-                            normalize(r.name || '') === normalizedSearch ||
-                            (r.tag_name && normalize(r.tag_name).includes(normalizedSearch)) ||
-                            (r.name && normalize(r.name).includes(normalizedSearch))
-                        );
+            console.log(`Searching for release matching ${TAG}...`);
+            
+            let releases = [];
+            let match = null;
+            const maxRetries = 5;
+            
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(baseUrl, { headers });
+                    if (!response.ok) throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+                    
+                    releases = await response.json();
+                    
+                    match = releases.find(r => 
+                        normalize(r.tag_name) === normalizedSearch ||
+                        normalize(r.name || '') === normalizedSearch ||
+                        (r.tag_name && normalize(r.tag_name).includes(normalizedSearch)) ||
+                        (r.name && normalize(r.name).includes(normalizedSearch))
+                    );
 
-                        if (match) break;
-                        
-                        console.log(`Match not found in ${releases.length} releases. Retry ${i + 1}/${maxRetries} in 15s...`);
-                        if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 15000));
-                    } catch (apiErr) {
-                        console.warn(`API call failed during retry ${i + 1}: ${apiErr.message}`);
-                        if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 15000));
-                    }
+                    if (match) break;
+                    
+                    console.log(`Match not found in ${releases.length} releases. Retry ${i + 1}/${maxRetries} in 15s...`);
+                    if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 15000));
+                } catch (apiErr) {
+                    console.warn(`API call failed during retry ${i + 1}: ${apiErr.message}`);
+                    if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 15000));
                 }
-
-                if (!match) {
-                    const availableTags = releases.map(r => `${r.tag_name || 'NO_TAG'} (${r.name || 'NO_NAME'})`).slice(0, 10).join(', ');
-                    throw new Error(`Could not find a release matching ${TAG} (normalized: ${normalizedSearch}) in ${REPO}. Found ${releases.length} total. Top 10 available: ${availableTags}`);
-                }
-                
-                currentBody = match.body || '';
-                releaseId = match.id;
-                console.log(`Matched release: ${match.tag_name || match.name} (ID: ${releaseId})`);
             }
+
+            if (!match) {
+                const availableTags = releases.map(r => `${r.tag_name || 'NO_TAG'} (${r.name || 'NO_NAME'})`).slice(0, 10).join(', ');
+                throw new Error(`Could not find a release matching ${TAG} (normalized: ${normalizedSearch}) in ${REPO}. Found ${releases.length} total. Top 10 available: ${availableTags}`);
+            }
+            
+            currentBody = match.body || '';
+            releaseId = match.id;
+            console.log(`Matched release: ${match.tag_name || match.name} (ID: ${releaseId})`);
 
             let newBody;
             if (currentBody.includes(SECTION_HEADER)) {
@@ -225,15 +217,21 @@ async function run() {
                 newBody = currentBody.trim() + markdown;
             }
             
-            fs.writeFileSync('new_body.md', newBody);
-            execSync(`gh release edit ${releaseId} --repo ${REPO} --notes-file new_body.md`, { 
-                env: ghEnv 
+            console.log(`Updating release ${releaseId} with new scan results...`);
+            const updateResponse = await fetch(`${baseUrl}/${releaseId}`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({ body: newBody })
             });
+
+            if (!updateResponse.ok) {
+                const errorData = await updateResponse.json();
+                throw new Error(`Failed to update release: ${updateResponse.status} ${JSON.stringify(errorData)}`);
+            }
+
             console.log('✅ Release notes updated successfully!');
         } catch (err) {
             console.error('❌ Failed to update release notes:', err.message);
-        } finally {
-            if (fs.existsSync('new_body.md')) fs.unlinkSync('new_body.md');
         }
     }
 }
