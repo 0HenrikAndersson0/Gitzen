@@ -114,6 +114,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
 
   useEffect(() => {
     const loadDiff = async () => {
@@ -276,100 +277,188 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
           <div className="flex min-w-0 flex-1 flex-col bg-zinc-950">
             {selectedFile ? (
               <>
-                <div className="border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
                   <div className="flex items-center gap-2">
                     {getFileIcon(selectedFile.status)}
                     <span className="font-mono text-sm text-zinc-300">{selectedFile.path}</span>
                   </div>
+                  <div className="flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5">
+                    <button
+                      onClick={() => setViewMode('split')}
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                        viewMode === 'split'
+                          ? 'bg-zinc-700 text-zinc-100'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Side-by-Side
+                    </button>
+                    <button
+                      onClick={() => setViewMode('unified')}
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                        viewMode === 'unified'
+                          ? 'bg-zinc-700 text-zinc-100'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Unified
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="flex min-h-0 flex-1 overflow-hidden">
-                  {/* Side-by-side diff */}
-                  <div className="grid min-h-0 flex-1 grid-cols-2">
-                    {/* Left pane - Old content */}
-                    <div className="flex min-h-0 flex-col border-r border-zinc-800">
-                      <div className="border-b border-zinc-800 bg-red-950/20 px-4 py-2">
-                        <span className="text-xs font-medium text-red-400">Original</span>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
-                        {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
-                          <div key={hunkIndex}>
-                            {hunk.lines.map((line, lineIndex) => {
-                              if (line.type === 'add') return null;
-                              return (
-                                <div
-                                  key={lineIndex}
-                                  className={`flex ${
-                                    line.type === 'remove'
-                                      ? 'bg-red-950/30'
-                                      : 'bg-transparent'
-                                  }`}
-                                >
-                                  <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600">
-                                    {line.oldLineNumber || ''}
-                                  </span>
-                                  <span
-                                    className={`flex-1 px-2 ${
+                  {viewMode === 'split' ? (
+                    /* Side-by-side diff */
+                    <div className="grid min-h-0 flex-1 grid-cols-2">
+                      {/* Left pane - Old content */}
+                      <div className="flex min-h-0 flex-col border-r border-zinc-800">
+                        <div className="border-b border-zinc-800 bg-red-950/20 px-4 py-2">
+                          <span className="text-xs font-medium text-red-400">Original</span>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
+                          {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
+                            <div key={hunkIndex}>
+                              <div className="bg-zinc-900/50 px-4 py-1 text-xs text-zinc-500 border-y border-zinc-800/50">
+                                @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                              </div>
+                              {hunk.lines.map((line, lineIndex) => {
+                                const isAddition = line.type === 'add';
+                                return (
+                                  <div
+                                    key={lineIndex}
+                                    className={`flex h-5 ${
                                       line.type === 'remove'
-                                        ? 'bg-red-900/20 text-red-300'
-                                        : 'text-zinc-400'
+                                        ? 'bg-red-950/30'
+                                        : 'bg-transparent'
                                     }`}
                                   >
-                                    {line.type === 'remove' && (
-                                      <span className="mr-1 text-red-400">-</span>
-                                    )}
-                                    {line.content || '\u00A0'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
+                                    <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50">
+                                      {!isAddition ? line.oldLineNumber || '' : ''}
+                                    </span>
+                                    <span
+                                      className={`flex-1 px-2 whitespace-pre ${
+                                        line.type === 'remove'
+                                          ? 'bg-red-900/20 text-red-300'
+                                          : 'text-zinc-400'
+                                      }`}
+                                    >
+                                      {!isAddition && (
+                                        <>
+                                          {line.type === 'remove' && (
+                                            <span className="mr-1 text-red-400">-</span>
+                                          )}
+                                          {line.content || ''}
+                                        </>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Right pane - New content */}
-                    <div className="flex min-h-0 flex-col">
-                      <div className="border-b border-zinc-800 bg-emerald-950/20 px-4 py-2">
-                        <span className="text-xs font-medium text-emerald-400">Modified</span>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
-                        {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
-                          <div key={hunkIndex}>
-                            {hunk.lines.map((line, lineIndex) => {
-                              if (line.type === 'remove') return null;
-                              return (
-                                <div
-                                  key={lineIndex}
-                                  className={`flex ${
-                                    line.type === 'add'
-                                      ? 'bg-emerald-950/30'
-                                      : 'bg-transparent'
-                                  }`}
-                                >
-                                  <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600">
-                                    {line.newLineNumber || ''}
-                                  </span>
-                                  <span
-                                    className={`flex-1 px-2 ${
+                      {/* Right pane - New content */}
+                      <div className="flex min-h-0 flex-col">
+                        <div className="border-b border-zinc-800 bg-emerald-950/20 px-4 py-2">
+                          <span className="text-xs font-medium text-emerald-400">Modified</span>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
+                          {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
+                            <div key={hunkIndex}>
+                              <div className="bg-zinc-900/50 px-4 py-1 text-xs text-zinc-500 border-y border-zinc-800/50">
+                                @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                              </div>
+                              {hunk.lines.map((line, lineIndex) => {
+                                const isRemoval = line.type === 'remove';
+                                return (
+                                  <div
+                                    key={lineIndex}
+                                    className={`flex h-5 ${
                                       line.type === 'add'
-                                        ? 'bg-emerald-900/20 text-emerald-300'
-                                        : 'text-zinc-400'
+                                        ? 'bg-emerald-950/30'
+                                        : 'bg-transparent'
                                     }`}
                                   >
-                                    {line.type === 'add' && (
-                                      <span className="mr-1 text-emerald-400">+</span>
-                                    )}
-                                    {line.content || '\u00A0'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
+                                    <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50">
+                                      {!isRemoval ? line.newLineNumber || '' : ''}
+                                    </span>
+                                    <span
+                                      className={`flex-1 px-2 whitespace-pre ${
+                                        line.type === 'add'
+                                          ? 'bg-emerald-900/20 text-emerald-300'
+                                          : 'text-zinc-400'
+                                      }`}
+                                    >
+                                      {!isRemoval && (
+                                        <>
+                                          {line.type === 'add' && (
+                                            <span className="mr-1 text-emerald-400">+</span>
+                                          )}
+                                          {line.content || ''}
+                                        </>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Unified diff */
+                    <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
+                      {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
+                        <div key={hunkIndex}>
+                          <div className="sticky top-0 z-10 bg-zinc-900/95 px-4 py-1 text-xs text-zinc-500 border-y border-zinc-800/50 backdrop-blur">
+                            @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                          </div>
+                          {hunk.lines.map((line, lineIndex) => (
+                            <div
+                              key={lineIndex}
+                              className={`flex ${
+                                line.type === 'add'
+                                  ? 'bg-emerald-950/30'
+                                  : line.type === 'remove'
+                                  ? 'bg-red-950/30'
+                                  : 'bg-transparent'
+                              }`}
+                            >
+                              <div className="flex w-24 flex-shrink-0 select-none border-r border-zinc-800/50">
+                                <span className="w-12 px-2 text-right text-zinc-600">
+                                  {line.oldLineNumber || ''}
+                                </span>
+                                <span className="w-12 px-2 text-right text-zinc-600">
+                                  {line.newLineNumber || ''}
+                                </span>
+                              </div>
+                              <span
+                                className={`flex-1 px-4 whitespace-pre ${
+                                  line.type === 'add'
+                                    ? 'bg-emerald-900/20 text-emerald-300'
+                                    : line.type === 'remove'
+                                    ? 'bg-red-900/20 text-red-300'
+                                    : 'text-zinc-400'
+                                }`}
+                              >
+                                {line.type === 'add' ? (
+                                  <span className="mr-2 text-emerald-400">+</span>
+                                ) : line.type === 'remove' ? (
+                                  <span className="mr-2 text-red-400">-</span>
+                                ) : (
+                                  <span className="mr-2 text-zinc-600"> </span>
+                                )}
+                                {line.content || ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
