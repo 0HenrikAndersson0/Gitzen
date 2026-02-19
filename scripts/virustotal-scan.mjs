@@ -159,13 +159,32 @@ async function run() {
 
         console.log(`Updating GitHub Release notes for ${TAG} in ${REPO}...`);
         try {
-            // Explicitly set the token in the environment for the gh command
             const ghEnv = { ...process.env, GH_TOKEN: GITHUB_TOKEN };
             
-            const currentBody = execSync(`gh release view ${TAG} --repo ${REPO} --json body --template '{{.body}}'`, { 
-                encoding: 'utf8',
-                env: ghEnv
-            });
+            // Try to find the release body. If direct tag lookup fails (common for drafts),
+            // we list the releases and find the matching one.
+            let currentBody = '';
+            try {
+                currentBody = execSync(`gh release view ${TAG} --repo ${REPO} --json body --template '{{.body}}'`, { 
+                    encoding: 'utf8',
+                    env: ghEnv
+                });
+            } catch (e) {
+                console.log(`Direct lookup for ${TAG} failed, searching release list...`);
+                const releasesJson = execSync(`gh release list --repo ${REPO} --limit 100 --json tagName,body`, {
+                    encoding: 'utf8',
+                    env: ghEnv
+                });
+                const releases = JSON.parse(releasesJson);
+                // Look for an exact match or a match without the 'v' prefix
+                const match = releases.find(r => r.tagName === TAG || r.tagName === TAG.replace(/^v/, ''));
+                if (!match) {
+                    throw new Error(`Could not find a release with tag ${TAG} in ${REPO}. Available tags: ${releases.map(r => r.tagName).join(', ')}`);
+                }
+                currentBody = match.body;
+            }
+
+            // Replace existing section if it exists, otherwise append
 
             // Replace existing section if it exists, otherwise append
             let newBody;
