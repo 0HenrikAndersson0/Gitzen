@@ -161,40 +161,60 @@ async function run() {
             const ghEnv = { ...process.env, GH_TOKEN: GITHUB_TOKEN };
             
             let currentBody = '';
-            let releaseId = TAG;
+            let releaseId = '';
+            const normalize = (t) => (t || '').replace(/^v\.?/, '').replace(/[-._]/g, '.').toLowerCase().trim();
+            const normalizedSearch = normalize(TAG);
 
             try {
-                const viewResult = execSync(`gh release view ${TAG} --repo ${REPO} --json body,id`, { 
+                console.log(`Attempting direct lookup for release with tag ${TAG}...`);
+                const viewResult = execSync(`gh release view ${TAG} --repo ${REPO} --json body,id,tagName`, { 
                     encoding: 'utf8',
                     env: ghEnv
                 });
                 const viewData = JSON.parse(viewResult);
                 currentBody = viewData.body;
                 releaseId = viewData.id;
+                console.log(`Found release via direct lookup: ${viewData.tagName} (ID: ${releaseId})`);
             } catch (e) {
-                console.log(`Direct lookup for ${TAG} failed, searching via API with fuzzy matching...`);
-                const releasesJson = execSync(`gh api repos/${REPO}/releases`, {
-                    encoding: 'utf8',
-                    env: ghEnv
-                });
-                const releases = JSON.parse(releasesJson);
+                console.log(`Direct lookup for ${TAG} failed, searching via API with fuzzy matching and retries...`);
                 
-                const normalize = (t) => t.replace(/^v\.?/, '').toLowerCase().trim();
-                const normalizedSearch = normalize(TAG);
+                let releases = [];
+                let match = null;
+                const maxRetries = 5;
+                
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const releasesJson = execSync(`gh api repos/${REPO}/releases`, {
+                            encoding: 'utf8',
+                            env: ghEnv
+                        });
+                        releases = JSON.parse(releasesJson);
+                        
+                        match = releases.find(r => 
+                            normalize(r.tag_name) === normalizedSearch ||
+                            normalize(r.name || '') === normalizedSearch ||
+                            (r.tag_name && normalize(r.tag_name).includes(normalizedSearch)) ||
+                            (r.name && normalize(r.name).includes(normalizedSearch))
+                        );
 
-                const match = releases.find(r => 
-                    normalize(r.tag_name) === normalizedSearch ||
-                    normalize(r.name || '') === normalizedSearch
-                );
+                        if (match) break;
+                        
+                        console.log(`Match not found in ${releases.length} releases. Retry ${i + 1}/${maxRetries} in 15s...`);
+                        if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 15000));
+                    } catch (apiErr) {
+                        console.warn(`API call failed during retry ${i + 1}: ${apiErr.message}`);
+                        if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 15000));
+                    }
+                }
 
                 if (!match) {
-                    const availableTags = releases.map(r => r.tag_name).join(', ');
-                    throw new Error(`Could not find a release matching ${TAG} (normalized: ${normalizedSearch}) in ${REPO}. Available: ${availableTags}`);
+                    const availableTags = releases.map(r => `${r.tag_name || 'NO_TAG'} (${r.name || 'NO_NAME'})`).slice(0, 10).join(', ');
+                    throw new Error(`Could not find a release matching ${TAG} (normalized: ${normalizedSearch}) in ${REPO}. Found ${releases.length} total. Top 10 available: ${availableTags}`);
                 }
                 
                 currentBody = match.body || '';
                 releaseId = match.id;
-                console.log(`Matched release: ${match.tag_name} (ID: ${releaseId})`);
+                console.log(`Matched release: ${match.tag_name || match.name} (ID: ${releaseId})`);
             }
 
             let newBody;
