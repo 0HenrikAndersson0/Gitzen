@@ -177,6 +177,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
   const [loading, setLoading] = useState(true);
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
+  const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -417,6 +418,29 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="mr-4 flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5">
+              <button
+                onClick={() => setViewMode('split')}
+                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  viewMode === 'split'
+                    ? 'bg-zinc-700 text-zinc-100'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Side-by-Side
+              </button>
+              <button
+                onClick={() => setViewMode('unified')}
+                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  viewMode === 'unified'
+                    ? 'bg-zinc-700 text-zinc-100'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Unified
+              </button>
+            </div>
+
             {!file.staged && (
                <button
                 onClick={handleDiscardFile}
@@ -472,104 +496,199 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
         <div className="flex min-h-0 flex-1 flex-col bg-zinc-950 overflow-auto">
           {diff ? (
             <div className="flex min-w-full flex-col">
-              {diff.hunks.map((hunk, hunkIndex) => {
-                 // Check if all valid lines in hunk are selected
-                 let allSelected = true;
-                 let hasChanges = false;
-                 hunk.lines.forEach((l, i) => {
-                   if (l.type !== 'context') {
-                     hasChanges = true;
-                     if (!selectedLines.has(`${hunkIndex}-${i}`)) allSelected = false;
-                   }
-                 });
+              {viewMode === 'split' ? (
+                /* Side-by-Side View */
+                diff.hunks.map((hunk, hunkIndex) => {
+                   // Check if all valid lines in hunk are selected
+                   let allSelected = true;
+                   let hasChanges = false;
+                   hunk.lines.forEach((l, i) => {
+                     if (l.type !== 'context') {
+                       hasChanges = true;
+                       if (!selectedLines.has(`${hunkIndex}-${i}`)) allSelected = false;
+                     }
+                   });
 
-                 return (
-                  <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
-                    {/* Hunk Header */}
-                    <div className="sticky top-0 z-10 flex items-center gap-3 bg-zinc-900/95 px-4 py-2 border-y border-zinc-800 backdrop-blur select-none">
-                       {hasChanges && (
-                         <div className="flex items-center justify-center rounded hover:bg-zinc-800 p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
-                            <input
-                              type="checkbox"
-                              checked={allSelected}
-                              onChange={() => {}} 
-                              className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
-                            />
-                         </div>
-                       )}
-                      <span className="font-mono text-xs text-zinc-500">
-                        @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
-                      </span>
-                    </div>
-
-                    {/* Hunk Content */}
-                    <div className="grid grid-cols-2">
-                      {/* Left Pane - Original */}
-                      <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm overflow-x-auto">
-                        {hunk.lines.map((line, lineIndex) => {
-                          if (line.type === 'add') return <div key={lineIndex} className="h-5"></div>;
-                          
-                          const isSelectable = line.type === 'remove';
-                          const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
-
-                          return (
-                             <div
-                                key={lineIndex}
-                                className={`flex w-max min-w-full group ${
-                                  line.type === 'remove'
-                                    ? 'bg-red-950/30'
-                                    : 'bg-transparent'
-                                }`}
-                                onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
-                              >
-                                <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
-                                  {isSelectable && (
-                                    <input 
-                                      type="checkbox" 
-                                      checked={isSelected} 
-                                      onChange={() => {}}
-                                      className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
-                                      data-checked={isSelected}
-                                    />
-                                  )}
-                                  {line.oldLineNumber || ''}
-                                </span>
-                                <span
-                                  className={`flex-1 px-2 whitespace-pre cursor-pointer ${
-                                    line.type === 'remove'
-                                      ? 'bg-red-900/20 text-red-300'
-                                      : 'text-zinc-400'
-                                  }`}
-                                >
-                                  {line.type === 'remove' && (
-                                    <span className="mr-1 inline-block w-3 select-none text-red-400">-</span>
-                                  )}
-                                  {line.content || '\u00A0'}
-                                </span>
-                              </div>
-                          );
-                        })}
+                   return (
+                    <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
+                      {/* Hunk Header */}
+                      <div className="sticky top-0 z-10 flex items-center gap-3 bg-zinc-900/95 px-4 py-2 border-y border-zinc-800 backdrop-blur select-none">
+                         {hasChanges && (
+                           <div className="flex items-center justify-center rounded hover:bg-zinc-800 p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                onChange={() => {}} 
+                                className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
+                              />
+                           </div>
+                         )}
+                        <span className="font-mono text-xs text-zinc-500">
+                          @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                        </span>
                       </div>
 
-                      {/* Right Pane - Modified */}
+                      {/* Hunk Content */}
+                      <div className="grid grid-cols-2">
+                        {/* Left Pane - Original */}
+                        <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                          {hunk.lines.map((line, lineIndex) => {
+                            const isAddition = line.type === 'add';
+                            const isSelectable = line.type === 'remove';
+                            const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
+
+                            return (
+                               <div
+                                  key={lineIndex}
+                                  className={`flex h-5 w-max min-w-full group ${
+                                    line.type === 'remove'
+                                      ? 'bg-red-950/30'
+                                      : 'bg-transparent'
+                                  }`}
+                                  onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
+                                >
+                                  <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                    {isSelectable && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        onChange={() => {}}
+                                        className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                        data-checked={isSelected}
+                                      />
+                                    )}
+                                    {!isAddition ? line.oldLineNumber || '' : ''}
+                                  </span>
+                                  <span
+                                    className={`flex-1 px-2 whitespace-pre cursor-pointer ${
+                                      line.type === 'remove'
+                                        ? 'bg-red-900/20 text-red-300'
+                                        : 'text-zinc-400'
+                                    }`}
+                                  >
+                                    {!isAddition && (
+                                      <>
+                                        {line.type === 'remove' && (
+                                          <span className="mr-1 inline-block w-3 select-none text-red-400">-</span>
+                                        )}
+                                        {line.content || ''}
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Right Pane - Modified */}
+                        <div className="bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                          {hunk.lines.map((line, lineIndex) => {
+                            const isRemoval = line.type === 'remove';
+                            const isSelectable = line.type === 'add';
+                            const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
+
+                            return (
+                               <div
+                                  key={lineIndex}
+                                  className={`flex h-5 w-max min-w-full group ${
+                                    line.type === 'add'
+                                      ? 'bg-emerald-950/30'
+                                      : 'bg-transparent'
+                                  }`}
+                                  onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
+                                >
+                                  <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                    {isSelectable && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isSelected} 
+                                        onChange={() => {}}
+                                        className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                        data-checked={isSelected}
+                                      />
+                                    )}
+                                    {!isRemoval ? line.newLineNumber || '' : ''}
+                                  </span>
+                                  <span
+                                    className={`flex-1 px-2 whitespace-pre cursor-pointer ${
+                                      line.type === 'add'
+                                        ? 'bg-emerald-900/20 text-emerald-300'
+                                        : 'text-zinc-400'
+                                    }`}
+                                  >
+                                    {!isRemoval && (
+                                      <>
+                                        {line.type === 'add' && (
+                                          <span className="mr-1 inline-block w-3 select-none text-emerald-400">+</span>
+                                        )}
+                                        {line.content || ''}
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                /* Unified View */
+                diff.hunks.map((hunk, hunkIndex) => {
+                   let allSelected = true;
+                   let hasChanges = false;
+                   hunk.lines.forEach((l, i) => {
+                     if (l.type !== 'context') {
+                       hasChanges = true;
+                       if (!selectedLines.has(`${hunkIndex}-${i}`)) allSelected = false;
+                     }
+                   });
+
+                   return (
+                    <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
+                      {/* Hunk Header */}
+                      <div className="sticky top-0 z-10 flex items-center gap-3 bg-zinc-900/95 px-4 py-2 border-y border-zinc-800 backdrop-blur select-none">
+                         {hasChanges && (
+                           <div className="flex items-center justify-center rounded hover:bg-zinc-800 p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                onChange={() => {}} 
+                                className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
+                              />
+                           </div>
+                         )}
+                        <span className="font-mono text-xs text-zinc-500">
+                          @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                        </span>
+                      </div>
+
                       <div className="bg-zinc-950/30 font-mono text-sm overflow-x-auto">
                         {hunk.lines.map((line, lineIndex) => {
-                          if (line.type === 'remove') return <div key={lineIndex} className="h-5"></div>;
-                          
-                          const isSelectable = line.type === 'add';
+                          const isSelectable = line.type !== 'context';
                           const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
 
                           return (
-                             <div
-                                key={lineIndex}
-                                className={`flex w-max min-w-full group ${
-                                  line.type === 'add'
-                                    ? 'bg-emerald-950/30'
-                                    : 'bg-transparent'
-                                }`}
-                                onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
-                              >
-                                <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                            <div
+                              key={lineIndex}
+                              className={`flex w-max min-w-full group ${
+                                line.type === 'add'
+                                  ? 'bg-emerald-950/30'
+                                  : line.type === 'remove'
+                                  ? 'bg-red-950/30'
+                                  : 'bg-transparent'
+                              }`}
+                              onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
+                            >
+                              <div className="flex w-32 flex-shrink-0 select-none border-r border-zinc-800/50 sticky left-0 bg-inherit z-10">
+                                <span className="w-12 px-2 text-right text-zinc-600">
+                                  {line.oldLineNumber || ''}
+                                </span>
+                                <span className="w-12 px-2 text-right text-zinc-600">
+                                  {line.newLineNumber || ''}
+                                </span>
+                                <div className="flex w-8 items-center justify-center">
                                   {isSelectable && (
                                     <input 
                                       type="checkbox" 
@@ -579,28 +698,34 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                                       data-checked={isSelected}
                                     />
                                   )}
-                                  {line.newLineNumber || ''}
-                                </span>
-                                <span
-                                  className={`flex-1 px-2 whitespace-pre cursor-pointer ${
-                                    line.type === 'add'
-                                      ? 'bg-emerald-900/20 text-emerald-300'
-                                      : 'text-zinc-400'
-                                  }`}
-                                >
-                                  {line.type === 'add' && (
-                                    <span className="mr-1 inline-block w-3 select-none text-emerald-400">+</span>
-                                  )}
-                                  {line.content || '\u00A0'}
-                                </span>
+                                </div>
                               </div>
+                              <span
+                                className={`flex-1 px-4 whitespace-pre cursor-pointer ${
+                                  line.type === 'add'
+                                    ? 'bg-emerald-900/20 text-emerald-300'
+                                    : line.type === 'remove'
+                                    ? 'bg-red-900/20 text-red-300'
+                                    : 'text-zinc-400'
+                                }`}
+                              >
+                                {line.type === 'add' ? (
+                                  <span className="mr-2 text-emerald-400 font-bold">+</span>
+                                ) : line.type === 'remove' ? (
+                                  <span className="mr-2 text-red-400 font-bold">-</span>
+                                ) : (
+                                  <span className="mr-2 text-zinc-600"> </span>
+                                )}
+                                {line.content || ''}
+                              </span>
+                            </div>
                           );
                         })}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                   );
+                })
+              )}
             </div>
           ) : (
             <div className="flex flex-1 items-center justify-center text-zinc-500">
