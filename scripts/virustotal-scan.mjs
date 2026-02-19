@@ -11,15 +11,14 @@ const {
 } = process.env;
 
 const REPO = RELEASE_REPO || GITHUB_REPOSITORY;
-
 const SECTION_HEADER = '### 🛡️ VirusTotal Scan Results';
 
 function validateEnv() {
     const missing = [];
     if (!VT_API_KEY) missing.push('VT_API_KEY');
     if (!GITHUB_TOKEN) missing.push('GITHUB_TOKEN');
-    if (!REPO) missing.push('GITHUB_REPOSITORY');
-    if (!TAG) missing.push('GITHUB_REF_NAME');
+    if (!REPO) missing.push('REPO');
+    if (!TAG) missing.push('TAG');
 
     if (missing.length > 0) {
         console.error(`Error: Missing required environment variables: ${missing.join(', ')}`);
@@ -161,44 +160,45 @@ async function run() {
         try {
             const ghEnv = { ...process.env, GH_TOKEN: GITHUB_TOKEN };
             
-            // Try to find the release body. If direct tag lookup fails (common for drafts),
-            // we list the releases and find the matching one.
             let currentBody = '';
+            let releaseId = TAG;
+
             try {
-                currentBody = execSync(`gh release view ${TAG} --repo ${REPO} --json body --template '{{.body}}'`, { 
+                const viewResult = execSync(`gh release view ${TAG} --repo ${REPO} --json body,id`, { 
                     encoding: 'utf8',
                     env: ghEnv
                 });
+                const viewData = JSON.parse(viewResult);
+                currentBody = viewData.body;
+                releaseId = viewData.id;
             } catch (e) {
-                console.log(`Direct lookup for ${TAG} failed, searching via API...`);
-                // gh api is more reliable for drafts and returns the full release object
+                console.log(`Direct lookup for ${TAG} failed, searching via API with fuzzy matching...`);
                 const releasesJson = execSync(`gh api repos/${REPO}/releases`, {
                     encoding: 'utf8',
                     env: ghEnv
                 });
                 const releases = JSON.parse(releasesJson);
                 
-                // Find a release that matches our tag, handling potential "v" prefix differences
+                const normalize = (t) => t.replace(/^v\.?/, '').toLowerCase().trim();
+                const normalizedSearch = normalize(TAG);
+
                 const match = releases.find(r => 
-                    r.tag_name === TAG || 
-                    r.tag_name === TAG.replace(/^v/, '') ||
-                    r.tag_name === 'v' + TAG.replace(/^v/, '')
+                    normalize(r.tag_name) === normalizedSearch ||
+                    normalize(r.name || '') === normalizedSearch
                 );
 
                 if (!match) {
                     const availableTags = releases.map(r => r.tag_name).join(', ');
-                    throw new Error(`Could not find a release matching ${TAG} in ${REPO}. Available: ${availableTags}`);
+                    throw new Error(`Could not find a release matching ${TAG} (normalized: ${normalizedSearch}) in ${REPO}. Available: ${availableTags}`);
                 }
+                
                 currentBody = match.body || '';
+                releaseId = match.id;
+                console.log(`Matched release: ${match.tag_name} (ID: ${releaseId})`);
             }
 
-            // Replace existing section if it exists, otherwise append
-
-            // Replace existing section if it exists, otherwise append
             let newBody;
             if (currentBody.includes(SECTION_HEADER)) {
-                // Remove everything from the header to the end of that section
-                // (Assumes it's the last section or separated by double newlines)
                 const parts = currentBody.split(SECTION_HEADER);
                 newBody = parts[0].trim() + markdown;
             } else {
@@ -206,8 +206,8 @@ async function run() {
             }
             
             fs.writeFileSync('new_body.md', newBody);
-            execSync(`gh release edit ${TAG} --repo ${REPO} --notes-file new_body.md`, { 
-                env: { ...process.env, GH_TOKEN: GITHUB_TOKEN } 
+            execSync(`gh release edit ${releaseId} --repo ${REPO} --notes-file new_body.md`, { 
+                env: ghEnv 
             });
             console.log('✅ Release notes updated successfully!');
         } catch (err) {
