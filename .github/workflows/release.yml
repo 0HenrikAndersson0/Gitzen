@@ -47,7 +47,7 @@ jobs:
         env:
           VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
-          GITHUB_REPOSITORY: 0HenrikAndersson0/gitzen-release
+          RELEASE_REPO: 0HenrikAndersson0/gitzen-release
         run: |
           # Use node to run our custom script
           # We pass the paths to the built artifacts

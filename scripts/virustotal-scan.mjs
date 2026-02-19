@@ -5,9 +5,12 @@ import { execSync } from 'child_process';
 const {
     VT_API_KEY,
     GITHUB_TOKEN,
-    GITHUB_REPOSITORY: REPO,
+    RELEASE_REPO,
+    GITHUB_REPOSITORY,
     GITHUB_REF_NAME: TAG
 } = process.env;
+
+const REPO = RELEASE_REPO || GITHUB_REPOSITORY;
 
 const SECTION_HEADER = '### 🛡️ VirusTotal Scan Results';
 
