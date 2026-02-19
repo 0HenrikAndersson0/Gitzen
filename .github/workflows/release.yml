@@ -35,9 +35,64 @@ jobs:
       - name: Build Renderer
         run: npm run build:renderer
 
-      - name: Build & Publish to Public Repo
-        run: npx electron-builder --publish always
-        env:
-          # Your PAT with access to the public release repo
-          GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
-          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+            - name: Build & Publish to Public Repo
+
+              run: npx electron-builder --publish always
+
+              env:
+
+                # Your PAT with access to the public release repo
+
+                GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+
+                GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+
+      
+
+                  - name: VirusTotal Scan
+
+      
+
+                    if: success()
+
+      
+
+                    env:
+
+      
+
+                      VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+
+      
+
+                      GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+
+      
+
+                      GITHUB_REPOSITORY: 0HenrikAndersson0/gitzen-release
+
+      
+
+                    run: |
+
+      
+
+                      # Use node to run our custom script
+
+      
+
+                      # We pass the paths to the built artifacts
+
+      
+
+                      # Note: GITHUB_REF_NAME contains the tag name (v*)
+
+      
+
+                      node scripts/virustotal-scan.mjs release/*.exe release/*.AppImage release/*.deb
+
+      
+
+            
+
+      
