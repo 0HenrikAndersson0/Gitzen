@@ -154,11 +154,14 @@ async function run() {
             markdown += `| \`${res.name}\` | ${status} | ${res.stats.malicious}/${total} | [View Report](${res.permalink}) |\n`;
         }
 
-        console.log('Updating GitHub Release notes...');
+        console.log(`Updating GitHub Release notes for ${TAG} in ${REPO}...`);
         try {
+            // Explicitly set the token in the environment for the gh command
+            const ghEnv = { ...process.env, GH_TOKEN: GITHUB_TOKEN };
+            
             const currentBody = execSync(`gh release view ${TAG} --repo ${REPO} --json body --template '{{.body}}'`, { 
                 encoding: 'utf8',
-                env: { ...process.env, GH_TOKEN: GITHUB_TOKEN }
+                env: ghEnv
             });
 
             // Replace existing section if it exists, otherwise append
