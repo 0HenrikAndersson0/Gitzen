@@ -170,18 +170,26 @@ async function run() {
                     env: ghEnv
                 });
             } catch (e) {
-                console.log(`Direct lookup for ${TAG} failed, searching release list...`);
-                const releasesJson = execSync(`gh release list --repo ${REPO} --limit 100 --json tagName,body`, {
+                console.log(`Direct lookup for ${TAG} failed, searching via API...`);
+                // gh api is more reliable for drafts and returns the full release object
+                const releasesJson = execSync(`gh api repos/${REPO}/releases`, {
                     encoding: 'utf8',
                     env: ghEnv
                 });
                 const releases = JSON.parse(releasesJson);
-                // Look for an exact match or a match without the 'v' prefix
-                const match = releases.find(r => r.tagName === TAG || r.tagName === TAG.replace(/^v/, ''));
+                
+                // Find a release that matches our tag, handling potential "v" prefix differences
+                const match = releases.find(r => 
+                    r.tag_name === TAG || 
+                    r.tag_name === TAG.replace(/^v/, '') ||
+                    r.tag_name === 'v' + TAG.replace(/^v/, '')
+                );
+
                 if (!match) {
-                    throw new Error(`Could not find a release with tag ${TAG} in ${REPO}. Available tags: ${releases.map(r => r.tagName).join(', ')}`);
+                    const availableTags = releases.map(r => r.tag_name).join(', ');
+                    throw new Error(`Could not find a release matching ${TAG} in ${REPO}. Available: ${availableTags}`);
                 }
-                currentBody = match.body;
+                currentBody = match.body || '';
             }
 
             // Replace existing section if it exists, otherwise append

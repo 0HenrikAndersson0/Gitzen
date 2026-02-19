@@ -1,6 +1,6 @@
 {
   "name": "gitzen",
-  "version": "0.8.0-alpha.1",
+  "version": "0.8.3-alpha.1",
   "description": "Gitzen - A modern Git GUI application",
   "main": "dist/main.js",
   "scripts": {
