@@ -230,48 +230,50 @@ export async function getStatus(): Promise<{ success: boolean; files?: Array<{ p
       return { success: false, error: 'No repository open' };
     }
 
-    const { stdout } = await runGitCommand('status --porcelain');
+    // -u ensures untracked files are shown individually, including those in new folders
+    const { stdout } = await runGitCommand('status --porcelain -u');
     const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; staged: boolean }> = [];
 
-    for (const line of stdout.trim().split('\n').filter(l => l)) {
+    for (const line of stdout.split('\n')) {
+      if (!line || line.length < 4) continue;
+      
       // Git porcelain format: XY filename
-      // X = index status, Y = worktree status
-      // Format is always 2 chars, then space(s), then filename
-      // Handle cases where there might be extra spaces or the format varies slightly
-      const match = line.match(/^(.{1,2})\s+(.+)$/);
-      if (match) {
-        let status = match[1];
-        let filePath = match[2];
-        
-        // Git may quote filenames with special characters - remove surrounding quotes
-        if ((filePath.startsWith('"') && filePath.endsWith('"')) ||
-            (filePath.startsWith("'") && filePath.endsWith("'"))) {
-          filePath = filePath.slice(1, -1);
+      const status = line.substring(0, 2);
+      let filePath = line.substring(3).trim();
+      
+      // Handle renamed files: "R  old -> new"
+      if (status.startsWith('R')) {
+        const parts = filePath.split(' -> ');
+        if (parts.length > 1) {
+          filePath = parts[1];
         }
-        
-        // Ensure status is always 2 characters (pad with space if needed)
-        if (status.length === 1) {
-          status = ' ' + status;
-        }
-        
-        const indexStatus = status[0];
-        const worktreeStatus = status[1];
-
-        let statusType: 'modified' | 'added' | 'deleted' = 'added';
-        if (indexStatus === 'A' || worktreeStatus === 'A') {
-          statusType = 'added';
-        } else if (indexStatus === 'D' || worktreeStatus === 'D') {
-          statusType = 'deleted';
-        } else if (indexStatus === 'M' || worktreeStatus === 'M') {
-          statusType = 'modified';
-        }
-
-        files.push({
-          path: filePath,
-          status: statusType,
-          staged: indexStatus !== ' ' && indexStatus !== '?',
-        });
       }
+
+      // Remove quotes if present
+      if (filePath.startsWith('"') && filePath.endsWith('"')) {
+        filePath = filePath.slice(1, -1);
+      }
+      
+      const indexStatus = status[0];
+      const worktreeStatus = status[1];
+
+      let statusType: 'modified' | 'added' | 'deleted' = 'added';
+      
+      if (indexStatus === '?' || worktreeStatus === '?') {
+        statusType = 'added'; // Untracked
+      } else if (indexStatus === 'A' || worktreeStatus === 'A') {
+        statusType = 'added';
+      } else if (indexStatus === 'D' || worktreeStatus === 'D') {
+        statusType = 'deleted';
+      } else if (indexStatus === 'M' || worktreeStatus === 'M' || indexStatus === 'R') {
+        statusType = 'modified';
+      }
+
+      files.push({
+        path: filePath,
+        status: statusType,
+        staged: indexStatus !== ' ' && indexStatus !== '?',
+      });
     }
 
     return { success: true, files };
@@ -1484,12 +1486,40 @@ export async function getFileDiff(filePath: string, staged: boolean): Promise<{ 
       return { success: false, error: 'No repository open' };
     }
 
-    const args = ['diff'];
-    if (staged) {
-      args.push('--cached');
+    // Check if the file is untracked (new)
+    // If it's untracked, 'git diff' normally shows nothing.
+    // We want to show the whole file as an addition.
+    
+    let isUntracked = false;
+    if (!staged) {
+      const statusResult = await getStatus();
+      if (statusResult.success) {
+        const fileStatus = statusResult.files?.find(f => f.path === filePath);
+        // In getStatus, we currently mark untracked as staged: false, status: 'added'
+        // But git status --porcelain shows them as ??
+        // Let's re-verify status logic if needed, but for now check if it's truly untracked.
+        const { stdout: checkUntracked } = await runGitCommand(`ls-files --others --exclude-standard ${filePath}`);
+        if (checkUntracked.trim() === filePath) {
+          isUntracked = true;
+        }
+      }
     }
-    args.push('--');
-    args.push(filePath);
+
+    let args: string[];
+    if (isUntracked) {
+      // For untracked files, we can use --no-index and diff against /dev/null
+      // or simply use a trick: git diff --no-index /dev/null filePath
+      // On Windows /dev/null might not work, so we use NUL
+      const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
+      args = ['diff', '--no-index', nullDevice, filePath];
+    } else {
+      args = ['diff'];
+      if (staged) {
+        args.push('--cached');
+      }
+      args.push('--');
+      args.push(filePath);
+    }
 
     // Unlike other commands, `git diff` can exit with code 1 if there are changes.
     // We need to handle this gracefully by catching the error and checking stdout.
@@ -1504,7 +1534,14 @@ export async function getFileDiff(filePath: string, staged: boolean): Promise<{ 
       // If there's a diff, git exits with 1, and execFileAsync throws.
       // The diff is in error.stdout.
       if (typeof error.stdout === 'string') {
-        return { success: true, diff: error.stdout };
+        let diff = error.stdout;
+        // If we used --no-index against /dev/null, the header might look weird.
+        // We might want to fix it up to look like a standard git diff.
+        if (isUntracked) {
+           diff = diff.replace(/^--- (?:.*)$/m, `--- /dev/null`);
+           diff = diff.replace(/^\+\+\+ (?:.*)$/m, `+++ b/${filePath}`);
+        }
+        return { success: true, diff };
       }
       // A real error occurred
       throw error;
