@@ -8,7 +8,7 @@ Gitzen is a modern Git GUI application built with Electron, React, and TypeScrip
 - **Frontend:** React, Vite, TypeScript, Tailwind CSS
 - **UI Components:** Radix UI, Lucide React (Icons), Sonner (Toasts)
 - **Git Integration:** Direct execution of `git` binary via `child_process` (Note: Documentation mentioning `nodegit` is outdated; the actual implementation shells out to the system git).
-- **State/Data:** Local `git` commands for data, `keytar` for secure credential storage.
+- **State/Data:** Local `git` commands for data.
 
 ## Architecture
 

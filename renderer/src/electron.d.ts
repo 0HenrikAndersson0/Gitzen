@@ -32,7 +32,7 @@ declare global {
 
   interface Window {
     electronAPI: {
-      gitClone: (url: string, path: string, credentials?: { username: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+      gitClone: (url: string, path: string) => Promise<{ success: boolean; error?: string }>;
       gitOpen: (path: string) => Promise<{ success: boolean; error?: string }>;
       gitStatus: () => Promise<{ success: boolean; files?: FileChange[]; error?: string }>;
       gitStage: (files: string[]) => Promise<{ success: boolean; error?: string }>;
@@ -78,11 +78,6 @@ declare global {
       gitGetCommitsForInteractiveRebase: (targetBranch: string) => Promise<{ success: boolean; commits?: any[]; error?: string }>;
       gitInteractiveRebase: (targetBranch: string, todoLines: string[]) => Promise<{ success: boolean; error?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-      saveCredentials: (remoteUrl: string, username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-      hasCredentials: (remoteUrl: string) => Promise<{ success: boolean; hasCredentials: boolean; error?: string }>;
-      validateExistingCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
-      deleteCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
-      listCredentials: () => Promise<{ success: boolean; credentials?: string[]; error?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
       getRemoteUrl: (remote?: string) => Promise<{ success: boolean; url?: string; error?: string }>;

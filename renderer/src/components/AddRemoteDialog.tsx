@@ -43,14 +43,6 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
       if (result.success && result.cloneUrl) {
         toast.success('Repository created on GitHub!');
         
-        // Save credentials
-        const username = result.ownerLogin || 'git';
-        const saveResult = await window.electronAPI.saveCredentials(result.cloneUrl, username, token);
-        if (!saveResult.success) {
-          console.error('Failed to save credentials:', saveResult.error);
-          toast.warning('Failed to save credentials, you may need to enter them manually.');
-        }
-
         // Add remote
         await onAddRemote('origin', result.cloneUrl);
         
@@ -126,6 +118,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                 <p className="text-xs text-blue-300 leading-relaxed">
                   <strong>Instruction:</strong> To create a repository on GitHub, you need a <strong>Personal Access Token (PAT)</strong>. 
                   Generate one at <span className="text-blue-400 underline">github.com/settings/tokens</span> with the <code>repo</code> scope enabled.
+                  <br/><span className="text-blue-200/70 mt-1 block">Note: This token is used once for creation and not stored.</span>
                 </p>
               </div>
                <div className="grid gap-2">
