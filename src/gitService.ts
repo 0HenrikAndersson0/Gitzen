@@ -1086,15 +1086,17 @@ export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name
       return { success: false, error: 'No repository open' };
     }
 
-    const { stdout } = await runGitCommand('tag -l --format="%(refname:short)|%(objectname:short)|%(creatordate:iso8601)"');
+    // Use %(*objectname:short) to get the commit hash for annotated tags.
+    // If it's a lightweight tag, %(*objectname:short) is empty, so we fall back to %(objectname:short).
+    const { stdout } = await runGitCommand('tag -l --format="%(refname:short)|%(objectname:short)|%(*objectname:short)|%(creatordate:iso8601)"');
     const tags = stdout
       .split('\n')
       .filter((line: string) => line.trim())
       .map((line: string) => {
-        const [name, commit, dateStr] = line.split('|');
+        const [name, hash, dereferencedHash, dateStr] = line.split('|');
         return {
           name: name || '',
-          commit: commit || '',
+          commit: dereferencedHash || hash || '',
           date: dateStr ? new Date(dateStr) : new Date(),
         };
       })
