@@ -87,7 +87,7 @@ async function getAnalysisReport(analysisId) {
         const status = result.data.attributes.status;
         
         if (status === 'completed') {
-            return result.data;
+            return result;
         }
 
         console.log(`Analysis status: ${status}... waiting 30s (${attempts + 1}/${maxAttempts})`);
@@ -133,9 +133,11 @@ async function run() {
         try {
             const analysisId = await uploadFile(filePath);
             const report = await getAnalysisReport(analysisId);
-            const stats = report.attributes.stats;
-            const sha256 = report.meta?.file_info?.sha256 || analysisId.split('-')[1];
-            const permalink = `https://www.virustotal.com/gui/file/${sha256}`;
+            const stats = report.data.attributes.stats;
+            const sha256 = report.meta?.file_info?.sha256;
+            const permalink = sha256 
+                ? `https://www.virustotal.com/gui/file/${sha256}/detection` 
+                : `https://www.virustotal.com/gui/analyses/${analysisId}`;
             
             results.push({
                 name: path.basename(filePath),
@@ -156,7 +158,7 @@ async function run() {
             markdown += `| \`${res.name}\` | ${status} | ${res.stats.malicious}/${total} | [View Report](${res.permalink}) |\n`;
         }
 
-            console.log(`Updating GitHub Release notes for ${TAG} in ${REPO}...`);
+        console.log(`Updating GitHub Release notes for ${TAG} in ${REPO}...`);
         try {
             const baseUrl = `https://api.github.com/repos/${REPO}/releases`;
             const headers = {
