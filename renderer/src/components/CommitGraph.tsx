@@ -1,5 +1,5 @@
 import { GitBranch, Tag, ArrowRight } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -185,7 +185,7 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
   }, [commits, spacingX, spacingY]);
 }
 
-export function CommitGraph({
+export const CommitGraph = memo(function CommitGraph({
   commits = [],
   hasMore = false,
   onLoadMore,
@@ -570,4 +570,4 @@ export function CommitGraph({
       />
     </div>
   );
-}
+});

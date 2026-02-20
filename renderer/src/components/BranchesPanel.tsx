@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -35,7 +35,7 @@ interface BranchesPanelProps {
   onOpenCreateDialog?: () => void;
 }
 
-export function BranchesPanel({
+export const BranchesPanel = memo(function BranchesPanel({
   currentBranch,
   localBranches,
   remoteBranches,
@@ -610,4 +610,4 @@ export function BranchesPanel({
       )}
     </div>
   );
-}
+});

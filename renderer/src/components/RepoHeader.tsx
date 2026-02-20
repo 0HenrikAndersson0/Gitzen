@@ -1,6 +1,6 @@
 import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2, Archive } from 'lucide-react';
 import { Badge } from './ui/badge';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from './ui/button';
 
 interface RepoHeaderProps {
@@ -22,7 +22,7 @@ interface RepoHeaderProps {
   onStash?: () => void;
 }
 
-export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -247,4 +247,4 @@ export function RepoHeader({ repoName, currentBranch, hasCredentials, branchStat
       </div>
     </div>
   );
-}
+});
