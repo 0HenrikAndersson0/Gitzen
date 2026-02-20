@@ -5,7 +5,6 @@ import { CommitPanel } from './components/CommitPanel';
 import { ActivityLog } from './components/ActivityLog';
 import { AddRemoteDialog } from './components/AddRemoteDialog';
 import { RepoHeader } from './components/RepoHeader';
-import { CredentialsDialog } from './components/CredentialsDialog';
 import { MergeConflictDialog } from './components/MergeConflictDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { CommitGraph } from './components/CommitGraph';
@@ -67,8 +66,6 @@ export default function App() {
   const [repoPath, setRepoPath] = useState<string | null>(null);
   const [historyLimit, setHistoryLimit] = useState(50);
   const [currentBranch, setCurrentBranch] = useState('main');
-  const [hasCredentials, setHasCredentials] = useState(false);
-  const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
   const [showAddRemoteDialog, setShowAddRemoteDialog] = useState(false);
   const [showForcePushDialog, setShowForcePushDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -85,13 +82,12 @@ export default function App() {
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'clone' | 'open'>('clone');
   const [showMergeConflictDialog, setShowMergeConflictDialog] = useState(false);
-  const [conflictedFiles, setConflictedFiles] = useState<ConflictedFile[]>([]);
+  const [conflictedFiles, setConflictedFiles] = useState<any[]>([]);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
   const [cherryPickStatus, setCherryPickStatus] = useState<{ inProgress: boolean }>({ inProgress: false });
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
-  const [pendingClone, setPendingClone] = useState<{ url: string; path: string } | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   
   // UI Layout State
@@ -486,12 +482,6 @@ export default function App() {
   // ... Handlers ...
 
   const handleCommit = useCallback(async (message: string) => {
-    // Note: This relies on 'files' state for counting, but not for the actual commit since git commits the index.
-    // However, the count log might be slightly off if called from a shortcut that just staged things without a render cycle.
-    // We can use filesRef for better accuracy in logging if needed, or just accept the visual state.
-    // Better to use filesRef if possible, but 'files' dependency is okay here.
-
-    // Actually, let's use filesRef for the count if we want it to be accurate after a quick stage-then-commit
     const currentFiles = filesRef.current;
     const stagedFiles = currentFiles.filter((f) => f.staged);
     addLog('info', `Committing ${stagedFiles.length} file(s)...`);
@@ -557,40 +547,11 @@ export default function App() {
           addLog('success', `Repository cloned successfully to ${path}`);
           toast.success('Repository cloned successfully!');
           
-          const testResult = await window.electronAPI.testGitCredentials(url);
-          if (testResult.success) {
-            setHasCredentials(true);
-            addLog('info', 'Git credentials verified - access available');
-          } else {
-            const credResult = await window.electronAPI.hasCredentials(url);
-            if (credResult.success && credResult.hasCredentials) {
-              setHasCredentials(true);
-            } else {
-              setTimeout(() => {
-                setShowCredentialsDialog(true);
-                addLog('warning', 'Git credentials required for push operations');
-              }, 500);
-            }
-          }
-
           await refreshAllData(path);
         } else {
           const errorMsg = result.error || 'Failed to clone repository';
-          
-          // Check for auth error
-          if (errorMsg.includes('Authentication failed') || 
-              errorMsg.includes('terminal prompts disabled') ||
-              errorMsg.includes('could not read Username') ||
-              errorMsg.includes('could not read Password') ||
-              errorMsg.includes('401') || 
-              errorMsg.includes('403')) {
-            addLog('warning', 'Clone failed: Authentication required. Please enter credentials.');
-            setPendingClone({ url, path });
-            setShowCredentialsDialog(true);
-          } else {
-            addLog('error', errorMsg);
-            toast.error(errorMsg);
-          }
+          addLog('error', errorMsg);
+          toast.error(errorMsg);
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -821,13 +782,6 @@ export default function App() {
       }
     }
 
-    if (!hasCredentials && remoteUrl) {
-      setShowCredentialsDialog(true);
-      addLog('error', 'Push failed: credentials required');
-      toast.error('Please provide credentials first');
-      return;
-    }
-
     addLog('info', `Pushing to origin/${currentBranch}...`);
     
     await withLoading(`Pushing to origin/${currentBranch}...`, async () => {
@@ -851,34 +805,11 @@ export default function App() {
 
           addLog('error', errorMsg);
           toast.error(errorMsg);
-          
-          if (errorMsg.includes('Authentication') || 
-              errorMsg.includes('Permission denied') ||
-              errorMsg.includes('401') ||
-              errorMsg.includes('403') ||
-              errorMsg.includes('could not read Username') ||
-              errorMsg.includes('could not read Password')) {
-            setHasCredentials(false);
-            if (remoteUrl) {
-              addLog('warning', 'Invalid credentials detected. Please re-enter your credentials.');
-              setShowCredentialsDialog(true);
-            }
-          }
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Push failed: ${errorMsg}`);
         toast.error(`Push failed: ${errorMsg}`);
-        
-        if (errorMsg.includes('Authentication') || 
-            errorMsg.includes('Permission denied') ||
-            errorMsg.includes('401') ||
-            errorMsg.includes('403')) {
-          setHasCredentials(false);
-          if (remoteUrl) {
-            setShowCredentialsDialog(true);
-          }
-        }
       }
     });
   };
@@ -901,61 +832,6 @@ export default function App() {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Force push failed: ${errorMsg}`);
         toast.error(`Force push failed: ${errorMsg}`);
-      }
-    });
-  };
-
-  const handleCredentialsSubmit = async (username: string, password: string) => {
-    const targetUrl = pendingClone ? pendingClone.url : remoteUrl;
-    
-    if (!targetUrl) return;
-    
-    addLog('info', `Validating credentials for ${username}...`);
-    
-    await withLoading('Validating credentials...', async () => {
-      try {
-        const result = await window.electronAPI.saveCredentials(targetUrl, username, password);
-        if (result.success) {
-          setHasCredentials(true);
-          setShowCredentialsDialog(false);
-          addLog('success', 'Credentials validated and saved successfully');
-          toast.success('Credentials authenticated!');
-          
-          if (pendingClone) {
-            addLog('info', 'Retrying clone with new credentials...');
-            const cloneResult = await window.electronAPI.gitClone(pendingClone.url, pendingClone.path, { username, password });
-            
-            if (cloneResult.success) {
-              setRepoPath(pendingClone.path);
-              setRepoName(pendingClone.url.split('/').pop()?.replace('.git', '') || 'repository');
-              addLog('success', `Repository cloned successfully to ${pendingClone.path}`);
-              toast.success('Repository cloned successfully!');
-              setPendingClone(null);
-              
-              await refreshStatusInternal();
-              await refreshBranchInternal();
-              await refreshHistoryInternal();
-            } else {
-              addLog('error', `Clone failed: ${cloneResult.error}`);
-              toast.error(`Clone failed: ${cloneResult.error}`);
-              // Keep pending clone? No, maybe user wants to try different creds?
-              // Let's keep dialog closed but user can try again.
-              setPendingClone(null);
-            }
-          }
-        } else {
-          const errorMsg = result.error || 'Failed to validate credentials';
-          addLog('error', `Authentication failed: ${errorMsg}`);
-          toast.error(`Authentication failed: ${errorMsg}`);
-          setHasCredentials(false);
-          // If validating for a pending clone failed, we stay in dialog? 
-          // Yes, dialog stays open.
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        addLog('error', `Failed to validate credentials: ${errorMsg}`);
-        toast.error(`Failed to validate credentials: ${errorMsg}`);
-        setHasCredentials(false);
       }
     });
   };
@@ -1250,7 +1126,6 @@ export default function App() {
   };
 
   const handleSwitchRepo = async (name: string, path: string) => {
-    setHasCredentials(false);
     setRemoteUrl(null);
     setFiles([]);
     setCommits([]);
@@ -1265,7 +1140,6 @@ export default function App() {
     setFiles([]);
     setCommits([]);
     setHistoryLimit(50);
-    setHasCredentials(false);
     setRemoteUrl(null);
     setActiveTab('clone');
     addLog('info', 'Ready to open a new repository');
@@ -1441,7 +1315,6 @@ export default function App() {
     setRebaseStatus({ inProgress: false });
     setConflictedFiles([]);
     setShowMergeConflictDialog(false);
-    setHasCredentials(false);
     setRemoteUrl(null);
     
     await withLoading(`Opening repository...`, async () => {
@@ -1463,38 +1336,6 @@ export default function App() {
             const remoteResult = await window.electronAPI.getRemoteUrl('origin');
             if (remoteResult.success && remoteResult.url) {
               setRemoteUrl(remoteResult.url);
-              const remoteUrlValue = remoteResult.url;
-              
-              // 1. Try system credentials (GCM / SSH) first
-              const testResult = await window.electronAPI.testGitCredentials(remoteUrlValue);
-
-              if (testResult.success) {
-                  setHasCredentials(true);
-                  addLog('info', 'Authenticated via system credentials or SSH');
-              } else {
-                  // 2. If system credentials fail, check for stored PAT credentials
-                  const validateResult = await window.electronAPI.validateExistingCredentials(remoteUrlValue);
-
-                  if (validateResult.success) {
-                      setHasCredentials(true);
-                      addLog('info', 'Authenticated via stored credentials');
-                  } else {
-                      // 3. Fallback: Check if we have credentials stored even if validation failed (or wasn't performed)
-                      const credResult = await window.electronAPI.hasCredentials(remoteUrlValue);
-                      if (credResult.success && credResult.hasCredentials) {
-                         if (validateResult.error === 'No credentials found') {
-                             addLog('warning', 'No credentials found. Please authenticate.');
-                             setHasCredentials(false);
-                         } else {
-                             addLog('warning', `Stored credentials validation failed: ${validateResult.error}`);
-                             setHasCredentials(false);
-                         }
-                      } else {
-                         addLog('info', 'No authentication methods available. Push/Pull may fail.');
-                         setHasCredentials(false);
-                      }
-                  }
-              }
             }
           } catch (error) {
             console.log('No remote configured for this repository');
@@ -1522,7 +1363,7 @@ export default function App() {
         <RepoHeader
           repoName={repoName}
           currentBranch={currentBranch}
-          hasCredentials={hasCredentials}
+          hasCredentials={true}
           branchStatus={branchStatus}
           isDisabled={isRefreshingBranches}
           canStash={files.length > 0}
@@ -1697,12 +1538,6 @@ export default function App() {
             <ActivityLog logs={logs} />
           </div>
         ) : null}
-
-      <CredentialsDialog
-        open={showCredentialsDialog}
-        onClose={() => setShowCredentialsDialog(false)}
-        onSubmit={handleCredentialsSubmit}
-      />
 
       <AddRemoteDialog
         open={showAddRemoteDialog}

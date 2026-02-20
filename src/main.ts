@@ -77,8 +77,8 @@ recentReposService.setUserDataPath(app.getPath('userData'));
 settingsService.setUserDataPath(app.getPath('userData'));
 
 // IPC handlers
-ipcMain.handle('git:clone', async (_, url, localPath, credentials) => {
-  return await gitService.cloneRepository(url, localPath, credentials);
+ipcMain.handle('git:clone', async (_, url, localPath) => {
+  return await gitService.cloneRepository(url, localPath);
 });
 
 ipcMain.handle('git:open', async (_, repoPath) => {
@@ -97,15 +97,16 @@ ipcMain.handle('git:unstage', async (_, files) => {
   return await gitService.unstageFiles(files);
 });
 
-  ipcMain.handle('git:stageAll', async () => {
-    return await gitService.stageAll();
-  });
+ipcMain.handle('git:stageAll', async () => {
+  return await gitService.stageAll();
+});
 
-  ipcMain.handle('git:unstageAll', async () => {
-    return await gitService.unstageAll();
-  });
+ipcMain.handle('git:unstageAll', async () => {
+  return await gitService.unstageAll();
+});
 
-  ipcMain.handle('git:commit', async (_, message) => {  return await gitService.commit(message);
+ipcMain.handle('git:commit', async (_, message) => {
+  return await gitService.commit(message);
 });
 
 ipcMain.handle('git:push', async (_, remote, branch, force, overwrite) => {
@@ -178,26 +179,6 @@ ipcMain.handle('git:checkoutBranch', async (_, name) => {
 
 ipcMain.handle('git:mergeBranchToCurrent', async (_, branchToMerge) => {
   return await gitService.mergeBranchToCurrent(branchToMerge);
-});
-
-ipcMain.handle('git:saveCredentials', async (_, remoteUrl, username, password) => {
-  return await gitService.saveCredentials(remoteUrl, username, password);
-});
-
-ipcMain.handle('git:hasCredentials', async (_, remoteUrl) => {
-  return await gitService.hasCredentials(remoteUrl);
-});
-
-ipcMain.handle('git:validateExistingCredentials', async (_, remoteUrl) => {
-  return await gitService.validateExistingCredentials(remoteUrl);
-});
-
-ipcMain.handle('git:deleteCredentials', async (_, remoteUrl) => {
-  return await gitService.deleteCredentials(remoteUrl);
-});
-
-ipcMain.handle('git:listCredentials', async () => {
-  return await gitService.listCredentials();
 });
 
 ipcMain.handle('git:getRepoPath', () => {

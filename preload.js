@@ -7,7 +7,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose protected methods that allow the renderer process to use
 // the APIs you need. This is where you can add custom APIs
 contextBridge.exposeInMainWorld('electronAPI', {
-  gitClone: (url, path, credentials) => ipcRenderer.invoke('git:clone', url, path, credentials),
+  gitClone: (url, path) => ipcRenderer.invoke('git:clone', url, path),
   gitOpen: (path) => ipcRenderer.invoke('git:open', path),
   gitStatus: () => ipcRenderer.invoke('git:status'),
   gitStage: (files) => ipcRenderer.invoke('git:stage', files),
@@ -33,11 +33,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitCreateBranch: (name, checkout) => ipcRenderer.invoke('git:createBranch', name, checkout),
   gitCheckoutBranch: (name) => ipcRenderer.invoke('git:checkoutBranch', name),
   gitMergeBranchToCurrent: (branchToMerge) => ipcRenderer.invoke('git:mergeBranchToCurrent', branchToMerge),
-  saveCredentials: (remoteUrl, username, password) => ipcRenderer.invoke('git:saveCredentials', remoteUrl, username, password),
-  hasCredentials: (remoteUrl) => ipcRenderer.invoke('git:hasCredentials', remoteUrl),
-  validateExistingCredentials: (remoteUrl) => ipcRenderer.invoke('git:validateExistingCredentials', remoteUrl),
-  deleteCredentials: (remoteUrl) => ipcRenderer.invoke('git:deleteCredentials', remoteUrl),
-  listCredentials: () => ipcRenderer.invoke('git:listCredentials'),
   getRepoPath: () => ipcRenderer.invoke('git:getRepoPath'),
   getRepoName: () => ipcRenderer.invoke('git:getRepoName'),
   getRemoteUrl: (remote) => ipcRenderer.invoke('git:getRemoteUrl', remote),

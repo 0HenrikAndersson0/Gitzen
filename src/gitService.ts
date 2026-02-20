@@ -3,23 +3,28 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { shell } from 'electron';
-import { CredentialManager } from './CredentialManager';
+import { shell, app } from 'electron';
 import * as settingsService from './settingsService';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 let currentRepoPath: string | null = null;
-let credentialManager: CredentialManager | null = null;
 
 export interface ConflictedFile {
   path: string;
   type: 'both-modified' | 'deleted-by-us' | 'deleted-by-them' | 'both-added' | 'both-deleted' | 'added-by-us' | 'added-by-them' | 'unknown';
 }
 
+function getAuthEnv(remoteUrl?: string): NodeJS.ProcessEnv {
+  return {
+    GIT_TERMINAL_PROMPT: '0',
+    LC_ALL: 'C'
+  };
+}
+
 export function initializeGitService() {
-  credentialManager = new CredentialManager();
+  // No initialization needed for git service
 }
 
 interface GitExecResult {
@@ -60,49 +65,22 @@ async function runGitCommand(command: string, cwd?: string, env?: NodeJS.Process
   });
 }
 
-export async function cloneRepository(url: string, localPath: string, credentials?: { username: string; password: string }): Promise<{ success: boolean; error?: string }> {
+export async function cloneRepository(url: string, localPath: string): Promise<{ success: boolean; error?: string }> {
   try {
     const dir = path.dirname(localPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    let cloneUrl = url;
-    if (credentials) {
-      // Embed provided credentials
-      const urlObj = new URL(url);
-      urlObj.username = credentials.username;
-      urlObj.password = credentials.password;
-      cloneUrl = urlObj.toString();
-    } else {
-      // Try to find existing credentials (including fallback to other repos on same host)
-      if (!credentialManager) {
-        credentialManager = new CredentialManager();
-      }
-      const existingCreds = await credentialManager.getRemoteCredentials(url);
-          if (existingCreds?.username && existingCreds?.password) {
-            const urlObj = new URL(url);
-            urlObj.username = existingCreds.username;
-            urlObj.password = existingCreds.password;
-            cloneUrl = urlObj.toString();
-          }
-        }
-      
-            await runGitExecFile([
-      
-                '-c', 'http.version=HTTP/1.1',
-      
-                '-c', 'credential.helper=',
-      
-                'clone', cloneUrl, localPath
-      
-            ], {
-      
-              maxBuffer: 10 * 1024 * 1024,
+    const env = getAuthEnv(url);
+
+    await runGitExecFile([
+        'clone', url, localPath
+    ], {
+      maxBuffer: 10 * 1024 * 1024,
       env: { 
         ...process.env, 
-        GIT_TERMINAL_PROMPT: '0',
-        LC_ALL: 'C'
+        ...env
       },
     });
 
@@ -387,18 +365,22 @@ export async function push(remote: string = 'origin', branch?: string, force: bo
       return { success: false, error: 'No repository open' };
     }
 
-    return await withRemoteCredentials(remote, async () => {
-      const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-      let forceFlag = '';
-      if (overwrite) {
-        forceFlag = ' --force';
-      } else if (force) {
-        forceFlag = ' --force-with-lease';
-      }
-      
-      await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`);
-      return { success: true };
-    });
+    const { url } = await getRemoteUrl(remote);
+    if (!url) throw new Error(`Remote '${remote}' has no URL`);
+
+    const authEnv = getAuthEnv(url);
+    const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
+    
+    let forceFlag = '';
+    if (overwrite) {
+      forceFlag = ' --force';
+    } else if (force) {
+      forceFlag = ' --force-with-lease';
+    }
+    
+    await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`, undefined, authEnv);
+    return { success: true };
+
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -488,26 +470,22 @@ export async function pull(remote: string = 'origin', branch?: string, targetBra
       return { success: false, error: 'No repository open' };
     }
 
-    return await withRemoteCredentials(remote, async () => {
-      const currentBranchResult = await getCurrentBranch();
-      const currentBranch = currentBranchResult.branch;
-      const remoteBranchName = branch || (currentBranch || 'main');
+    const { url } = await getRemoteUrl(remote);
+    if (!url) throw new Error(`Remote '${remote}' has no URL`);
 
-      // If targetBranch is specified and is NOT the current branch, we fetch to update it
-      // This mimics "pull" behavior for non-checked-out branches by updating the ref to the remote's version
-      if (targetBranch && targetBranch !== currentBranch) {
-        // Fetch remote branch into local branch: git fetch remote remoteBranch:localBranch
-        // Note: This handles fast-forward updates. If divergent, it will fail, which is correct (needs merge).
-        await runGitCommand(`fetch ${remote} ${remoteBranchName}:${targetBranch}`);
-        return { success: true };
-      } else {
-        // Normal pull into current branch
-        // Use --no-rebase to default to merge strategy.
-        // Use --ff to explicitly request fast-forward if possible (avoiding merge commit if not needed).
-        await runGitCommand(`pull --no-rebase --ff ${remote} ${remoteBranchName}`);
-        return { success: true };
-      }
-    });
+    const authEnv = getAuthEnv(url);
+    const currentBranchResult = await getCurrentBranch();
+    const currentBranch = currentBranchResult.branch;
+    const remoteBranchName = branch || (currentBranch || 'main');
+
+    // If targetBranch is specified and is NOT the current branch, we fetch to update it
+    if (targetBranch && targetBranch !== currentBranch) {
+      await runGitCommand(`fetch ${remote} ${remoteBranchName}:${targetBranch}`, undefined, authEnv);
+      return { success: true };
+    } else {
+      await runGitCommand(`pull --no-rebase --ff ${remote} ${remoteBranchName}`, undefined, authEnv);
+      return { success: true };
+    }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -845,10 +823,12 @@ export async function fetchRemote(remote: string = 'origin'): Promise<{ success:
       return { success: false, error: 'No repository open' };
     }
 
-    return await withRemoteCredentials(remote, async () => {
-      await runGitCommand(`fetch ${remote} --prune`);
-      return { success: true };
-    });
+    const { url } = await getRemoteUrl(remote);
+    if (!url) throw new Error(`Remote '${remote}' has no URL`);
+
+    const authEnv = getAuthEnv(url);
+    await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv);
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -935,275 +915,9 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
   }
 }
 
-/**
- * Helper to execute a git action with credentials injected into the remote URL if available.
- * It temporarily sets the remote URL to include credentials, runs the action, and then restores the URL.
- */
-async function withRemoteCredentials<T>(remote: string, action: () => Promise<T>): Promise<T> {
-  // Capture repo path at start to prevent race conditions during repo switch
-  const repoPath = currentRepoPath;
-  if (!repoPath) throw new Error('No repo open');
 
-  // Get remote URL to check for credentials
-  let originalUrl: string;
-  try {
-    // Use captured repoPath
-    const { stdout } = await runGitExecFile(['remote', 'get-url', remote], { cwd: repoPath });
-    originalUrl = stdout.toString().trim();
-  } catch (e) {
-    // If we can't get the remote URL, just run the action without credential injection
-    return await action();
-  }
 
-  // Try to get credentials
-  if (credentialManager) {
-    const creds = await credentialManager.getRemoteCredentials(originalUrl);
-    if (creds?.username && creds?.password) {
-      // Convert SSH URL to HTTPS if needed, or embed credentials
-      let urlWithCreds = originalUrl;
-      if (originalUrl.startsWith('git@') || originalUrl.startsWith('ssh://')) {
-        // Convert SSH to HTTPS
-        urlWithCreds = originalUrl
-          .replace(/^git@/, 'https://')
-          .replace(/^ssh:\/\//, 'https://')
-          .replace(/:([^\/]+)\//, '/$1/');
-      }
 
-      try {
-        const urlObj = new URL(urlWithCreds);
-        urlObj.username = creds.username;
-        urlObj.password = creds.password;
-        
-        // Temporarily update remote URL with credentials
-        // Use captured repoPath to ensure we modify the correct repo
-        await runGitExecFile(['remote', 'set-url', remote, urlObj.toString()], {
-            cwd: repoPath,
-            env: { ...process.env, LC_ALL: 'C' }
-        });
-
-        try {
-          const result = await action();
-          // Restore original URL
-          await runGitExecFile(['remote', 'set-url', remote, originalUrl], {
-            cwd: repoPath,
-            env: { ...process.env, LC_ALL: 'C' }
-          });
-          return result;
-        } catch (error) {
-          // Restore original URL on error
-          await runGitExecFile(['remote', 'set-url', remote, originalUrl], {
-            cwd: repoPath,
-            env: { ...process.env, LC_ALL: 'C' }
-          });
-          throw error;
-        }
-      } catch (urlError) {
-        console.warn('Failed to parse URL with credentials, trying without:', urlError);
-      }
-    }
-  }
-
-  // If no credentials found or URL parsing failed, just run the action
-  return await action();
-}
-
-async function validateCredentials(remoteUrl: string, username: string, password: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Convert SSH URL to HTTPS if needed for credential testing
-    let testUrl = remoteUrl;
-    if (testUrl.startsWith('git@') || testUrl.startsWith('ssh://')) {
-      testUrl = testUrl
-        .replace(/^git@/, 'https://')
-        .replace(/^ssh:\/\//, 'https://')
-        .replace(/:([^\/]+)\//, '/$1/');
-    }
-
-    // Use the same approach that worked in the terminal, but with execFileAsync for safety
-    // execFileAsync handles argument splitting and quoting automatically
-    const urlObj = new URL(testUrl);
-    urlObj.username = username;
-    urlObj.password = password;
-    const urlWithCreds = urlObj.toString();
-    
-    try {
-      const args = [
-        '-c', 'http.version=HTTP/1.1',
-        '-c', 'credential.helper=',
-        'ls-remote', '--exit-code', urlWithCreds
-      ];
-      
-      const cmdStr = `git ${args.join(' ')}`;
-      const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
-      console.log(`[GIT] ${maskedCmd}`);
-
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn('git', args, {
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }
-        });
-
-        let stderr = '';
-        let stdout = '';
-
-        child.stdout.on('data', (data) => {
-          stdout += data.toString();
-        });
-
-        child.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
-
-        child.on('close', (code) => {
-          if (code === 0 || code === 2) {
-            // Code 0: Success, refs found
-            // Code 2: Success, no refs found (empty repo) - this proves auth worked
-            resolve();
-          } else {
-            const error = new Error(`Git exited with code ${code}`);
-            (error as any).code = code;
-            (error as any).stderr = stderr;
-            (error as any).stdout = stdout;
-            reject(error);
-          }
-        });
-        
-        // Handle error event (e.g. failed to spawn)
-        child.on('error', (err) => {
-            reject(err);
-        });
-      });
-      
-      return { success: true };
-    } catch (error: any) {
-      const cmd = error.cmd || '';
-      const stderr = error.stderr || '';
-      const stdout = error.stdout || '';
-      const message = error.message || '';
-      const errorCode = error.code;
-      
-      const fullErrorDetail = `Code: ${errorCode}, Msg: ${message}, StdErr: ${stderr}, StdOut: ${stdout}`;
-      
-      // Check for authentication-related errors (case-insensitive)
-      const lowError = fullErrorDetail.toLowerCase();
-      if (errorCode === 128 || 
-          lowError.includes('authentication failed') || 
-          lowError.includes('terminal prompts disabled') ||
-          lowError.includes('could not read username') ||
-          lowError.includes('could not read password') ||
-          lowError.includes('permission denied') ||
-          lowError.includes('401') ||
-          lowError.includes('403') ||
-          lowError.includes('unauthorized')) {
-        return { success: false, error: `Authentication failed (Invalid username or token). Details: ${stderr || message}` };
-      }
-      
-      return { success: false, error: `Git command failed: ${fullErrorDetail}` };
-    }
-  } catch (error: any) {
-    return { success: false, error: `Validation error: ${error.message || 'Unknown error'}` };
-  }
-}
-
-export async function saveCredentials(remoteUrl: string, username: string, password: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    if (!credentialManager) {
-      credentialManager = new CredentialManager();
-    }
-
-    // Trim whitespace from credentials
-    const cleanUsername = username.trim();
-    const cleanPassword = password.trim();
-
-    // First, delete any existing credentials for this remote
-    try {
-      await credentialManager.deleteRemoteCredentials(remoteUrl);
-    } catch (error) {
-      // Ignore errors when deleting (might not exist)
-    }
-
-    // Validate credentials before saving
-    const validation = await validateCredentials(remoteUrl, cleanUsername, cleanPassword);
-    
-    if (!validation.success) {
-      // Don't save invalid credentials
-      return { success: false, error: validation.error || 'Credential validation failed' };
-    }
-
-    // Save credentials only if validation succeeds
-    await credentialManager.storeRemoteCredentials(remoteUrl, {
-      username: cleanUsername,
-      password: cleanPassword,
-    });
-
-    return { success: true };
-  } catch (error: any) {
-    // If saving fails, make sure credentials are deleted
-    try {
-      if (credentialManager) {
-        await credentialManager.deleteRemoteCredentials(remoteUrl);
-      }
-    } catch (deleteError) {
-      // Ignore delete errors
-    }
-    return { success: false, error: error.message || 'Unknown error' };
-  }
-}
-
-export async function hasCredentials(remoteUrl: string): Promise<{ success: boolean; hasCredentials: boolean; error?: string }> {
-  try {
-    if (!credentialManager) {
-      credentialManager = new CredentialManager();
-    }
-
-    const creds = await credentialManager.getRemoteCredentials(remoteUrl);
-    return { success: true, hasCredentials: creds !== null };
-  } catch (error: any) {
-    return { success: false, hasCredentials: false, error: error.message || 'Unknown error' };
-  }
-}
-
-export async function validateExistingCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    if (!credentialManager) {
-      credentialManager = new CredentialManager();
-    }
-
-    const creds = await credentialManager.getRemoteCredentials(remoteUrl);
-    if (!creds || !creds.username || !creds.password) {
-      return { success: false, error: 'No credentials found' };
-    }
-
-    // Validate the existing credentials
-    return await validateCredentials(remoteUrl, creds.username, creds.password);
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
-  }
-}
-
-export async function deleteCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    if (!credentialManager) {
-      credentialManager = new CredentialManager();
-    }
-
-    await credentialManager.deleteRemoteCredentials(remoteUrl);
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
-  }
-}
-
-export async function listCredentials(): Promise<{ success: boolean; credentials?: string[]; error?: string }> {
-  try {
-    if (!credentialManager) {
-      credentialManager = new CredentialManager();
-    }
-
-    const credentials = await credentialManager.listCredentials();
-    return { success: true, credentials };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
-  }
-}
 
 export async function getGitUserConfig(): Promise<{ success: boolean; name?: string; email?: string; isGlobal?: boolean; error?: string }> {
   try {
@@ -1325,9 +1039,11 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
     // Fetch each remote individually with credentials
     for (const remote of remotes) {
       try {
-        await withRemoteCredentials(remote, async () => {
-          await runGitCommand(`fetch ${remote} --prune`);
-        });
+        const { url } = await getRemoteUrl(remote);
+        if (url) {
+          const authEnv = getAuthEnv(url);
+          await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv);
+        }
       } catch (e) {
         console.warn(`Failed to fetch remote ${remote}:`, e);
         // Continue with other remotes
@@ -1589,17 +1305,18 @@ export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ su
 
     // Delete remote branch using git push --delete
     try {
-      await withRemoteCredentials(remoteName, async () => {
-        await runGitExecFile(['push', remoteName, '--delete', branchName], {
-          cwd: repoPath,
-          maxBuffer: 10 * 1024 * 1024,
-          env: {
-            ...process.env,
-            GIT_TERMINAL_PROMPT: '0',
-            LC_ALL: 'C',
-          },
-        });
-      });
+        const { url } = await getRemoteUrl(remoteName);
+        if (url) {
+            const authEnv = getAuthEnv(url);
+            await runGitExecFile(['push', remoteName, '--delete', branchName], {
+                cwd: repoPath,
+                maxBuffer: 10 * 1024 * 1024,
+                env: {
+                  ...process.env,
+                  ...authEnv
+                },
+            });
+        }
     } catch (error: any) {
       const errorMsg = error.message || '';
       // If the branch is already gone from remote, we consider it a success for the user
@@ -1659,10 +1376,12 @@ export async function pushTag(tagName: string, remote: string = 'origin'): Promi
       return { success: false, error: 'No repository open' };
     }
 
-    return await withRemoteCredentials(remote, async () => {
-      await runGitCommand(`push ${remote} ${tagName}`);
-      return { success: true };
-    });
+    const { url } = await getRemoteUrl(remote);
+    if (!url) throw new Error(`Remote '${remote}' has no URL`);
+
+    const authEnv = getAuthEnv(url);
+    await runGitCommand(`push ${remote} ${tagName}`, undefined, authEnv);
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -1675,20 +1394,23 @@ export async function getRemoteTags(remote: string = 'origin'): Promise<{ succes
     }
 
     // Use ls-remote to list tags on the remote
-    return await withRemoteCredentials(remote, async () => {
-      const { stdout } = await runGitCommand(`ls-remote --tags --refs ${remote}`);
-      const tags = stdout.split('\n')
-        .map(line => {
-          const parts = line.split('\t');
-          if (parts.length > 1) {
-            return parts[1].replace('refs/tags/', '');
-          }
-          return '';
-        })
-        .filter(t => t);
+    const { url } = await getRemoteUrl(remote);
+    if (!url) throw new Error(`Remote '${remote}' has no URL`);
 
-      return { success: true, tags };
-    });
+    const authEnv = getAuthEnv(url);
+    const { stdout } = await runGitCommand(`ls-remote --tags --refs ${remote}`, undefined, authEnv);
+    
+    const tags = stdout.split('\n')
+      .map(line => {
+        const parts = line.split('\t');
+        if (parts.length > 1) {
+          return parts[1].replace('refs/tags/', '');
+        }
+        return '';
+      })
+      .filter(t => t);
+
+    return { success: true, tags };
   } catch (error: any) {
     // If remote doesn't exist or fails, just return empty list or error
     return { success: false, error: error.message || 'Unknown error' };
@@ -1979,33 +1701,31 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
     }
 
     // Try git ls-remote without explicit credentials
-    // Git will use credential helper, SSH keys, or other built-in mechanisms
-    try {
-      // Try git ls-remote without explicit credentials
-      // Git will use credential helper, SSH keys, or prompt
-      await runGitCommand(`ls-remote "${remoteUrl}"`);
-      return { success: true };
-    } catch (error: any) {
-      const errorMsg = error.message || error.stderr || String(error);
-      const errorCode = error.code;
-      
-      // Check for authentication-related errors
-      if (errorCode === 128 || 
-          errorMsg.includes('Authentication failed') || 
-          errorMsg.includes('fatal: could not read Username') ||
-          errorMsg.includes('fatal: could not read Password') ||
-          errorMsg.includes('Permission denied') ||
-          errorMsg.includes('401') ||
-          errorMsg.includes('403') ||
-          errorMsg.includes('Unauthorized')) {
+    // Git will use credential helper, SSH keys, or prompt
+    // We rely on getAuthEnv to inject known credentials if available, otherwise fallback to system.
+    
+    const authEnv = getAuthEnv(remoteUrl);
+
+    await runGitCommand(`ls-remote "${remoteUrl}"`, undefined, authEnv);
+    return { success: true };
+  } catch (error: any) {
+    const errorMsg = error.message || error.stderr || String(error);
+    const errorCode = error.code;
+    
+    // Check for authentication-related errors
+    if (errorCode === 128 || 
+        errorMsg.includes('Authentication failed') || 
+        errorMsg.includes('fatal: could not read Username') ||
+        errorMsg.includes('fatal: could not read Password') ||
+        errorMsg.includes('Permission denied') ||
+        errorMsg.includes('401') ||
+        errorMsg.includes('403') ||
+        errorMsg.includes('Unauthorized')) {
         return { success: false, error: 'Git credential system could not authenticate' };
       }
       
       // For other errors, return failure but don't assume it's auth-related
       return { success: false, error: errorMsg };
-    }
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
   }
 }
 

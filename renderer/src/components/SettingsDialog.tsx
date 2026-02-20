@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, Key, Trash2, User } from 'lucide-react';
+import { Settings, FolderOpen, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -12,13 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -31,11 +24,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [gitName, setGitName] = useState('');
   const [gitEmail, setGitEmail] = useState('');
   const [isGlobalConfig, setIsGlobalConfig] = useState(true);
-  const [credentials, setCredentials] = useState<string[]>([]);
-  const [selectedCredential, setSelectedCredential] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingCredential, setDeletingCredential] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -46,10 +36,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [mergeToolResult, maxCommitsResult, credentialsResult, gitUserResult] = await Promise.all([
+      const [mergeToolResult, maxCommitsResult, gitUserResult] = await Promise.all([
         window.electronAPI.getMergeToolPath(),
         window.electronAPI.getMaxCommits(),
-        window.electronAPI.listCredentials(),
         window.electronAPI.getGitUserConfig(),
       ]);
       if (mergeToolResult.success) {
@@ -57,9 +46,6 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       }
       if (maxCommitsResult.success) {
         setMaxCommits(maxCommitsResult.maxCommits || 30);
-      }
-      if (credentialsResult.success) {
-        setCredentials(credentialsResult.credentials || []);
       }
       if (gitUserResult.success) {
         setGitName(gitUserResult.name || '');
@@ -87,29 +73,6 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       }
     } catch (error) {
       console.error('Failed to browse for merge tool:', error);
-    }
-  };
-
-  const handleDeleteCredential = async () => {
-    if (!selectedCredential) return;
-    
-    setDeletingCredential(true);
-    try {
-      const result = await window.electronAPI.deleteCredentials(selectedCredential);
-      if (result.success) {
-        // Refresh list
-        const updated = await window.electronAPI.listCredentials();
-        if (updated.success) {
-          setCredentials(updated.credentials || []);
-          setSelectedCredential('');
-        }
-      } else {
-        console.error('Failed to delete credential:', result.error);
-      }
-    } catch (error) {
-      console.error('Failed to delete credential:', error);
-    } finally {
-      setDeletingCredential(false);
     }
   };
 
@@ -245,38 +208,6 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             />
             <p className="text-xs text-zinc-500">
               Maximum number of commits to display in the commit graph. Higher values may impact performance. (10-200)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Saved Credentials</Label>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Select value={selectedCredential} onValueChange={setSelectedCredential} disabled={loading || credentials.length === 0}>
-                  <SelectTrigger className="bg-zinc-950 border-zinc-700 w-full">
-                    <SelectValue placeholder={credentials.length === 0 ? "No saved credentials" : "Select a credential to manage"} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                    {credentials.map((cred) => (
-                      <SelectItem key={cred} value={cred} className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer">
-                        {cred}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                onClick={handleDeleteCredential}
-                variant="destructive"
-                className="bg-red-900/50 border-red-900 hover:bg-red-900 text-red-100"
-                disabled={!selectedCredential || deletingCredential}
-              >
-                <Trash2 className="size-4 mr-2" />
-                Delete
-              </Button>
-            </div>
-            <p className="text-xs text-zinc-500">
-              Manage saved credentials for remote repositories.
             </p>
           </div>
         </div>

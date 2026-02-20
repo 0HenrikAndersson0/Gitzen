@@ -242,21 +242,41 @@ export function CommitGraph({
 
   // Load tags for commits
   const loadTags = async () => {
-    const commitsWithTagsData = await Promise.all(
-      commits.map(async (commit) => {
-        try {
-          const result = await (window.electronAPI as any).getTagsForCommit(commit.hash);
-          if (result.success && result.tags && result.tags.length > 0) {
-            return { ...commit, tags: result.tags };
+    try {
+      const result = await window.electronAPI.getTags();
+      if (result.success && result.tags) {
+        // Create a map of commit hash -> tags
+        const tagsMap = new Map<string, string[]>();
+        
+        result.tags.forEach(tag => {
+          if (tag.commit) {
+            const existing = tagsMap.get(tag.commit) || [];
+            existing.push(tag.name);
+            tagsMap.set(tag.commit, existing);
+          }
+        });
+
+        const commitsWithTagsData = commits.map(commit => {
+          // Try to find tags for this commit using its short hash (id)
+          let tags = tagsMap.get(commit.id) || [];
+          
+          // Fallback: Check if we have tags for the full hash if available
+          if (tags.length === 0 && commit.hash) {
+             const fullHashTags = tagsMap.get(commit.hash);
+             if (fullHashTags) tags = fullHashTags;
+          }
+
+          if (tags.length > 0) {
+            return { ...commit, tags };
           }
           return commit;
-        } catch (error) {
-          console.error(`Failed to load tags for commit ${commit.hash}:`, error);
-          return commit;
-        }
-      })
-    );
-    setCommitsWithTags(commitsWithTagsData);
+        });
+        
+        setCommitsWithTags(commitsWithTagsData);
+      }
+    } catch (error) {
+      console.error('Failed to load tags:', error);
+    }
   };
 
   useEffect(() => {
