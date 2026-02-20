@@ -234,7 +234,12 @@ export default function App() {
         const result = await window.electronAPI.gitStatus();
         if (!pathOverride && targetPath !== repoPathRef.current) return;
         if (result.success && result.files) {
-          setFiles(result.files);
+          setFiles(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(result.files)) {
+              return result.files!;
+            }
+            return prev;
+          });
         }
       } catch (error) {
         console.error('Failed to refresh status:', error);
@@ -279,19 +284,31 @@ export default function App() {
         if (!pathOverride && targetPath !== repoPathRef.current) return;
 
         if (localResult.success && localResult.branches) {
-          setLocalBranches(localResult.branches.map((b: any) => ({
+          const newLocalBranches = localResult.branches.map((b: any) => ({
               name: b.name,
               isRemote: false,
               isCurrent: b.current,
               ahead: b.ahead,
               behind: b.behind,
               upstream: b.upstream
-          })));
+          }));
+          setLocalBranches(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(newLocalBranches)) {
+              return newLocalBranches;
+            }
+            return prev;
+          });
         }
         if (remoteResult.success && remoteResult.branches) {
-          setRemoteBranches(remoteResult.branches.map(b => ({
+          const newRemoteBranches = remoteResult.branches.map(b => ({
               name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
-          })));
+          }));
+          setRemoteBranches(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(newRemoteBranches)) {
+              return newRemoteBranches;
+            }
+            return prev;
+          });
         }
       } catch (e) {
           console.error('Failed to refresh branches', e);
@@ -313,11 +330,17 @@ export default function App() {
         const result = await window.electronAPI.gitGetBranchStatus();
         if (!pathOverride && targetPath !== repoPathRef.current) return;
         if (result.success) {
-          setBranchStatus({
-            ahead: result.ahead || 0,
-            behind: result.behind || 0,
-            hasUpstream: !!result.hasUpstream,
-            upstream: result.upstream
+          setBranchStatus(prev => {
+            const newState = {
+              ahead: result.ahead || 0,
+              behind: result.behind || 0,
+              hasUpstream: !!result.hasUpstream,
+              upstream: result.upstream
+            };
+            if (JSON.stringify(prev) !== JSON.stringify(newState)) {
+              return newState;
+            }
+            return prev;
           });
         }
       } catch (error) {
@@ -356,7 +379,15 @@ export default function App() {
         if (!pathOverride && targetPath !== repoPathRef.current) return;
         if (result.success) {
           if (result.commits) {
-            setCommits(result.commits);
+            setCommits(prev => {
+              // Only update if commit IDs have changed or length changed
+              // Simple check: compare first and last commit IDs and length
+              // For full correctness, we should compare deep, but JSON.stringify on 2000 items is fast enough (~2-5ms)
+              if (JSON.stringify(prev) !== JSON.stringify(result.commits)) {
+                return result.commits!;
+              }
+              return prev;
+            });
           }
           setHasMoreCommits(!!result.hasMore);
         }
@@ -384,7 +415,12 @@ export default function App() {
         if (!pathOverride && targetPath !== repoPathRef.current) return;
         if (result.success) {
           if (result.stashes) {
-            setStashes(result.stashes);
+            setStashes(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(result.stashes)) {
+                return result.stashes!;
+              }
+              return prev;
+            });
           }
         }
       } catch (error) {

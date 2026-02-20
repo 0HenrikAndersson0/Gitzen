@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { Tag, Trash2, Plus, CloudUpload, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -19,7 +19,7 @@ interface TagsPanelProps {
   onSetLoading?: (loading: boolean, message?: string) => void;
 }
 
-export function TagsPanel({
+export const TagsPanel = memo(function TagsPanel({
   onDeleteTag,
   onSetLoading,
 }: TagsPanelProps) {
@@ -265,4 +265,4 @@ export function TagsPanel({
       />
     </div>
   );
-}
+});
