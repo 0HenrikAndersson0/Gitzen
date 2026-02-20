@@ -51,6 +51,7 @@ jobs:
             release/*.AppImage
             release/*.deb
           if-no-files-found: warn
+          retention-days: 1
 
   virustotal:
     needs: release
@@ -78,3 +79,11 @@ jobs:
           RELEASE_REPO: 0HenrikAndersson0/gitzen-release
         run: |
           node scripts/virustotal-scan.mjs dist/*.exe dist/*.AppImage dist/*.deb
+
+      - name: Cleanup Artifacts
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get artifact IDs for this run and delete them
+          gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[].id' | xargs -I {} gh api -X DELETE repos/${{ github.repository }}/actions/artifacts/{}
