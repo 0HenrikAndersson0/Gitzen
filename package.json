@@ -13,7 +13,8 @@
     "build:win": "npm run compile && npm run build:renderer && electron-builder --win",
     "compile": "tsc",
     "compile:watch": "tsc --watch",
-    "test": "vitest run --dir src"
+    "test": "vitest run --dir src",
+    "release:alpha": "node scripts/release-alpha.mjs"
   },
   "keywords": [
     "electron",
