@@ -11,6 +11,13 @@ function run() {
             process.exit(1);
         }
 
+        // Verify we are on a branch
+        const branch = execSync('git branch --show-current').toString().trim();
+        if (!branch) {
+            console.error('❌ You are in a detached HEAD state. Please checkout a branch first.');
+            process.exit(1);
+        }
+
         // 2. Read package.json
         const pkgPath = path.resolve('package.json');
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
@@ -41,7 +48,7 @@ function run() {
         execSync('git add package.json package-lock.json', { stdio: 'inherit' });
 
         // 6. Commit
-        console.log('VX Committing...');
+        console.log('🚀 Committing...');
         execSync(`git commit -m "chore: release v${newVersion}"`, { stdio: 'inherit' });
 
         // 7. Tag
@@ -49,11 +56,15 @@ function run() {
         console.log(`🏷️  Creating tag ${tagName}...`);
         execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
 
+        // 8. Push
+        console.log('⬆️  Pushing changes and tag...');
+        execSync(`git push origin ${branch}`, { stdio: 'inherit' });
+        execSync(`git push origin ${tagName}`, { stdio: 'inherit' });
+
         console.log('✅ Release script completed successfully!');
         console.log(`   New Version: ${newVersion}`);
         console.log(`   Tag: ${tagName}`);
-        console.log('👉 To push changes to remote, run:');
-        console.log(`   git push && git push origin ${tagName}`);
+        console.log('   Changes pushed to remote.');
 
     } catch (error) {
         console.error('❌ Release failed:', error.message);
