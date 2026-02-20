@@ -49,17 +49,14 @@ function run() {
         console.log(`🏷️  Creating tag ${tagName}...`);
         execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
 
-        console.log('
-✅ Release script completed successfully!');
+        console.log('✅ Release script completed successfully!');
         console.log(`   New Version: ${newVersion}`);
         console.log(`   Tag: ${tagName}`);
-        console.log('
-👉 To push changes to remote, run:');
+        console.log('👉 To push changes to remote, run:');
         console.log(`   git push && git push origin ${tagName}`);
 
     } catch (error) {
-        console.error('
-❌ Release failed:', error.message);
+        console.error('❌ Release failed:', error.message);
         process.exit(1);
     }
 }
