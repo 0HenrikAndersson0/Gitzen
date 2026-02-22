@@ -177,7 +177,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
   const [loading, setLoading] = useState(true);
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
-  const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
+  const [viewMode, setViewMode] = useState<'split' | 'unified'>('unified');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

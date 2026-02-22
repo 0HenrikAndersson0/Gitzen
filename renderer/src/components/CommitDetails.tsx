@@ -114,7 +114,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
+  const [viewMode, setViewMode] = useState<'split' | 'unified'>('unified');
 
   useEffect(() => {
     const loadDiff = async () => {
