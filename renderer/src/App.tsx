@@ -144,6 +144,16 @@ export default function App() {
     }
   }, [runQueued]);
 
+  const applyTheme = (theme: string) => {
+    // Remove theme classes
+    document.documentElement.classList.remove('dark');
+    
+    // Add classes based on theme string
+    if (theme.includes('dark')) {
+      document.documentElement.classList.add('dark');
+    }
+  };
+
   useEffect(() => {
     // Listen for menu events
     if (window.electronAPI) {
@@ -155,11 +165,7 @@ export default function App() {
        
        if (window.electronAPI.onThemeChanged) {
           window.electronAPI.onThemeChanged((theme) => {
-             if (theme === 'dark') {
-                document.documentElement.classList.add('dark');
-             } else {
-                document.documentElement.classList.remove('dark');
-             }
+             applyTheme(theme);
           });
        }
     }
@@ -168,10 +174,11 @@ export default function App() {
       try {
         if (window.electronAPI.getTheme) {
            const themeResult = await window.electronAPI.getTheme();
-           if (themeResult.success && themeResult.theme === 'dark') {
-              document.documentElement.classList.add('dark');
+           if (themeResult.success && themeResult.theme) {
+              applyTheme(themeResult.theme);
            } else {
-              document.documentElement.classList.remove('dark');
+              // Fallback
+              document.documentElement.classList.add('dark');
            }
         } else {
            // Fallback if API not available yet
