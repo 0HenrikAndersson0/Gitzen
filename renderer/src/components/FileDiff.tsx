@@ -498,7 +498,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
         {/* Diff Viewer */}
         <div className="flex min-h-0 flex-1 flex-col bg-zinc-950 overflow-auto">
           {diff ? (
-            <div className="flex min-w-full flex-col">
+            <div className="flex min-w-full w-fit flex-col">
               {viewMode === 'split' ? (
                 /* Side-by-Side View */
                 diff.hunks.map((hunk, hunkIndex) => {
@@ -532,7 +532,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                       </div>
 
                       {/* Hunk Content */}
-                      <div className="grid w-fit min-w-full" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <div className="grid min-w-full" style={{ gridTemplateColumns: '1fr 1fr' }}>
                         {/* Left Pane - Original */}
                         <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm">
                           {hunk.lines.map((line, lineIndex) => {
