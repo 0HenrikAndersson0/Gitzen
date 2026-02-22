@@ -296,11 +296,11 @@ export const BranchesPanel = memo(function BranchesPanel({
   return (
     <div className="flex flex-col gap-4">
       {/* Local Branches Panel */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
-        <div className="border-b border-zinc-800 p-3 flex items-center justify-between cursor-pointer hover:bg-zinc-800/30 transition-colors"
+      <div className="rounded-lg border border-border bg-card/50 flex flex-col">
+        <div className="border-b border-border p-3 flex items-center justify-between cursor-pointer hover:bg-accent/30 transition-colors"
              onClick={() => setLocalBranchesExpanded(!localBranchesExpanded)}>
-          <div className="flex items-center gap-2 text-zinc-100">
-            {localBranchesExpanded ? <ChevronDown className="size-4 text-zinc-500" /> : <ChevronRight className="size-4 text-zinc-500" />}
+          <div className="flex items-center gap-2 text-foreground">
+            {localBranchesExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
             <GitBranch className="size-4" />
             <h3 className="font-semibold text-sm">Local Branches</h3>
           </div>
@@ -317,27 +317,27 @@ export const BranchesPanel = memo(function BranchesPanel({
         </div>
         {localBranchesExpanded && (
           <div className="flex flex-col">
-            <div className="p-2 border-b border-zinc-800">
+            <div className="p-2 border-b border-border">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-zinc-500" />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
                 <Input
                   value={localFilter}
                   onChange={(e) => setLocalFilter(e.target.value)}
                   placeholder="Filter local branches..."
-                  className="h-7 pl-7 text-xs bg-zinc-800/50 border-zinc-700 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
+                  className="h-7 pl-7 text-xs bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-zinc-700"
                 />
               </div>
             </div>
             {loading && localBranches.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-border">
                 {localBranches
                   .filter(b => b.name.toLowerCase().includes(localFilter.toLowerCase()))
                   .map((branch) => (
                   <div
                     key={branch.name}
-                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
+                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
                     onContextMenu={(e) => handleContextMenu(e, branch)}
                   >
                     <button
@@ -345,10 +345,10 @@ export const BranchesPanel = memo(function BranchesPanel({
                       className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                       disabled={branch.isCurrent}
                     >
-                      <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-blue-400' : 'text-zinc-500'}`} />
+                      <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-blue-400' : 'text-muted-foreground'}`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className={`truncate text-sm ${branch.isCurrent ? 'text-blue-400 font-medium' : 'text-zinc-300'}`}>
+                          <span className={`truncate text-sm ${branch.isCurrent ? 'text-blue-400 font-medium' : 'text-foreground'}`}>
                             {branch.name}
                           </span>
                           {branch.isCurrent && (
@@ -390,30 +390,30 @@ export const BranchesPanel = memo(function BranchesPanel({
       </div>
 
       {/* Remote Branches Panel */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
-        <div className="border-b border-zinc-800 p-3 flex items-center gap-2 text-zinc-100 cursor-pointer hover:bg-zinc-800/30 transition-colors"
+      <div className="rounded-lg border border-border bg-card/50 flex flex-col">
+        <div className="border-b border-border p-3 flex items-center gap-2 text-foreground cursor-pointer hover:bg-accent/30 transition-colors"
              onClick={() => setRemoteBranchesExpanded(!remoteBranchesExpanded)}>
-          {remoteBranchesExpanded ? <ChevronDown className="size-4 text-zinc-500" /> : <ChevronRight className="size-4 text-zinc-500" />}
+          {remoteBranchesExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
           <GitMerge className="size-4" />
           <h3 className="font-semibold text-sm">Remote Branches</h3>
         </div>
         {remoteBranchesExpanded && (
           <div className="flex flex-col">
-            <div className="p-2 border-b border-zinc-800">
+            <div className="p-2 border-b border-border">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-zinc-500" />
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
                 <Input
                   value={remoteFilter}
                   onChange={(e) => setRemoteFilter(e.target.value)}
                   placeholder="Filter remote branches..."
-                  className="h-7 pl-7 text-xs bg-zinc-800/50 border-zinc-700 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
+                  className="h-7 pl-7 text-xs bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-zinc-700"
                 />
               </div>
             </div>
             {loading && remoteBranches.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-border">
                 {remoteBranches
                   .filter(b => b.name.toLowerCase().includes(remoteFilter.toLowerCase()))
                   .map((branch) => {
@@ -423,7 +423,7 @@ export const BranchesPanel = memo(function BranchesPanel({
                   return (
                     <div
                       key={branch.name}
-                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
+                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
                       onContextMenu={(e) => handleContextMenu(e, branch)}
                     >
                       <div
@@ -432,11 +432,11 @@ export const BranchesPanel = memo(function BranchesPanel({
                       >
                         <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-purple-400" />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm text-zinc-300">
+                          <div className="truncate text-sm text-foreground">
                             {branch.name}
                           </div>
                           {isLocalBranch && (
-                            <div className="text-[10px] text-zinc-500">
+                            <div className="text-[10px] text-muted-foreground">
                               Local branch exists
                             </div>
                           )}
@@ -461,7 +461,7 @@ export const BranchesPanel = memo(function BranchesPanel({
       </div>
 
       {/* Stashes Panel */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
+      <div className="rounded-lg border border-border bg-card/50 flex flex-col">
         <StashList
           stashes={stashes}
           onApplyStash={onApplyStash}
@@ -471,26 +471,26 @@ export const BranchesPanel = memo(function BranchesPanel({
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteDialog} onOpenChange={(open) => !open && setDeleteDialog(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-red-400 flex items-center gap-2">
               <Trash2 className="size-5" />
               {deleteDialog?.type === 'branch' && 'Delete Branch'}
               {deleteDialog?.type === 'remoteBranch' && 'Delete Remote Branch'}
             </DialogTitle>
-            <DialogDescription className="text-zinc-400 mt-3 text-base">
+            <DialogDescription className="text-muted-foreground mt-3 text-base">
               {deleteDialog?.type === 'branch' && (
                 <>
-                  Are you sure you want to delete the branch <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
+                  Are you sure you want to delete the branch <span className="font-mono font-semibold text-foreground">{deleteDialog.name}</span>? 
                   <br />
-                  <span className="text-sm text-zinc-500 mt-2 block">This action cannot be undone.</span>
+                  <span className="text-sm text-muted-foreground mt-2 block">This action cannot be undone.</span>
                 </>
               )}
               {deleteDialog?.type === 'remoteBranch' && (
                 <>
-                  Are you sure you want to delete the remote branch <span className="font-mono font-semibold text-zinc-300">{deleteDialog.name}</span>? 
+                  Are you sure you want to delete the remote branch <span className="font-mono font-semibold text-foreground">{deleteDialog.name}</span>? 
                   <br />
-                  <span className="text-sm text-zinc-500 mt-2 block">This will delete the branch on the remote repository.</span>
+                  <span className="text-sm text-muted-foreground mt-2 block">This will delete the branch on the remote repository.</span>
                 </>
               )}
             </DialogDescription>
@@ -499,7 +499,7 @@ export const BranchesPanel = memo(function BranchesPanel({
             <Button
               variant="outline"
               onClick={() => setDeleteDialog(null)}
-              className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-200"
+              className="bg-secondary border-border text-foreground hover:bg-muted hover:text-foreground"
             >
               Cancel
             </Button>
@@ -516,10 +516,10 @@ export const BranchesPanel = memo(function BranchesPanel({
 
       {/* Create Branch Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-zinc-100">Create New Branch</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle className="text-foreground">Create New Branch</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Enter a name for the new branch. It will be created and checked out.
             </DialogDescription>
           </DialogHeader>
@@ -528,7 +528,7 @@ export const BranchesPanel = memo(function BranchesPanel({
               value={newBranchName}
               onChange={(e) => setNewBranchName(e.target.value)}
               placeholder="branch-name"
-              className="bg-zinc-800 border-zinc-700 text-zinc-100"
+              className="bg-secondary border-border text-foreground"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   handleCreateBranch();
@@ -543,7 +543,7 @@ export const BranchesPanel = memo(function BranchesPanel({
                   closeDialog();
                   setNewBranchName('');
                 }}
-                className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+                className="bg-secondary border-border text-foreground hover:bg-muted"
               >
                 Cancel
               </Button>
@@ -563,35 +563,35 @@ export const BranchesPanel = memo(function BranchesPanel({
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden py-1 min-w-[160px]"
+          className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
             onClick={() => handleMenuAction('pull')}
           >
             Pull latest changes
           </div>
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
             onClick={() => handleMenuAction('fetch')}
           >
             Fetch latest changes
           </div>
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors border-t border-zinc-700"
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors border-t border-border"
             onClick={() => handleMenuAction('merge')}
           >
             Merge to current
           </div>
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
             onClick={() => handleMenuAction('rebase')}
           >
             Rebase current onto {contextMenu.branch}
           </div>
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
             onClick={() => handleMenuAction('interactive-rebase')}
           >
             Interactive Rebase...

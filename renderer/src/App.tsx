@@ -146,15 +146,38 @@ export default function App() {
 
   useEffect(() => {
     // Listen for menu events
-    if (window.electronAPI && window.electronAPI.onShowShortcuts) {
-       window.electronAPI.onShowShortcuts(() => {
-          setShowShortcutsModal(true);
-       });
+    if (window.electronAPI) {
+       if (window.electronAPI.onShowShortcuts) {
+          window.electronAPI.onShowShortcuts(() => {
+             setShowShortcutsModal(true);
+          });
+       }
+       
+       if (window.electronAPI.onThemeChanged) {
+          window.electronAPI.onThemeChanged((theme) => {
+             if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+             } else {
+                document.documentElement.classList.remove('dark');
+             }
+          });
+       }
     }
 
-    document.documentElement.classList.add('dark');
     const init = async () => {
       try {
+        if (window.electronAPI.getTheme) {
+           const themeResult = await window.electronAPI.getTheme();
+           if (themeResult.success && themeResult.theme === 'dark') {
+              document.documentElement.classList.add('dark');
+           } else {
+              document.documentElement.classList.remove('dark');
+           }
+        } else {
+           // Fallback if API not available yet
+           document.documentElement.classList.add('dark');
+        }
+
         const result = await window.electronAPI.getMaxCommits();
         setHistoryLimit(result.success && result.maxCommits ? result.maxCommits : 50);
       } catch (e) {
@@ -1451,7 +1474,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 p-4 flex flex-col gap-4">
+    <div className="h-screen bg-background text-foreground p-4 flex flex-col gap-4">
       <SplashScreen visible={showSplash} />
       {isLoading && <LoadingOverlay message={loadingMessage} />}
       
@@ -1509,7 +1532,7 @@ export default function App() {
                 <div className="flex gap-2">
                     <button
                         onClick={handleSkipCherryPick}
-                        className="px-3 py-1.5 text-xs font-medium bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 border border-zinc-500/20 rounded-md transition-colors"
+                        className="px-3 py-1.5 text-xs font-medium bg-zinc-500/10 text-muted-foreground hover:bg-zinc-500/20 border border-border/20 rounded-md transition-colors"
                     >
                         Skip
                     </button>
@@ -1567,18 +1590,18 @@ export default function App() {
             {/* Main Content Area - Graph or Repo Selector */}
             <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full min-h-0`}>
               {!repoName ? (
-                <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden h-full">
+                <div className="rounded-lg border border-border bg-card/50 overflow-hidden h-full">
                   <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
-                    <TabsList className="grid w-full grid-cols-2 bg-zinc-900/50 border-b border-zinc-800 rounded-none flex-none">
+                    <TabsList className="grid w-full grid-cols-2 bg-card/50 border-b border-border rounded-none flex-none">
                       <TabsTrigger 
                         value="clone" 
-                        className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+                        className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
                       >
                         Clone Repository
                       </TabsTrigger>
                       <TabsTrigger 
                         value="open"
-                        className="data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+                        className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
                       >
                         Open Repository
                       </TabsTrigger>
@@ -1668,10 +1691,10 @@ export default function App() {
         onClose={() => setShowShortcutsModal(false)}
       />
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-zinc-100">Reset Branch</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle className="text-foreground">Reset Branch</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Choose how you want to reset the current branch to this commit.
             </DialogDescription>
           </DialogHeader>
@@ -1679,19 +1702,19 @@ export default function App() {
             <div className="grid grid-cols-1 gap-4">
               <button
                 onClick={() => handleConfirmReset('soft')}
-                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 transition-colors text-left"
+                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-border bg-card/50 hover:bg-accent transition-colors text-left"
               >
                 <span className="font-semibold text-emerald-400">Soft Reset</span>
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-muted-foreground">
                   Keeps all changes in the staging area (Index). Useful if you want to recommit changes.
                 </span>
               </button>
               <button
                 onClick={() => handleConfirmReset('mixed')}
-                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 transition-colors text-left"
+                className="flex flex-col items-start gap-1 p-4 rounded-lg border border-border bg-card/50 hover:bg-accent transition-colors text-left"
               >
                 <span className="font-semibold text-blue-400">Mixed Reset (Default)</span>
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-muted-foreground">
                   Keeps changes in Working Directory but unstages them.
                 </span>
               </button>

@@ -366,19 +366,19 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
   const getFileIcon = (status: FileChange['status']) => {
     switch (status) {
       case 'added':
-        return <FilePlus className="h-4 w-4 text-emerald-400" />;
+        return <FilePlus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
       case 'deleted':
-        return <FileX className="h-4 w-4 text-red-400" />;
+        return <FileX className="h-4 w-4 text-red-600 dark:text-red-400" />;
       default:
-        return <FileText className="h-4 w-4 text-blue-400" />;
+        return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
     }
   };
 
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-6">
-          <div className="text-zinc-100">Loading file diff...</div>
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="text-foreground">Loading file diff...</div>
         </div>
       </div>
     );
@@ -386,15 +386,15 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="flex h-full w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div className="flex h-full w-full flex-col rounded-lg border border-border bg-card shadow-2xl">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-zinc-800 p-6">
+        <div className="flex items-start justify-between border-b border-border p-6">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 border-r border-zinc-800 pr-6">
+            <div className="flex items-center gap-2 border-r border-border pr-6">
               <button
                 onClick={onPrevious}
                 disabled={!onPrevious || processing}
-                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-20"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-20"
                 title="Previous file (Left Arrow)"
               >
                 <ChevronLeft className="h-6 w-6" />
@@ -402,7 +402,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
               <button
                 onClick={onNext}
                 disabled={!onNext || processing}
-                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-20"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-20"
                 title="Next file (Right Arrow)"
               >
                 <ChevronRight className="h-6 w-6" />
@@ -410,8 +410,8 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
             </div>
             <div className="flex items-center gap-2">
               {getFileIcon(file.status)}
-              <span className="font-mono text-xl text-zinc-300">{file.path}</span>
-              <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${file.staged ? 'bg-emerald-900/30 text-emerald-400' : 'bg-amber-900/30 text-amber-400'}`}>
+              <span className="font-mono text-xl text-foreground">{file.path}</span>
+              <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${file.staged ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
                 {file.staged ? 'Staged' : 'Unstaged'}
               </span>
             </div>
@@ -422,7 +422,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                <button
                 onClick={handleDiscardFile}
                 disabled={processing}
-                className="flex items-center gap-2 rounded-md bg-red-950/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-md bg-red-100 dark:bg-red-950/30 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
                 Discard File
@@ -433,7 +433,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
               <button
                 onClick={handleDiscardSelected}
                 disabled={processing}
-                className="flex items-center gap-2 rounded-md bg-red-950/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-md bg-red-100 dark:bg-red-950/30 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
                 Discard Selected Lines
@@ -462,7 +462,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
 
             <button
               onClick={onClose}
-              className="ml-4 rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+              className="ml-4 rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X className="h-5 w-5" />
             </button>
@@ -470,14 +470,14 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-end border-b border-zinc-800 bg-zinc-900/50 px-6 py-2">
-          <div className="flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5">
+        <div className="flex items-center justify-end border-b border-border bg-card/50 px-6 py-2">
+          <div className="flex rounded-md border border-border bg-secondary p-0.5">
             <button
               onClick={() => setViewMode('split')}
               className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                 viewMode === 'split'
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Side-by-Side
@@ -486,8 +486,8 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
               onClick={() => setViewMode('unified')}
               className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                 viewMode === 'unified'
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Unified
@@ -496,7 +496,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
         </div>
 
         {/* Diff Viewer */}
-        <div className="flex min-h-0 flex-1 flex-col bg-zinc-950 overflow-auto">
+        <div className="flex min-h-0 flex-1 flex-col bg-background overflow-auto">
           {diff ? (
             <div className="flex min-w-full w-fit flex-col">
               {viewMode === 'split' ? (
@@ -513,20 +513,20 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                    });
 
                    return (
-                    <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
+                    <div key={hunkIndex} className="border-b border-border last:border-0">
                       {/* Hunk Header */}
-                      <div className="sticky top-0 z-10 flex items-center gap-3 bg-zinc-900/95 px-4 py-2 border-y border-zinc-800 backdrop-blur select-none">
+                      <div className="sticky top-0 z-10 flex items-center gap-3 bg-card/95 px-4 py-2 border-y border-border backdrop-blur select-none">
                          {hasChanges && (
-                           <div className="flex items-center justify-center rounded hover:bg-zinc-800 p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
+                           <div className="flex items-center justify-center rounded hover:bg-accent p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
                               <input
                                 type="checkbox"
                                 checked={allSelected}
                                 onChange={() => {}} 
-                                className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
+                                className="h-4 w-4 rounded border-border bg-secondary text-blue-500 focus:ring-blue-500/20 cursor-pointer"
                               />
                            </div>
                          )}
-                        <span className="font-mono text-xs text-zinc-500">
+                        <span className="font-mono text-xs text-muted-foreground">
                           @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                         </span>
                       </div>
@@ -534,7 +534,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                       {/* Hunk Content */}
                       <div className="grid min-w-full" style={{ gridTemplateColumns: '1fr 1fr' }}>
                         {/* Left Pane - Original */}
-                        <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm">
+                        <div className="border-r border-border bg-background/30 font-mono text-sm">
                           {hunk.lines.map((line, lineIndex) => {
                             const isAddition = line.type === 'add';
                             const isSelectable = line.type === 'remove';
@@ -545,18 +545,18 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                                   key={lineIndex}
                                   className={`flex h-5 w-max min-w-full group ${
                                     line.type === 'remove'
-                                      ? 'bg-red-950/30'
+                                      ? 'bg-red-100 dark:bg-red-950/30'
                                       : 'bg-transparent'
                                   }`}
                                   onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
                                 >
-                                  <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                  <span className="w-16 flex-shrink-0 select-none px-2 text-right text-muted-foreground border-r border-border/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
                                     {isSelectable && (
                                       <input 
                                         type="checkbox" 
                                         checked={isSelected} 
                                         onChange={() => {}}
-                                        className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                        className="h-3 w-3 rounded-sm border-border bg-secondary text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
                                         data-checked={isSelected}
                                       />
                                     )}
@@ -565,14 +565,14 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                                   <span
                                     className={`flex-1 px-2 whitespace-pre cursor-pointer ${
                                       line.type === 'remove'
-                                        ? 'bg-red-900/20 text-red-300'
-                                        : 'text-zinc-400'
+                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                        : 'text-muted-foreground'
                                     }`}
                                   >
                                     {!isAddition && (
                                       <>
                                         {line.type === 'remove' && (
-                                          <span className="mr-1 inline-block w-3 select-none text-red-400">-</span>
+                                          <span className="mr-1 inline-block w-3 select-none text-red-600 dark:text-red-400">-</span>
                                         )}
                                         {line.content || ''}
                                       </>
@@ -584,7 +584,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                         </div>
 
                         {/* Right Pane - Modified */}
-                        <div className="bg-zinc-950/30 font-mono text-sm">
+                        <div className="bg-background/30 font-mono text-sm">
                           {hunk.lines.map((line, lineIndex) => {
                             const isRemoval = line.type === 'remove';
                             const isSelectable = line.type === 'add';
@@ -595,18 +595,18 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                                   key={lineIndex}
                                   className={`flex h-5 w-max min-w-full group ${
                                     line.type === 'add'
-                                      ? 'bg-emerald-950/30'
+                                      ? 'bg-emerald-100 dark:bg-emerald-950/30'
                                       : 'bg-transparent'
                                   }`}
                                   onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
                                 >
-                                  <span className="w-16 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
+                                  <span className="w-16 flex-shrink-0 select-none px-2 text-right text-muted-foreground border-r border-border/50 sticky left-0 bg-inherit z-10 flex items-center justify-end gap-2">
                                     {isSelectable && (
                                       <input 
                                         type="checkbox" 
                                         checked={isSelected} 
                                         onChange={() => {}}
-                                        className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                        className="h-3 w-3 rounded-sm border-border bg-secondary text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
                                         data-checked={isSelected}
                                       />
                                     )}
@@ -615,14 +615,14 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                                   <span
                                     className={`flex-1 px-2 whitespace-pre cursor-pointer ${
                                       line.type === 'add'
-                                        ? 'bg-emerald-900/20 text-emerald-300'
-                                        : 'text-zinc-400'
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                                        : 'text-muted-foreground'
                                     }`}
                                   >
                                     {!isRemoval && (
                                       <>
                                         {line.type === 'add' && (
-                                          <span className="mr-1 inline-block w-3 select-none text-emerald-400">+</span>
+                                          <span className="mr-1 inline-block w-3 select-none text-emerald-600 dark:text-emerald-400">+</span>
                                         )}
                                         {line.content || ''}
                                       </>
@@ -649,25 +649,25 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                    });
 
                    return (
-                    <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
+                    <div key={hunkIndex} className="border-b border-border last:border-0">
                       {/* Hunk Header */}
-                      <div className="sticky top-0 z-10 flex items-center gap-3 bg-zinc-900/95 px-4 py-2 border-y border-zinc-800 backdrop-blur select-none">
+                      <div className="sticky top-0 z-10 flex items-center gap-3 bg-card/95 px-4 py-2 border-y border-border backdrop-blur select-none">
                          {hasChanges && (
-                           <div className="flex items-center justify-center rounded hover:bg-zinc-800 p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
+                           <div className="flex items-center justify-center rounded hover:bg-accent p-1 cursor-pointer" onClick={() => toggleHunk(hunkIndex)}>
                               <input
                                 type="checkbox"
                                 checked={allSelected}
                                 onChange={() => {}} 
-                                className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
+                                className="h-4 w-4 rounded border-border bg-secondary text-blue-500 focus:ring-blue-500/20 cursor-pointer"
                               />
                            </div>
                          )}
-                        <span className="font-mono text-xs text-zinc-500">
+                        <span className="font-mono text-xs text-muted-foreground">
                           @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                         </span>
                       </div>
 
-                      <div className="bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                      <div className="bg-background/30 font-mono text-sm overflow-x-auto">
                         {hunk.lines.map((line, lineIndex) => {
                           const isSelectable = line.type !== 'context';
                           const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
@@ -677,18 +677,18 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                               key={lineIndex}
                               className={`flex w-max min-w-full group ${
                                 line.type === 'add'
-                                  ? 'bg-emerald-950/30'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/30'
                                   : line.type === 'remove'
-                                  ? 'bg-red-950/30'
+                                  ? 'bg-red-100 dark:bg-red-950/30'
                                   : 'bg-transparent'
                               }`}
                               onClick={() => isSelectable && toggleLine(hunkIndex, lineIndex)}
                             >
-                              <div className="flex w-32 flex-shrink-0 select-none border-r border-zinc-800/50 sticky left-0 bg-inherit z-10">
-                                <span className="w-12 px-2 text-right text-zinc-600">
+                              <div className="flex w-32 flex-shrink-0 select-none border-r border-border/50 sticky left-0 bg-inherit z-10">
+                                <span className="w-12 px-2 text-right text-muted-foreground">
                                   {line.oldLineNumber || ''}
                                 </span>
-                                <span className="w-12 px-2 text-right text-zinc-600">
+                                <span className="w-12 px-2 text-right text-muted-foreground">
                                   {line.newLineNumber || ''}
                                 </span>
                                 <div className="flex w-8 items-center justify-center">
@@ -697,7 +697,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                                       type="checkbox" 
                                       checked={isSelected} 
                                       onChange={() => {}}
-                                      className="h-3 w-3 rounded-sm border-zinc-600 bg-zinc-800 text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
+                                      className="h-3 w-3 rounded-sm border-border bg-secondary text-blue-500 opacity-0 group-hover:opacity-100 data-[checked=true]:opacity-100"
                                       data-checked={isSelected}
                                     />
                                   )}
@@ -706,18 +706,18 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                               <span
                                 className={`flex-1 px-4 whitespace-pre cursor-pointer ${
                                   line.type === 'add'
-                                    ? 'bg-emerald-900/20 text-emerald-300'
+                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
                                     : line.type === 'remove'
-                                    ? 'bg-red-900/20 text-red-300'
-                                    : 'text-zinc-400'
+                                    ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                    : 'text-muted-foreground'
                                 }`}
                               >
                                 {line.type === 'add' ? (
-                                  <span className="mr-2 text-emerald-400 font-bold">+</span>
+                                  <span className="mr-2 text-emerald-600 dark:text-emerald-400 font-bold">+</span>
                                 ) : line.type === 'remove' ? (
-                                  <span className="mr-2 text-red-400 font-bold">-</span>
+                                  <span className="mr-2 text-red-600 dark:text-red-400 font-bold">-</span>
                                 ) : (
-                                  <span className="mr-2 text-zinc-600"> </span>
+                                  <span className="mr-2 text-muted-foreground"> </span>
                                 )}
                                 {line.content || ''}
                               </span>
@@ -731,7 +731,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
               )}
             </div>
           ) : (
-            <div className="flex flex-1 items-center justify-center text-zinc-500">
+            <div className="flex flex-1 items-center justify-center text-muted-foreground">
               No changes in this file
             </div>
           )}

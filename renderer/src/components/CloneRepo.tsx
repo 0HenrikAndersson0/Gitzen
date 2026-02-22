@@ -65,7 +65,7 @@ export function CloneRepo({ onClone }: CloneRepoProps) {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6">
+    <div className="rounded-lg border border-border bg-card/50 p-6">
       <div className="mb-4 flex items-center gap-2">
         <FolderGit className="size-5 text-blue-400" />
         <h2>Clone Repository</h2>
@@ -80,7 +80,7 @@ export function CloneRepo({ onClone }: CloneRepoProps) {
             placeholder="https://github.com/username/repository.git"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
-            className="bg-zinc-950 border-zinc-700"
+            className="bg-background border-border"
           />
         </div>
 
@@ -93,12 +93,12 @@ export function CloneRepo({ onClone }: CloneRepoProps) {
               placeholder="/Users/username/projects/repository"
               value={localPath}
               onChange={(e) => setLocalPath(e.target.value)}
-              className="bg-zinc-950 border-zinc-700 flex-1"
+              className="bg-background border-border flex-1"
             />
             <Button
               variant="outline"
               onClick={handleBrowsePath}
-              className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 px-3"
+              className="bg-secondary border-border hover:bg-muted px-3"
               title="Browse folder"
             >
               <FolderOpen className="size-4" />

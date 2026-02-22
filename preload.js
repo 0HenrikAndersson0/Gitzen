@@ -83,5 +83,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setMergeToolPath: (path) => ipcRenderer.invoke('settings:setMergeToolPath', path),
   getMaxCommits: () => ipcRenderer.invoke('settings:getMaxCommits'),
   setMaxCommits: (maxCommits) => ipcRenderer.invoke('settings:setMaxCommits', maxCommits),
+  getTheme: () => ipcRenderer.invoke('settings:getTheme'),
+  setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
   onShowShortcuts: (callback) => ipcRenderer.on('menu:show-shortcuts', callback),
+  onThemeChanged: (callback) => ipcRenderer.on('menu:theme-changed', (_, theme) => callback(theme)),
 });

@@ -4,6 +4,7 @@ import * as path from 'path';
 interface AppSettings {
   mergeToolPath?: string;
   maxCommits?: number;
+  theme?: string;
 }
 
 let userDataPath: string | null = null;
@@ -66,6 +67,17 @@ export function getMaxCommits(): number {
 export function setMaxCommits(maxCommits: number): void {
   const settings = loadSettings();
   settings.maxCommits = maxCommits;
+  saveSettings(settings);
+}
+
+export function getTheme(): string {
+  const settings = loadSettings();
+  return settings.theme || 'dark'; // Default to dark
+}
+
+export function setTheme(theme: string): void {
+  const settings = loadSettings();
+  settings.theme = theme;
   saveSettings(settings);
 }
 

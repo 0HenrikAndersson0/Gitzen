@@ -90,7 +90,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6">
+    <div className="rounded-lg border border-border bg-card p-6">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-blue-600/10 p-3">
@@ -102,51 +102,51 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 <button
                   onClick={handleToggleDropdown}
                   disabled={isDisabled}
-                  className={`group flex items-center gap-2 text-left transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-zinc-100'}`}
+                  className={`group flex items-center gap-2 text-left transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-foreground'}`}
                 >
                   <h1 className="mb-1">{repoName}</h1>
-                  <ChevronDown className="size-4 text-zinc-500 transition-transform group-hover:text-zinc-400" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-hover:text-muted-foreground" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                 </button>
 
                 {isOpen && (
-                  <div className="absolute left-0 top-full z-50 mt-2 min-w-[280px] rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
+                  <div className="absolute left-0 top-full z-50 mt-2 min-w-[280px] rounded-lg border border-border bg-card shadow-xl">
                     {/* Open New Repository Option */}
                     <button
                       onClick={handleOpenNew}
-                      className="flex w-full items-center gap-3 border-b border-zinc-800 px-4 py-3 text-left transition-colors hover:bg-zinc-800"
+                      className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-accent"
                     >
                       <Plus className="size-4 text-emerald-400" />
                       <div>
-                        <div className="text-sm font-medium text-zinc-200">Open New Repository</div>
-                        <div className="text-xs text-zinc-500">Clone or open another repo</div>
+                        <div className="text-sm font-medium text-foreground">Open New Repository</div>
+                        <div className="text-xs text-muted-foreground">Clone or open another repo</div>
                       </div>
                     </button>
 
                     {/* Recent Repositories */}
                     {recentRepos.length > 0 && (
                       <div className="p-2">
-                        <div className="px-2 py-1 text-xs font-medium text-zinc-500">Recent Repositories</div>
+                        <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Recent Repositories</div>
                         {recentRepos.map((repo, index) => (
                           <div
                             key={index}
-                            className="group/item flex w-full items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-zinc-800 cursor-pointer"
+                            className="group/item flex w-full items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-accent cursor-pointer"
                             onClick={() => handleSwitchRepo(repo.name, repo.path)}
                           >
                             <FolderOpen className="size-4 text-blue-400 flex-shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium text-zinc-300">
+                              <div className="truncate text-sm font-medium text-foreground">
                                 {repo.name}
                               </div>
-                              <div className="truncate text-xs text-zinc-500" title={repo.path}>
+                              <div className="truncate text-xs text-muted-foreground" title={repo.path}>
                                 {repo.path}
                               </div>
                             </div>
                             <button
                               onClick={(e) => handleRemoveRecent(e, repo.path)}
-                              className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-zinc-700 rounded transition-all flex-shrink-0"
+                              className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-muted rounded transition-all flex-shrink-0"
                               title="Remove from recent list"
                             >
-                                <Trash2 className="size-3.5 text-zinc-500 hover:text-red-400" />
+                                <Trash2 className="size-3.5 text-muted-foreground hover:text-red-400" />
                             </button>
                           </div>
                         ))}
@@ -156,16 +156,16 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 )}
 
                 {repoName && (
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <GitBranch className="size-4" />
                     <span>{currentBranch}</span>
                     {branchStatus && branchStatus.hasUpstream && (
                       <div className="flex items-center gap-2 ml-2 text-xs">
-                        <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-yellow-400' : 'text-zinc-600'}`} title={`${branchStatus.behind} commits behind`}>
+                        <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-yellow-400' : 'text-muted-foreground'}`} title={`${branchStatus.behind} commits behind`}>
                           <ArrowDown className="size-3 mr-0.5" />
                           {branchStatus.behind}
                         </span>
-                        <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-blue-400' : 'text-zinc-600'}`} title={`${branchStatus.ahead} commits ahead`}>
+                        <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-blue-400' : 'text-muted-foreground'}`} title={`${branchStatus.ahead} commits ahead`}>
                           <ArrowUp className="size-3 mr-0.5" />
                           {branchStatus.ahead}
                         </span>
@@ -188,7 +188,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 size="sm"
                 onClick={onStash}
                 disabled={!canStash}
-                className={`gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 ${!canStash ? 'opacity-50' : ''}`}
+                className={`gap-2 border-border bg-secondary/50 hover:bg-accent text-foreground ${!canStash ? 'opacity-50' : ''}`}
                 title="Stash changes"
               >
                 <Archive className="size-4" />
@@ -198,7 +198,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 variant="outline"
                 size="sm"
                 onClick={onPull}
-                className="gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300"
+                className="gap-2 border-border bg-secondary/50 hover:bg-accent text-foreground"
                 title="Pull from remote"
               >
                 <DownloadCloud className="size-4" />
@@ -213,7 +213,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 variant="outline"
                 size="sm"
                 onClick={onPush}
-                className="gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300"
+                className="gap-2 border-border bg-secondary/50 hover:bg-accent text-foreground"
                 title="Push to remote"
               >
                 <UploadCloud className="size-4" />
@@ -229,10 +229,10 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
 
           <button
             onClick={() => onOpenSettings?.()}
-            className="p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 transition-colors"
+            className="p-2 rounded-lg bg-secondary/50 hover:bg-accent border border-border transition-colors"
             title="Settings"
           >
-            <Settings className="size-4 text-zinc-400 hover:text-zinc-200" />
+            <Settings className="size-4 text-muted-foreground hover:text-foreground" />
           </button>
           {hasCredentials ? (
             <Badge className="bg-green-600/10 text-green-400 border-green-600/20 cursor-help" title="Gitzen uses your system's git credentials (e.g. SSH keys, GCM, keychain).">

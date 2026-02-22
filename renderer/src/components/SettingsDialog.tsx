@@ -115,7 +115,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-2xl">
+      <DialogContent className="bg-card border-border max-w-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Settings className="size-5 text-blue-400" />
@@ -127,10 +127,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         </DialogHeader>
         
         <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-2">
-          <div className="space-y-4 border-b border-zinc-800 pb-6">
+          <div className="space-y-4 border-b border-border pb-6">
             <div className="flex items-center gap-2 mb-2">
               <User className="size-4 text-blue-400" />
-              <h3 className="text-sm font-medium text-zinc-300">Git Identity</h3>
+              <h3 className="text-sm font-medium text-foreground">Git Identity</h3>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -142,7 +142,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   placeholder="John Doe"
                   value={gitName}
                   onChange={(e) => setGitName(e.target.value)}
-                  className="bg-zinc-950 border-zinc-700"
+                  className="bg-background border-border"
                   disabled={loading}
                 />
               </div>
@@ -154,7 +154,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   placeholder="john@example.com"
                   value={gitEmail}
                   onChange={(e) => setGitEmail(e.target.value)}
-                  className="bg-zinc-950 border-zinc-700"
+                  className="bg-background border-border"
                   disabled={loading}
                 />
               </div>
@@ -169,20 +169,20 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               />
               <label
                 htmlFor="isGlobal"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-zinc-400"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground"
               >
                 Save as global configuration
               </label>
             </div>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               This will update your user.name and user.email in your Git configuration.
             </p>
           </div>
 
-          <div className="space-y-4 border-b border-zinc-800 pb-6">
+          <div className="space-y-4 border-b border-border pb-6">
             <div className="flex items-center gap-2 mb-2">
               <Globe className="size-4 text-blue-400" />
-              <h3 className="text-sm font-medium text-zinc-300">Remote</h3>
+              <h3 className="text-sm font-medium text-foreground">Remote</h3>
             </div>
             
             <div className="space-y-2">
@@ -193,10 +193,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 placeholder="https://github.com/username/repo.git"
                 value={remoteUrl}
                 onChange={(e) => setRemoteUrl(e.target.value)}
-                className="bg-zinc-950 border-zinc-700 font-mono text-xs"
+                className="bg-background border-border font-mono text-xs"
                 disabled={loading}
               />
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted-foreground">
                 The URL for the 'origin' remote. Change this to update where you push/pull from.
               </p>
             </div>
@@ -211,20 +211,20 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 placeholder="/usr/bin/meld or C:\\Program Files\\Meld\\meld.exe"
                 value={mergeToolPath}
                 onChange={(e) => setMergeToolPath(e.target.value)}
-                className="bg-zinc-950 border-zinc-700 flex-1"
+                className="bg-background border-border flex-1"
                 disabled={loading}
               />
               <Button
                 onClick={handleBrowse}
                 variant="outline"
-                className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+                className="bg-secondary border-border hover:bg-muted"
                 disabled={loading}
               >
                 <FolderOpen className="size-4 mr-2" />
                 Browse
               </Button>
             </div>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               Path to your preferred merge tool executable. Leave empty to use Git's default mergetool or system default.
             </p>
           </div>
@@ -243,10 +243,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   setMaxCommits(value);
                 }
               }}
-              className="bg-zinc-950 border-zinc-700"
+              className="bg-background border-border"
               disabled={loading}
             />
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               Maximum number of commits to display in the commit graph. Higher values may impact performance. (10-200)
             </p>
           </div>
@@ -256,7 +256,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           <Button
             onClick={onClose}
             variant="outline"
-            className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+            className="bg-secondary border-border hover:bg-muted"
             disabled={saving}
           >
             Cancel
