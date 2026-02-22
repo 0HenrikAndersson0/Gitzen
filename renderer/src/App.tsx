@@ -168,6 +168,28 @@ export default function App() {
              applyTheme(theme);
           });
        }
+
+       if (window.electronAPI.onUpdateAvailable) {
+          window.electronAPI.onUpdateAvailable((updateInfo) => {
+             toast.info(
+                <div className="flex flex-col gap-1">
+                   <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm">Update Available: {updateInfo.version}</span>
+                   </div>
+                   <span className="text-xs text-muted-foreground line-clamp-2">
+                      {updateInfo.name}
+                   </span>
+                   <button 
+                      onClick={() => window.electronAPI.openExternal(updateInfo.url)}
+                      className="mt-2 text-xs font-medium px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded w-fit"
+                   >
+                      View on GitHub
+                   </button>
+                </div>,
+                { duration: 10000, id: 'update-available' }
+             );
+          });
+       }
     }
 
     const init = async () => {
