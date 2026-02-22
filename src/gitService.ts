@@ -1026,6 +1026,19 @@ export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success
   }
 }
 
+export async function setRemoteUrl(remote: string, url: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await runGitCommand(`remote set-url ${remote} ${url}`);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
 export async function fetchAllRemotes(): Promise<{ success: boolean; error?: string }> {
   try {
     if (!currentRepoPath) {
@@ -1037,6 +1050,7 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
     const remotes = remotesOutput.trim().split('\n').filter(r => r);
 
     // Fetch each remote individually with credentials
+    let errors: string[] = [];
     for (const remote of remotes) {
       try {
         const { url } = await getRemoteUrl(remote);
@@ -1044,11 +1058,16 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
           const authEnv = getAuthEnv(url);
           await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn(`Failed to fetch remote ${remote}:`, e);
-        // Continue with other remotes
+        errors.push(e.message || String(e));
       }
     }
+    
+    if (errors.length > 0) {
+      return { success: false, error: errors[0] };
+    }
+    
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };

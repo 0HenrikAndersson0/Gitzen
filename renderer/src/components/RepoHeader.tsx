@@ -235,11 +235,11 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
             <Settings className="size-4 text-zinc-400 hover:text-zinc-200" />
           </button>
           {hasCredentials ? (
-            <Badge className="bg-green-600/10 text-green-400 border-green-600/20">
+            <Badge className="bg-green-600/10 text-green-400 border-green-600/20 cursor-help" title="Gitzen uses your system's git credentials (e.g. SSH keys, GCM, keychain).">
               Authenticated
             </Badge>
           ) : (
-            <Badge className="bg-yellow-600/10 text-yellow-400 border-yellow-600/20">
+            <Badge className="bg-red-600/10 text-red-400 border-red-600/20 cursor-help" title="Authentication failed. Gitzen relies on your system's git credentials. Please use 'gh auth login' or configure your credential helper.">
               No Credentials
             </Badge>
           )}
