@@ -89,6 +89,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
   const [showSplash, setShowSplash] = useState(true);
+  const [hasCredentials, setHasCredentials] = useState(true);
   
   // UI Layout State
   const [showLeftPanel, setShowLeftPanel] = useState(true);
@@ -167,6 +168,37 @@ export default function App() {
   useEffect(() => {
     repoPathRef.current = repoPath;
   }, [repoPath]);
+
+  const checkAuthError = (errorMsg: string, silent = false): boolean => {
+    if (!errorMsg) return false;
+    
+    const isAuthError = 
+      errorMsg.includes('Authentication failed') || 
+      errorMsg.includes('fatal: could not read Username') ||
+      errorMsg.includes('fatal: could not read Password') ||
+      errorMsg.includes('Permission denied') ||
+      errorMsg.includes('401') ||
+      errorMsg.includes('403') ||
+      errorMsg.includes('Unauthorized');
+
+    if (isAuthError) {
+      setHasCredentials(false);
+      if (!silent) {
+        toast.error(
+          <div className="flex flex-col gap-1">
+            <span className="font-bold">Authentication Failed</span>
+            <span className="text-xs">
+              Gitzen relies on your system's git credentials (e.g., SSH keys, GCM). 
+              Please use <code>gh auth login</code> or check your credential helper configuration.
+            </span>
+          </div>,
+          { duration: 10000 }
+        );
+      }
+      return true;
+    }
+    return false;
+  };
 
   const initApp = async () => {
     const path = await loadRepository();
@@ -352,19 +384,25 @@ export default function App() {
     return runQueued(() => refreshBranchStatusInternal(pathOverride));
   }, [refreshBranchStatusInternal, runQueued]);
 
-  const performFetchInternal = useCallback(async (pathOverride?: string) => {
+  const performFetchInternal = useCallback(async (pathOverride?: string, silent = false) => {
       const targetPath = pathOverride || repoPath;
       if (!targetPath) return;
       try {
-          await window.electronAPI.gitFetchAll();
+          const result = await window.electronAPI.gitFetchAll();
+          if (result.success) {
+            setHasCredentials(true);
+          } else if (result.error) {
+             checkAuthError(result.error, silent);
+          }
       } catch (e) {
           console.error('Failed to fetch', e);
+          if (e instanceof Error) checkAuthError(e.message, silent);
       }
   }, [repoPath]);
 
   const performFetch = useCallback((pathOverride?: string, silent = false) => {
     return runQueued(async () => {
-      await performFetchInternal(pathOverride);
+      await performFetchInternal(pathOverride, silent);
       // We run these sequentially within the same queued task to ensure consistency
       await refreshBranchStatusInternal(pathOverride || repoPath || undefined);
       await refreshBranchesInternal(pathOverride || repoPath || undefined, silent);
@@ -580,6 +618,7 @@ export default function App() {
         if (result.success) {
           setRepoPath(path);
           setRepoName(url.split('/').pop()?.replace('.git', '') || 'repository');
+          setHasCredentials(true);
           addLog('success', `Repository cloned successfully to ${path}`);
           toast.success('Repository cloned successfully!');
           
@@ -587,12 +626,16 @@ export default function App() {
         } else {
           const errorMsg = result.error || 'Failed to clone repository';
           addLog('error', errorMsg);
-          toast.error(errorMsg);
+          if (!checkAuthError(errorMsg)) {
+            toast.error(errorMsg);
+          }
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Clone failed: ${errorMsg}`);
-        toast.error(`Clone failed: ${errorMsg}`);
+        if (!checkAuthError(errorMsg)) {
+          toast.error(`Clone failed: ${errorMsg}`);
+        }
       }
     });
   };
@@ -783,6 +826,7 @@ export default function App() {
       try {
         const result = await window.electronAPI.gitPull('origin', currentBranch);
         if (result.success) {
+          setHasCredentials(true);
           addLog('success', `Successfully pulled from origin/${currentBranch}`);
           toast.success('Pulled successfully!');
           await refreshStatusInternal();
@@ -791,12 +835,16 @@ export default function App() {
         } else {
           const errorMsg = result.error || 'Failed to pull';
           addLog('error', errorMsg);
-          toast.error(errorMsg);
+          if (!checkAuthError(errorMsg)) {
+            toast.error(errorMsg);
+          }
         }
       } catch (error) {
          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
          addLog('error', `Pull failed: ${errorMsg}`);
-         toast.error(`Pull failed: ${errorMsg}`);
+         if (!checkAuthError(errorMsg)) {
+            toast.error(`Pull failed: ${errorMsg}`);
+         }
       }
     });
   };
@@ -824,11 +872,16 @@ export default function App() {
       try {
         const result = await window.electronAPI.gitPush('origin', currentBranch);
         if (result.success) {
+          setHasCredentials(true);
           addLog('success', `Successfully pushed to origin/${currentBranch}`);
           toast.success('Changes pushed successfully!');
           await refreshBranchStatusInternal();
         } else {
           const errorMsg = result.error || 'Failed to push';
+          if (checkAuthError(errorMsg)) {
+            addLog('error', errorMsg);
+            return;
+          }
           
           if (errorMsg.includes('Updates were rejected') || 
               errorMsg.includes('non-fast-forward') || 
@@ -845,7 +898,9 @@ export default function App() {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Push failed: ${errorMsg}`);
-        toast.error(`Push failed: ${errorMsg}`);
+        if (!checkAuthError(errorMsg)) {
+          toast.error(`Push failed: ${errorMsg}`);
+        }
       }
     });
   };
@@ -856,18 +911,23 @@ export default function App() {
       try {
         const result = await window.electronAPI.gitPush('origin', currentBranch, true, overwrite);
         if (result.success) {
+          setHasCredentials(true);
           addLog('success', `Successfully ${overwrite ? 'force' : 'force-with-lease'} pushed to origin/${currentBranch}`);
           toast.success(`Changes ${overwrite ? 'force' : 'force-with-lease'} pushed successfully!`);
           await refreshBranchStatusInternal();
         } else {
           const errorMsg = result.error || 'Failed to force push';
           addLog('error', errorMsg);
-          toast.error(errorMsg);
+          if (!checkAuthError(errorMsg)) {
+            toast.error(errorMsg);
+          }
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         addLog('error', `Force push failed: ${errorMsg}`);
-        toast.error(`Force push failed: ${errorMsg}`);
+        if (!checkAuthError(errorMsg)) {
+          toast.error(`Force push failed: ${errorMsg}`);
+        }
       }
     });
   };
@@ -1399,7 +1459,7 @@ export default function App() {
         <RepoHeader
           repoName={repoName}
           currentBranch={currentBranch}
-          hasCredentials={true}
+          hasCredentials={hasCredentials}
           branchStatus={branchStatus}
           isDisabled={isRefreshingBranches}
           canStash={files.length > 0}
@@ -1649,7 +1709,7 @@ export default function App() {
         </DialogContent>
       </Dialog>
 
-      <Toaster />
+      <Toaster visibleToasts={1} richColors />
     </div>
   );
 }

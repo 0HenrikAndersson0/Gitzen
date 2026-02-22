@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRepoPath: () => ipcRenderer.invoke('git:getRepoPath'),
   getRepoName: () => ipcRenderer.invoke('git:getRepoName'),
   getRemoteUrl: (remote) => ipcRenderer.invoke('git:getRemoteUrl', remote),
+  setRemoteUrl: (remote, url) => ipcRenderer.invoke('git:setRemoteUrl', remote, url),
   getRemoteBranches: () => ipcRenderer.invoke('git:getRemoteBranches'),
   getTags: () => ipcRenderer.invoke('git:getTags'),
   getCommitDiff: (commitHash) => ipcRenderer.invoke('git:getCommitDiff', commitHash),

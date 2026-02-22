@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, User } from 'lucide-react';
+import { Settings, FolderOpen, User, Globe } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -23,6 +24,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [maxCommits, setMaxCommits] = useState(30);
   const [gitName, setGitName] = useState('');
   const [gitEmail, setGitEmail] = useState('');
+  const [remoteUrl, setRemoteUrl] = useState('');
   const [isGlobalConfig, setIsGlobalConfig] = useState(true);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,10 +38,11 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [mergeToolResult, maxCommitsResult, gitUserResult] = await Promise.all([
+      const [mergeToolResult, maxCommitsResult, gitUserResult, remoteResult] = await Promise.all([
         window.electronAPI.getMergeToolPath(),
         window.electronAPI.getMaxCommits(),
         window.electronAPI.getGitUserConfig(),
+        window.electronAPI.getRemoteUrl('origin'),
       ]);
       if (mergeToolResult.success) {
         setMergeToolPath(mergeToolResult.mergeToolPath || '');
@@ -51,6 +54,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         setGitName(gitUserResult.name || '');
         setGitEmail(gitUserResult.email || '');
         setIsGlobalConfig(gitUserResult.isGlobal !== false);
+      }
+      if (remoteResult.success) {
+        setRemoteUrl(remoteResult.url || '');
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -79,18 +85,29 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const [mergeToolResult, maxCommitsResult, gitUserResult] = await Promise.all([
+      const [mergeToolResult, maxCommitsResult, gitUserResult, remoteResult] = await Promise.all([
         window.electronAPI.setMergeToolPath(mergeToolPath),
         window.electronAPI.setMaxCommits(maxCommits),
         window.electronAPI.setGitUserConfig(gitName, gitEmail, isGlobalConfig),
+        remoteUrl ? window.electronAPI.setRemoteUrl('origin', remoteUrl) : Promise.resolve({ success: true }),
       ]);
-      if (mergeToolResult.success && maxCommitsResult.success && gitUserResult.success) {
+
+      const errors: string[] = [];
+      if (!mergeToolResult.success) errors.push(`Merge Tool: ${mergeToolResult.error}`);
+      if (!maxCommitsResult.success) errors.push(`Max Commits: ${maxCommitsResult.error}`);
+      if (!gitUserResult.success) errors.push(`Git User: ${gitUserResult.error}`);
+      if (!remoteResult.success) errors.push(`Remote URL: ${remoteResult.error}`);
+
+      if (errors.length === 0) {
+        toast.success('Settings saved successfully');
         onClose();
       } else {
-        console.error('Failed to save settings:', mergeToolResult.error || maxCommitsResult.error || gitUserResult.error);
+        console.error('Failed to save settings:', errors.join(', '));
+        toast.error(`Failed to save: ${errors[0]}`); // Show first error
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
+      toast.error('An unexpected error occurred while saving settings');
     } finally {
       setSaving(false);
     }
@@ -105,7 +122,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             <DialogTitle>Settings</DialogTitle>
           </div>
           <DialogDescription>
-            Configure your Git identity and merge tool preferences.
+            Configure your Git identity, remotes, and preferences.
           </DialogDescription>
         </DialogHeader>
         
@@ -160,6 +177,29 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             <p className="text-xs text-zinc-500">
               This will update your user.name and user.email in your Git configuration.
             </p>
+          </div>
+
+          <div className="space-y-4 border-b border-zinc-800 pb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Globe className="size-4 text-blue-400" />
+              <h3 className="text-sm font-medium text-zinc-300">Remote</h3>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="remoteUrl">Remote URL (origin)</Label>
+              <Input
+                id="remoteUrl"
+                type="text"
+                placeholder="https://github.com/username/repo.git"
+                value={remoteUrl}
+                onChange={(e) => setRemoteUrl(e.target.value)}
+                className="bg-zinc-950 border-zinc-700 font-mono text-xs"
+                disabled={loading}
+              />
+              <p className="text-xs text-zinc-500">
+                The URL for the 'origin' remote. Change this to update where you push/pull from.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">

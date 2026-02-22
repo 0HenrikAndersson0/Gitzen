@@ -193,6 +193,10 @@ ipcMain.handle('git:getRemoteUrl', async (_, remote) => {
   return await gitService.getRemoteUrl(remote);
 });
 
+ipcMain.handle('git:setRemoteUrl', async (_, remote, url) => {
+  return await gitService.setRemoteUrl(remote, url);
+});
+
 ipcMain.handle('git:getRemoteBranches', async () => {
   return await gitService.getRemoteBranches();
 });
