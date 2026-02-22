@@ -32,6 +32,40 @@ function createWindow() {
       ]
     },
     {
+      label: 'Layout',
+      submenu: [
+        {
+          label: 'Theme',
+          submenu: [
+            {
+              label: 'Light',
+              type: 'radio',
+              checked: settingsService.getTheme() === 'lapom-light',
+              click: () => {
+                settingsService.setTheme('lapom-light');
+                const win = BrowserWindow.getFocusedWindow();
+                if (win) {
+                  win.webContents.send('menu:theme-changed', 'lapom-light');
+                }
+              }
+            },
+            {
+              label: 'Dark',
+              type: 'radio',
+              checked: settingsService.getTheme() === 'lapom-dark',
+              click: () => {
+                settingsService.setTheme('lapom-dark');
+                const win = BrowserWindow.getFocusedWindow();
+                if (win) {
+                  win.webContents.send('menu:theme-changed', 'lapom-dark');
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       label: 'Help',
       submenu: [
         {
@@ -433,6 +467,24 @@ ipcMain.handle('settings:getMaxCommits', () => {
 ipcMain.handle('settings:setMaxCommits', (_, maxCommits: number) => {
   try {
     settingsService.setMaxCommits(maxCommits);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:getTheme', () => {
+  try {
+    const theme = settingsService.getTheme();
+    return { success: true, theme };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setTheme', (_, theme: string) => {
+  try {
+    settingsService.setTheme(theme);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };

@@ -129,7 +129,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
   return (
     <div className="space-y-2">
       {files.length === 0 ? (
-        <div className="py-8 text-center text-zinc-500">
+        <div className="py-8 text-center text-muted-foreground">
           <FileCheck className="mx-auto mb-2 size-8" />
           <p>No changes to commit</p>
         </div>
@@ -141,7 +141,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
             className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${
               selectedFileIndex === index
                 ? 'border-blue-500/50 bg-blue-900/20'
-                : 'border-zinc-800 bg-zinc-950/50 hover:bg-zinc-900/50'
+                : 'border-border bg-background/50 hover:bg-card/50'
             }`}
             onContextMenu={(e) => handleContextMenu(e, file)}
             onClick={() => setSelectedFile(file)}
@@ -150,7 +150,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
               checked={file.staged}
               onCheckedChange={() => onToggleStage(file.path)}
               onClick={(e) => e.stopPropagation()}
-              className="border-zinc-600"
+              className="border-border"
             />
             <span className={`font-mono ${getStatusColor(file.status)} w-4`}>
               {getStatusLabel(file.status)}
@@ -167,19 +167,19 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden"
+          className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           {contextMenu.file.status === 'added' ? (
             <div
-              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
               onClick={() => handleMenuAction('delete')}
             >
               Delete file
             </div>
           ) : (
             <div
-              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors"
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
               onClick={() => handleMenuAction('revert')}
             >
               Revert changes

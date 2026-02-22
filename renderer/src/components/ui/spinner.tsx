@@ -15,7 +15,7 @@ export function Spinner({ className, size = 'md', ...props }: SpinnerProps) {
   return (
     <div
       className={cn(
-        "animate-spin rounded-full border-zinc-200 border-t-transparent",
+        "animate-spin rounded-full border-border border-t-transparent",
         sizeClasses[size],
         className
       )}
@@ -28,7 +28,7 @@ export function LoadingOverlay({ message }: { message?: string }) {
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
       <Spinner size="lg" className="border-blue-500 border-t-transparent" />
-      {message && <div className="text-zinc-200 font-medium animate-pulse">{message}</div>}
+      {message && <div className="text-foreground font-medium animate-pulse">{message}</div>}
     </div>
   )
 }

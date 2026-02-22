@@ -117,7 +117,7 @@ export function MergeConflictDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-3xl max-h-[85vh]">
+      <DialogContent className="bg-card border-border max-w-3xl max-h-[85vh]">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <AlertTriangle className="size-5 text-amber-500" />
@@ -130,14 +130,14 @@ export function MergeConflictDialog({
         
         <div className="space-y-4 py-4">
           {bulkResolvableFiles.length > 0 && (
-            <div className="flex items-center justify-between bg-zinc-950 p-2 rounded border border-zinc-800">
+            <div className="flex items-center justify-between bg-background p-2 rounded border border-border">
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={allSelected}
                   onCheckedChange={handleSelectAll}
                   className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                 />
-                <span className="text-sm text-zinc-400">
+                <span className="text-sm text-muted-foreground">
                   Select all standard conflicts
                 </span>
               </div>
@@ -153,9 +153,9 @@ export function MergeConflictDialog({
             </div>
           )}
           
-          <div className="bg-zinc-950 border border-zinc-800 rounded-lg max-h-[500px] overflow-y-auto">
+          <div className="bg-background border border-border rounded-lg max-h-[500px] overflow-y-auto">
             {conflictedFiles.length > 0 ? (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-border">
                 {conflictedFiles.map((file, index) => {
                   const isSelected = selectedFiles.has(file.path);
                   const isDeletedConflict = file.type === 'deleted-by-us' || file.type === 'deleted-by-them';
@@ -164,7 +164,7 @@ export function MergeConflictDialog({
                     <div
                       key={index}
                       className={`flex flex-col gap-2 p-3 transition-colors ${
-                        isSelected ? 'bg-blue-600/10' : 'hover:bg-zinc-900'
+                        isSelected ? 'bg-blue-600/10' : 'hover:bg-card'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -178,12 +178,12 @@ export function MergeConflictDialog({
                           )}
                           <div className="flex flex-col min-w-0">
                              <div className="flex items-center gap-2">
-                                <FileText className="size-4 text-zinc-400 flex-shrink-0" />
-                                <span className="text-sm font-medium text-zinc-200 truncate" title={file.path}>
+                                <FileText className="size-4 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm font-medium text-foreground truncate" title={file.path}>
                                   {file.path}
                                 </span>
                              </div>
-                             <span className="text-xs text-zinc-500 flex items-center gap-1">
+                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                                 <AlertCircle className="size-3" />
                                 {getConflictDescription(file.type)}
                              </span>
@@ -215,7 +215,7 @@ export function MergeConflictDialog({
                           ) : (
                             <Button
                               onClick={() => onOpenFile(file.path)}
-                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 h-8 text-xs"
+                              className="bg-secondary hover:bg-muted text-foreground border border-border h-8 text-xs"
                               size="sm"
                             >
                               Open Merge Tool
@@ -228,7 +228,7 @@ export function MergeConflictDialog({
                 })}
               </div>
             ) : (
-              <div className="p-4 text-center text-zinc-400">
+              <div className="p-4 text-center text-muted-foreground">
                 <CheckCircle2 className="size-8 mx-auto mb-2 text-green-400" />
                 <p className="font-medium">All conflicts resolved!</p>
                 <p className="text-xs mt-1">You can now complete the merge.</p>
@@ -248,7 +248,7 @@ export function MergeConflictDialog({
           </Button>
           <Button
             onClick={onClose}
-            className="bg-zinc-700 hover:bg-zinc-600"
+            className="bg-muted hover:bg-accent"
             variant="outline"
             disabled={resolving}
           >

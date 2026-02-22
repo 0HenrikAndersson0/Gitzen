@@ -17,14 +17,14 @@ export function ForcePushDialog({ open, onClose, onConfirm, targetBranch }: Forc
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-[450px] bg-zinc-900 border-zinc-800 text-zinc-100">
+      <DialogContent className="sm:max-w-[450px] bg-card border-border text-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-red-500">
             <AlertTriangle className="size-5" />
             Force Push Required
           </DialogTitle>
-          <DialogDescription className="pt-2 text-zinc-400">
-            The remote branch <span className="text-zinc-200 font-mono">{targetBranch}</span> has commits that you do not have locally.
+          <DialogDescription className="pt-2 text-muted-foreground">
+            The remote branch <span className="text-foreground font-mono">{targetBranch}</span> has commits that you do not have locally.
             This usually happens after a rebase or if the remote history has been rewritten.
           </DialogDescription>
         </DialogHeader>
@@ -40,13 +40,13 @@ export function ForcePushDialog({ open, onClose, onConfirm, targetBranch }: Forc
             checked={overwrite} 
             onCheckedChange={(checked) => setOverwrite(checked as boolean)}
           />
-          <Label htmlFor="overwrite" className="text-sm font-normal cursor-pointer text-zinc-300">
+          <Label htmlFor="overwrite" className="text-sm font-normal cursor-pointer text-foreground">
             Use <code className="text-red-400">--force</code> instead of <code className="text-blue-400">--force-with-lease</code>
           </Label>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onClose} className="border-zinc-700 hover:bg-zinc-800 text-zinc-300">
+          <Button variant="outline" onClick={onClose} className="border-border hover:bg-accent text-foreground">
             Cancel
           </Button>
           <Button 

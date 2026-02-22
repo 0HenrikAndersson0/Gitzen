@@ -103,7 +103,7 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="bg-card border-border max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Interactive Rebase</DialogTitle>
           <DialogDescription>
@@ -118,34 +118,34 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
 
         <div className="flex-1 overflow-y-auto min-h-[300px] mt-4 space-y-2">
           {loading ? (
-            <div className="text-center text-zinc-500 py-8">Loading commits...</div>
+            <div className="text-center text-muted-foreground py-8">Loading commits...</div>
           ) : commits.length === 0 ? (
-            <div className="text-center text-zinc-500 py-8">No commits to rebase.</div>
+            <div className="text-center text-muted-foreground py-8">No commits to rebase.</div>
           ) : (
             commits.map((commit, index) => (
-              <div key={commit.hash} className="flex items-center gap-2 p-2 bg-zinc-800/50 rounded-md border border-zinc-700/50">
+              <div key={commit.hash} className="flex items-center gap-2 p-2 bg-secondary/50 rounded-md border border-border/50">
                 <div className="flex flex-col gap-1">
                   <button
                     onClick={() => moveCommit(index, 'up')}
                     disabled={index === 0}
-                    className="p-1 hover:bg-zinc-700 rounded disabled:opacity-30"
+                    className="p-1 hover:bg-muted rounded disabled:opacity-30"
                   >
-                    <ArrowUp className="size-3 text-zinc-400" />
+                    <ArrowUp className="size-3 text-muted-foreground" />
                   </button>
                   <button
                     onClick={() => moveCommit(index, 'down')}
                     disabled={index === commits.length - 1}
-                    className="p-1 hover:bg-zinc-700 rounded disabled:opacity-30"
+                    className="p-1 hover:bg-muted rounded disabled:opacity-30"
                   >
-                    <ArrowDown className="size-3 text-zinc-400" />
+                    <ArrowDown className="size-3 text-muted-foreground" />
                   </button>
                 </div>
 
                 <Select value={commit.action} onValueChange={(val) => updateAction(index, val as any)}>
-                  <SelectTrigger className="w-[100px] h-8 bg-zinc-800 border-zinc-700 text-xs">
+                  <SelectTrigger className="w-[100px] h-8 bg-secondary border-border text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                  <SelectContent className="bg-secondary border-border">
                     <SelectItem value="pick">Pick</SelectItem>
                     <SelectItem value="reword">Reword</SelectItem>
                     <SelectItem value="edit">Edit</SelectItem>
@@ -155,7 +155,7 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
                   </SelectContent>
                 </Select>
 
-                <div className="font-mono text-xs text-zinc-500 w-[70px]">{commit.hash.substring(0, 7)}</div>
+                <div className="font-mono text-xs text-muted-foreground w-[70px]">{commit.hash.substring(0, 7)}</div>
 
                 <Input
                   value={commit.message}
@@ -163,9 +163,9 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
                   disabled={commit.action !== 'reword'}
                   className={`h-8 text-sm transition-colors ${
                     commit.action === 'reword' 
-                      ? 'bg-zinc-900 border-blue-500 ring-1 ring-blue-500/20' 
-                      : 'bg-transparent border-transparent hover:border-zinc-700 disabled:opacity-70'
-                  } ${commit.action === 'drop' ? 'line-through text-zinc-500' : ''}`}
+                      ? 'bg-card border-blue-500 ring-1 ring-blue-500/20' 
+                      : 'bg-transparent border-transparent hover:border-border disabled:opacity-70'
+                  } ${commit.action === 'drop' ? 'line-through text-muted-foreground' : ''}`}
                   placeholder={commit.action === 'reword' ? "Enter new commit message..." : ""}
                 />
               </div>
@@ -173,8 +173,8 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
           )}
         </div>
 
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-zinc-800">
-          <Button variant="outline" onClick={onClose} className="bg-zinc-800 border-zinc-700 text-zinc-300">Cancel</Button>
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-border">
+          <Button variant="outline" onClick={onClose} className="bg-secondary border-border text-foreground">Cancel</Button>
           <Button onClick={handleStart} className="bg-blue-600 hover:bg-blue-700 text-white" disabled={loading || commits.length === 0}>
             Start Rebase
           </Button>

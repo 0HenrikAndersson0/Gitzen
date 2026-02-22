@@ -24,14 +24,14 @@ export function SplashScreen({ visible, onHidden }: SplashScreenProps) {
 
   return (
     <div 
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-zinc-950 transition-opacity duration-500"
+      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background transition-opacity duration-500"
       style={{ opacity }}
     >
       <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500">
-        <h1 className="text-4xl font-bold text-zinc-100 tracking-tight mb-2">Gitzen</h1>
-        <p className="text-zinc-400 text-sm">Loading your workspace...</p>
+        <h1 className="text-4xl font-bold text-foreground tracking-tight mb-2">Gitzen</h1>
+        <p className="text-muted-foreground text-sm">Loading your workspace...</p>
         
-        <div className="mt-8 w-48 h-1 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="mt-8 w-48 h-1 bg-secondary rounded-full overflow-hidden">
           <div className="h-full bg-blue-500 animate-loading-bar rounded-full"></div>
         </div>
       </div>

@@ -136,11 +136,11 @@ export const TagsPanel = memo(function TagsPanel({
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col">
-      <div className="border-b border-zinc-800 p-3 flex items-center justify-between cursor-pointer hover:bg-zinc-800/30 transition-colors"
+    <div className="rounded-lg border border-border bg-card/50 flex flex-col">
+      <div className="border-b border-border p-3 flex items-center justify-between cursor-pointer hover:bg-accent/30 transition-colors"
            onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="flex items-center gap-2 text-zinc-100">
-          {isExpanded ? <ChevronDown className="size-4 text-zinc-500" /> : <ChevronRight className="size-4 text-zinc-500" />}
+        <div className="flex items-center gap-2 text-foreground">
+          {isExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
           <Tag className="size-4" />
           <h3 className="font-semibold text-sm">Tags</h3>
         </div>
@@ -157,36 +157,36 @@ export const TagsPanel = memo(function TagsPanel({
       </div>
       {isExpanded && (
         <div className="flex flex-col">
-          <div className="p-2 border-b border-zinc-800">
+          <div className="p-2 border-b border-border">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-zinc-500" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
               <Input
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter tags..."
-                className="h-7 pl-7 text-xs bg-zinc-800/50 border-zinc-700 text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
+                className="h-7 pl-7 text-xs bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-zinc-700"
               />
             </div>
           </div>
           <div className="max-h-[300px] overflow-y-auto">
             {loading && tags.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-500">Loading...</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-border">
                 {tags
                   .filter(t => t.name.toLowerCase().includes(filter.toLowerCase()))
                   .map((tag) => (
                   <div
                     key={tag.name}
-                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-zinc-800/50"
+                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-2.5">
                       <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm text-zinc-300">
+                        <div className="truncate text-sm text-foreground">
                           {tag.name}
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                           <span className="font-mono">{tag.commit.substring(0, 7)}</span>
                           <span>•</span>
                           <span>{tag.date.toLocaleDateString()}</span>
@@ -201,7 +201,7 @@ export const TagsPanel = memo(function TagsPanel({
                                     handlePushTag(tag.name);
                                 }}
                                 title="Push to origin"
-                                className="p-1 rounded-md hover:bg-zinc-700 text-blue-400 hover:text-blue-300"
+                                className="p-1 rounded-md hover:bg-muted text-blue-400 hover:text-blue-300"
                             >
                                 <CloudUpload className="size-3.5" />
                             </button>
@@ -212,7 +212,7 @@ export const TagsPanel = memo(function TagsPanel({
                                 handleDeleteTag(tag.name);
                             }}
                             title="Delete tag"
-                            className="p-1 rounded-md hover:bg-zinc-700 text-red-400 hover:text-red-300"
+                            className="p-1 rounded-md hover:bg-muted text-red-400 hover:text-red-300"
                         >
                             <Trash2 className="size-3.5" />
                         </button>
@@ -227,23 +227,23 @@ export const TagsPanel = memo(function TagsPanel({
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteDialog} onOpenChange={(open) => !open && setDeleteDialog(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-red-400 flex items-center gap-2">
               <Trash2 className="size-5" />
               Delete Tag
             </DialogTitle>
-            <DialogDescription className="text-zinc-400 mt-3 text-base">
-              Are you sure you want to delete the tag <span className="font-mono font-semibold text-zinc-300">{deleteDialog}</span>? 
+            <DialogDescription className="text-muted-foreground mt-3 text-base">
+              Are you sure you want to delete the tag <span className="font-mono font-semibold text-foreground">{deleteDialog}</span>? 
               <br />
-              <span className="text-sm text-zinc-500 mt-2 block">This action cannot be undone.</span>
+              <span className="text-sm text-muted-foreground mt-2 block">This action cannot be undone.</span>
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 justify-end mt-6">
             <Button
               variant="outline"
               onClick={() => setDeleteDialog(null)}
-              className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-200"
+              className="bg-secondary border-border text-foreground hover:bg-muted hover:text-foreground"
             >
               Cancel
             </Button>

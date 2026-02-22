@@ -44,10 +44,10 @@ export function CreateTagDialog({ open, onOpenChange, onTagCreated, commitHash }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-zinc-900 border-zinc-800">
+      <DialogContent className="bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-zinc-100">Create New Tag</DialogTitle>
-          <DialogDescription className="text-zinc-400">
+          <DialogTitle className="text-foreground">Create New Tag</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Enter a name for the new tag. {commitHash ? `It will be created at commit ${commitHash.substring(0, 7)}.` : 'It will be created at the current HEAD.'}
           </DialogDescription>
         </DialogHeader>
@@ -56,7 +56,7 @@ export function CreateTagDialog({ open, onOpenChange, onTagCreated, commitHash }
             value={newTagName}
             onChange={(e) => setNewTagName(e.target.value)}
             placeholder="v1.0.0"
-            className="bg-zinc-800 border-zinc-700 text-zinc-100"
+            className="bg-secondary border-border text-foreground"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleCreateTag();
@@ -71,7 +71,7 @@ export function CreateTagDialog({ open, onOpenChange, onTagCreated, commitHash }
                 onOpenChange(false);
                 setNewTagName('');
               }}
-              className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+              className="bg-secondary border-border text-foreground hover:bg-muted"
             >
               Cancel
             </Button>

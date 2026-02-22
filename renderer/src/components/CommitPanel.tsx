@@ -49,14 +49,14 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   const unstagedFiles = files.filter((f) => !f.staged);
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col">
+    <div className="rounded-lg border border-border bg-card/50 p-6 flex flex-col">
       <div className="mb-4 flex items-center gap-2 flex-none">
         <GitCommitHorizontal className="size-5 text-green-400" />
         <h2 className="font-semibold">Changes</h2>
       </div>
 
       <div className="flex-1 flex flex-col gap-4 min-h-0">
-        <div className="flex-1 overflow-y-auto min-h-0 border border-zinc-800/50 rounded-md">
+        <div className="flex-1 overflow-y-auto min-h-0 border border-border/50 rounded-md">
           <FileStaging
             files={files}
             onToggleStage={onToggleStage}
@@ -66,11 +66,11 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
             selectedFileIndex={selectedFileIndex}
           />
           {files.length > 0 && (
-            <div className="p-3 border-t border-zinc-800/50 flex gap-4">
+            <div className="p-3 border-t border-border/50 flex gap-4">
               {unstagedFiles.length > 0 && (
                 <button
                   onClick={onStageAll}
-                  className="text-xs text-zinc-400 hover:text-green-400 transition-colors flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-green-400 transition-colors flex items-center gap-1"
                 >
                   Stage All
                 </button>
@@ -78,7 +78,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
               {stagedFiles.length > 0 && (
                 <button
                   onClick={onUnstageAll}
-                  className="text-xs text-zinc-400 hover:text-yellow-400 transition-colors flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-yellow-400 transition-colors flex items-center gap-1"
                 >
                   Unstage All
                 </button>
@@ -95,7 +95,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
             placeholder="Enter your commit message..."
             value={commitMessage}
             onChange={(e) => onCommitMessageChange(e.target.value)}
-            className="h-20 bg-zinc-950 border-zinc-700 font-mono resize-none"
+            className="h-20 bg-background border-border font-mono resize-none"
           />
         </div>
 

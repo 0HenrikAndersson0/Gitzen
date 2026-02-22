@@ -156,30 +156,30 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
   const getFileIcon = (status: FileChange['status']) => {
     switch (status) {
       case 'added':
-        return <FilePlus className="h-4 w-4 text-emerald-400" />;
+        return <FilePlus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
       case 'deleted':
-        return <FileX className="h-4 w-4 text-red-400" />;
+        return <FileX className="h-4 w-4 text-red-600 dark:text-red-400" />;
       default:
-        return <FileText className="h-4 w-4 text-blue-400" />;
+        return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
     }
   };
 
   const getStatusColor = (status: FileChange['status']) => {
     switch (status) {
       case 'added':
-        return 'text-emerald-400';
+        return 'text-emerald-600 dark:text-emerald-400';
       case 'deleted':
-        return 'text-red-400';
+        return 'text-red-600 dark:text-red-400';
       default:
-        return 'text-blue-400';
+        return 'text-blue-600 dark:text-blue-400';
     }
   };
 
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-6">
-          <div className="text-zinc-100">Loading commit diff...</div>
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="text-foreground">Loading commit diff...</div>
         </div>
       </div>
     );
@@ -187,14 +187,14 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="flex h-full w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div className="flex h-full w-full flex-col rounded-lg border border-border bg-card shadow-2xl">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-zinc-800 p-6">
+        <div className="flex items-start justify-between border-b border-border p-6">
           <div className="min-w-0 flex-1">
-            <h2 className="mb-2 text-xl font-semibold text-zinc-100">
+            <h2 className="mb-2 text-xl font-semibold text-foreground">
               {commit.message}
             </h2>
-            <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <span>{commit.author}</span>
               {commit.branch && (
                 <>
@@ -205,11 +205,11 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
               <span>•</span>
               <button
                 onClick={handleCopyHash}
-                className="flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                className="flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-accent hover:text-foreground"
               >
                 <code>{commit.hash}</code>
                 {copiedHash ? (
-                  <Check className="h-3 w-3 text-emerald-400" />
+                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                 ) : (
                   <Copy className="h-3 w-3" />
                 )}
@@ -220,7 +220,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <X className="h-5 w-5" />
           </button>
@@ -228,16 +228,16 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
 
         <div className="flex min-h-0 flex-1">
           {/* File List Sidebar */}
-          <div className="w-80 border-r border-zinc-800 bg-zinc-900/50">
-            <div className="border-b border-zinc-800 p-4">
-              <h3 className="font-medium text-zinc-200">
+          <div className="w-80 border-r border-border bg-card/50">
+            <div className="border-b border-border p-4">
+              <h3 className="font-medium text-foreground">
                 Changed Files ({files.length})
               </h3>
-              <div className="mt-2 flex gap-4 text-xs text-zinc-500">
-                <span className="text-emerald-400">
+              <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                <span className="text-emerald-600 dark:text-emerald-400">
                   +{files.reduce((sum, f) => sum + f.additions, 0)}
                 </span>
-                <span className="text-red-400">
+                <span className="text-red-600 dark:text-red-400">
                   -{files.reduce((sum, f) => sum + f.deletions, 0)}
                 </span>
               </div>
@@ -247,10 +247,10 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                 <button
                   key={index}
                   onClick={() => setSelectedFile(file)}
-                  className={`flex w-full items-start gap-3 border-b border-zinc-800 p-4 text-left transition-colors ${
+                  className={`flex w-full items-start gap-3 border-b border-border p-4 text-left transition-colors ${
                     selectedFile?.path === file.path
-                      ? 'bg-zinc-800'
-                      : 'hover:bg-zinc-800/50'
+                      ? 'bg-secondary'
+                      : 'hover:bg-accent/50'
                   }`}
                 >
                   {getFileIcon(file.status)}
@@ -258,13 +258,13 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                     <div className={`truncate text-sm font-medium ${getStatusColor(file.status)}`}>
                       {file.path.split('/').pop()}
                     </div>
-                    <div className="truncate text-xs text-zinc-500">{file.path}</div>
+                    <div className="truncate text-xs text-muted-foreground">{file.path}</div>
                     <div className="mt-1 flex gap-3 text-xs">
                       {file.additions > 0 && (
-                        <span className="text-emerald-400">+{file.additions}</span>
+                        <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>
                       )}
                       {file.deletions > 0 && (
-                        <span className="text-red-400">-{file.deletions}</span>
+                        <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
                       )}
                     </div>
                   </div>
@@ -274,21 +274,21 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
           </div>
 
           {/* Diff Viewer - Side by Side */}
-          <div className="flex min-w-0 flex-1 flex-col bg-zinc-950">
+          <div className="flex min-w-0 flex-1 flex-col bg-background">
             {selectedFile ? (
               <>
-                <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                <div className="flex items-center justify-between border-b border-border bg-card/50 px-4 py-3">
                   <div className="flex items-center gap-2">
                     {getFileIcon(selectedFile.status)}
-                    <span className="font-mono text-sm text-zinc-300">{selectedFile.path}</span>
+                    <span className="font-mono text-sm text-foreground">{selectedFile.path}</span>
                   </div>
-                  <div className="flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5">
+                  <div className="flex rounded-md border border-border bg-secondary p-0.5">
                     <button
                       onClick={() => setViewMode('split')}
                       className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                         viewMode === 'split'
-                          ? 'bg-zinc-700 text-zinc-100'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       Side-by-Side
@@ -297,8 +297,8 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                       onClick={() => setViewMode('unified')}
                       className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                         viewMode === 'unified'
-                          ? 'bg-zinc-700 text-zinc-100'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       Unified
@@ -312,27 +312,27 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
                       <div className="flex min-w-full w-fit flex-col">
                         {/* Sticky Header for Columns */}
-                        <div className="sticky top-0 z-20 grid min-w-full border-b border-zinc-800 bg-zinc-900" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                          <div className="border-r border-zinc-800 bg-red-950/20 px-4 py-2 text-xs font-medium text-red-400">
+                        <div className="sticky top-0 z-20 grid min-w-full border-b border-border bg-card" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                          <div className="border-r border-border bg-red-100 dark:bg-red-950/20 px-4 py-2 text-xs font-medium text-red-600 dark:text-red-400">
                             Original
                           </div>
-                          <div className="bg-emerald-950/20 px-4 py-2 text-xs font-medium text-emerald-400">
+                          <div className="bg-emerald-100 dark:bg-emerald-950/20 px-4 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                             Modified
                           </div>
                         </div>
 
-                        <div className="flex min-w-full flex-col bg-zinc-950/50 font-mono text-sm">
+                        <div className="flex min-w-full flex-col bg-background/50 font-mono text-sm">
                           {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
-                            <div key={hunkIndex} className="border-b border-zinc-800 last:border-0">
+                            <div key={hunkIndex} className="border-b border-border last:border-0">
                               {/* Hunk Header */}
-                              <div className="sticky top-[33px] z-10 bg-zinc-900/95 px-4 py-1 text-xs text-zinc-500 border-y border-zinc-800/50 backdrop-blur">
+                              <div className="sticky top-[33px] z-10 bg-card/95 px-4 py-1 text-xs text-muted-foreground border-y border-border/50 backdrop-blur">
                                 @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                               </div>
 
                               {/* Hunk Content */}
                               <div className="grid min-w-full" style={{ gridTemplateColumns: '1fr 1fr' }}>
                                 {/* Left Pane - Original */}
-                                <div className="border-r border-zinc-800 bg-zinc-950/30">
+                                <div className="border-r border-border bg-background/30">
                                   {hunk.lines.map((line, lineIndex) => {
                                     const isAddition = line.type === 'add';
                                     return (
@@ -340,24 +340,24 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                                         key={lineIndex}
                                         className={`flex h-5 ${
                                           line.type === 'remove'
-                                            ? 'bg-red-950/30'
+                                            ? 'bg-red-100 dark:bg-red-950/30'
                                             : 'bg-transparent'
                                         }`}
                                       >
-                                        <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50">
+                                        <span className="w-12 flex-shrink-0 select-none px-2 text-right text-muted-foreground border-r border-border/50">
                                           {!isAddition ? line.oldLineNumber || '' : ''}
                                         </span>
                                         <span
                                           className={`flex-1 px-2 whitespace-pre ${
                                             line.type === 'remove'
-                                              ? 'bg-red-900/20 text-red-300'
-                                              : 'text-zinc-400'
+                                              ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                              : 'text-muted-foreground'
                                           }`}
                                         >
                                           {!isAddition && (
                                             <>
                                               {line.type === 'remove' && (
-                                                <span className="mr-1 text-red-400">-</span>
+                                                <span className="mr-1 text-red-600 dark:text-red-400">-</span>
                                               )}
                                               {line.content || ''}
                                             </>
@@ -369,7 +369,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                                 </div>
 
                                 {/* Right Pane - Modified */}
-                                <div className="bg-zinc-950/30">
+                                <div className="bg-background/30">
                                   {hunk.lines.map((line, lineIndex) => {
                                     const isRemoval = line.type === 'remove';
                                     return (
@@ -377,24 +377,24 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                                         key={lineIndex}
                                         className={`flex h-5 ${
                                           line.type === 'add'
-                                            ? 'bg-emerald-950/30'
+                                            ? 'bg-emerald-100 dark:bg-emerald-950/30'
                                             : 'bg-transparent'
                                         }`}
                                       >
-                                        <span className="w-12 flex-shrink-0 select-none px-2 text-right text-zinc-600 border-r border-zinc-800/50">
+                                        <span className="w-12 flex-shrink-0 select-none px-2 text-right text-muted-foreground border-r border-border/50">
                                           {!isRemoval ? line.newLineNumber || '' : ''}
                                         </span>
                                         <span
                                           className={`flex-1 px-2 whitespace-pre ${
                                             line.type === 'add'
-                                              ? 'bg-emerald-900/20 text-emerald-300'
-                                              : 'text-zinc-400'
+                                              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                                              : 'text-muted-foreground'
                                           }`}
                                         >
                                           {!isRemoval && (
                                             <>
                                               {line.type === 'add' && (
-                                                <span className="mr-1 text-emerald-400">+</span>
+                                                <span className="mr-1 text-emerald-600 dark:text-emerald-400">+</span>
                                               )}
                                               {line.content || ''}
                                             </>
@@ -412,10 +412,10 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                     </div>
                   ) : (
                     /* Unified diff */
-                    <div className="min-h-0 flex-1 overflow-auto bg-zinc-950/50 font-mono text-sm">
+                    <div className="min-h-0 flex-1 overflow-auto bg-background/50 font-mono text-sm">
                       {selectedFile.diff?.hunks.map((hunk, hunkIndex) => (
                         <div key={hunkIndex}>
-                          <div className="sticky top-0 z-10 bg-zinc-900/95 px-4 py-1 text-xs text-zinc-500 border-y border-zinc-800/50 backdrop-blur">
+                          <div className="sticky top-0 z-10 bg-card/95 px-4 py-1 text-xs text-muted-foreground border-y border-border/50 backdrop-blur">
                             @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                           </div>
                           {hunk.lines.map((line, lineIndex) => (
@@ -423,35 +423,35 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                               key={lineIndex}
                               className={`flex ${
                                 line.type === 'add'
-                                  ? 'bg-emerald-950/30'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/30'
                                   : line.type === 'remove'
-                                  ? 'bg-red-950/30'
+                                  ? 'bg-red-100 dark:bg-red-950/30'
                                   : 'bg-transparent'
                               }`}
                             >
-                              <div className="flex w-24 flex-shrink-0 select-none border-r border-zinc-800/50">
-                                <span className="w-12 px-2 text-right text-zinc-600">
+                              <div className="flex w-24 flex-shrink-0 select-none border-r border-border/50">
+                                <span className="w-12 px-2 text-right text-muted-foreground">
                                   {line.oldLineNumber || ''}
                                 </span>
-                                <span className="w-12 px-2 text-right text-zinc-600">
+                                <span className="w-12 px-2 text-right text-muted-foreground">
                                   {line.newLineNumber || ''}
                                 </span>
                               </div>
                               <span
                                 className={`flex-1 px-4 whitespace-pre ${
                                   line.type === 'add'
-                                    ? 'bg-emerald-900/20 text-emerald-300'
+                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
                                     : line.type === 'remove'
-                                    ? 'bg-red-900/20 text-red-300'
-                                    : 'text-zinc-400'
+                                    ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                    : 'text-muted-foreground'
                                 }`}
                               >
                                 {line.type === 'add' ? (
-                                  <span className="mr-2 text-emerald-400">+</span>
+                                  <span className="mr-2 text-emerald-600 dark:text-emerald-400">+</span>
                                 ) : line.type === 'remove' ? (
-                                  <span className="mr-2 text-red-400">-</span>
+                                  <span className="mr-2 text-red-600 dark:text-red-400">-</span>
                                 ) : (
-                                  <span className="mr-2 text-zinc-600"> </span>
+                                  <span className="mr-2 text-muted-foreground"> </span>
                                 )}
                                 {line.content || ''}
                               </span>
@@ -464,7 +464,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                 </div>
               </>
             ) : (
-              <div className="flex flex-1 items-center justify-center text-zinc-500">
+              <div className="flex flex-1 items-center justify-center text-muted-foreground">
                 No file selected
               </div>
             )}

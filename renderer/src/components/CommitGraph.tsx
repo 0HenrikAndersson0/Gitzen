@@ -323,12 +323,12 @@ export const CommitGraph = memo(function CommitGraph({
 
   if (commits.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6">
+      <div className="rounded-lg border border-border bg-card/50 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <GitBranch className="h-5 w-5 text-emerald-400" />
-          <h2 className="font-semibold text-zinc-100">Commit History</h2>
+          <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="font-semibold text-foreground">Commit History</h2>
         </div>
-        <div className="text-center text-zinc-500 py-8">
+        <div className="text-center text-muted-foreground py-8">
           No commits to display
         </div>
       </div>
@@ -336,18 +336,18 @@ export const CommitGraph = memo(function CommitGraph({
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden flex flex-col h-full">
-      <div className="p-6 pb-4 flex items-center gap-2 border-b border-zinc-800">
-        <GitBranch className="h-5 w-5 text-emerald-400" />
-        <h2 className="font-semibold text-zinc-100">Commit History</h2>
-        <span className="ml-auto text-sm text-zinc-500">
+    <div className="rounded-lg border border-border bg-card/50 overflow-hidden flex flex-col h-full">
+      <div className="p-6 pb-4 flex items-center gap-2 border-b border-border">
+        <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+        <h2 className="font-semibold text-foreground">Commit History</h2>
+        <span className="ml-auto text-sm text-muted-foreground">
           {commits.length} commit{commits.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       <div 
         ref={containerRef}
-        className="flex-1 overflow-auto bg-zinc-950 relative" 
+        className="flex-1 overflow-auto bg-background relative" 
       >
         <div className="relative" style={{ height: height + 80, minWidth: '100%' }}>
            {/* Graph Layer - Absolute positioned behind content */}
@@ -412,12 +412,12 @@ export const CommitGraph = memo(function CommitGraph({
               return (
                 <div
                   key={commit.id}
-                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-zinc-800/30 cursor-pointer ${
+                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-border/30 cursor-pointer ${
                     hoveredCommitId === commit.id
-                      ? 'bg-zinc-800/50'
+                      ? 'bg-secondary/50'
                       : isCurrentHead 
-                        ? 'bg-emerald-950/20' 
-                        : 'hover:bg-zinc-800/30'
+                        ? 'bg-emerald-100 dark:bg-emerald-950/20' 
+                        : 'hover:bg-accent/30'
                   }`}
                   style={{
                     top: node.y - 18,
@@ -430,25 +430,25 @@ export const CommitGraph = memo(function CommitGraph({
                   onMouseLeave={() => setHoveredCommitId(null)}
                 >
                   <div className="flex items-center gap-3">
-                    <p className="font-medium text-zinc-200 text-sm truncate flex-1 flex items-center gap-2">
+                    <p className="font-medium text-foreground text-sm truncate flex-1 flex items-center gap-2">
                       {commit.message}
                     </p>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
                         {commit.branch && (
-                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400 border border-emerald-500/20">
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-100 dark:bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                             {commit.branch}
                             </span>
                         )}
                         {commit.tags && commit.tags.map(tag => (
-                            <span key={tag} className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400 border border-amber-500/20">
+                            <span key={tag} className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
                                 <Tag className="h-2 w-2" />
                                 {tag}
                             </span>
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs text-zinc-500 w-32 justify-end">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground w-32 justify-end">
                       <span className="flex items-center gap-1 truncate max-w-[80px]">
                         {commit.author}
                       </span>
@@ -464,27 +464,27 @@ export const CommitGraph = memo(function CommitGraph({
 
            {onLoadMore && hasMore && (
             <div
-              className="absolute left-0 right-0 flex items-center justify-center gap-2 border-t border-zinc-800/30"
+              className="absolute left-0 right-0 flex items-center justify-center gap-2 border-t border-border/30"
               style={{ top: height, height: 80 }}
             >
-              <span className="text-sm text-zinc-500">Load</span>
+              <span className="text-sm text-muted-foreground">Load</span>
               <Select value={loadAmount} onValueChange={setLoadAmount}>
-                <SelectTrigger className="w-[80px] h-8 bg-zinc-900 border-zinc-700">
+                <SelectTrigger className="w-[80px] h-8 bg-card border-border">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-700">
+                <SelectContent className="bg-card border-border">
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
                   <SelectItem value="200">200</SelectItem>
                   <SelectItem value="500">500</SelectItem>
                 </SelectContent>
               </Select>
-              <span className="text-sm text-zinc-500">more commits</span>
+              <span className="text-sm text-muted-foreground">more commits</span>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onLoadMore(parseInt(loadAmount))}
-                className="ml-2 bg-zinc-900 border-zinc-700 hover:bg-zinc-800"
+                className="ml-2 bg-card border-border hover:bg-accent"
               >
                 Load
               </Button>
@@ -505,23 +505,23 @@ export const CommitGraph = memo(function CommitGraph({
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden py-1 min-w-[150px]"
+          className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden py-1 min-w-[150px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <div
-            className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2"
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2"
             onClick={() => {
               setTagTargetCommit(contextMenu.commitHash);
               setShowTagDialog(true);
               setContextMenu(null);
             }}
           >
-            <Tag className="size-3.5 text-amber-400" />
+            <Tag className="size-3.5 text-amber-600 dark:text-amber-400" />
             Add Tag...
           </div>
           {onCherryPick && (
             <div
-              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2"
               onClick={() => {
                 onCherryPick(contextMenu.commitHash);
                 setContextMenu(null);
@@ -533,7 +533,7 @@ export const CommitGraph = memo(function CommitGraph({
           )}
           {onRevertCommit && (
             <div
-              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2"
               onClick={() => {
                 onRevertCommit(contextMenu.commitHash);
                 setContextMenu(null);
@@ -545,7 +545,7 @@ export const CommitGraph = memo(function CommitGraph({
           )}
           {onResetCommits && (
             <div
-              className="px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 cursor-pointer transition-colors flex items-center gap-2 border-t border-zinc-700 mt-1 pt-1"
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2 border-t border-border mt-1 pt-1"
               onClick={() => {
                 onResetCommits(contextMenu.commitHash);
                 setContextMenu(null);

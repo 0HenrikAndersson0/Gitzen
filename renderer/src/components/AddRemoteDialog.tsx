@@ -69,13 +69,13 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[450px] bg-zinc-900 border-zinc-800 text-zinc-100">
+      <DialogContent className="sm:max-w-[450px] bg-card border-border text-foreground">
         <DialogHeader>
           <DialogTitle>Add Remote</DialogTitle>
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-zinc-950 border border-zinc-800">
+          <TabsList className="grid w-full grid-cols-2 bg-background border border-border">
             <TabsTrigger value="link">Link Existing</TabsTrigger>
             <TabsTrigger value="create">Create on GitHub</TabsTrigger>
           </TabsList>
@@ -88,7 +88,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800"
+                  className="bg-background border-border"
                 />
               </div>
               <div className="grid gap-2">
@@ -97,12 +97,12 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                   id="url"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800"
+                  className="bg-background border-border"
                   placeholder="https://github.com/user/repo.git"
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} className="border-zinc-700 hover:bg-zinc-800 text-zinc-300">
+                <Button type="button" variant="outline" onClick={onClose} className="border-border hover:bg-accent text-foreground">
                   Cancel
                 </Button>
                 <Button type="submit" disabled={!name || !url} className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -128,7 +128,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                   type="password"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800"
+                  className="bg-background border-border"
                   placeholder="ghp_..."
                 />
               </div>
@@ -138,7 +138,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                   id="repoName"
                   value={repoName}
                   onChange={(e) => setRepoName(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800"
+                  className="bg-background border-border"
                   placeholder="my-awesome-project"
                 />
               </div>
@@ -148,7 +148,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800"
+                  className="bg-background border-border"
                 />
               </div>
               <div className="flex items-center space-x-2">
@@ -163,7 +163,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
               </div>
               
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} className="border-zinc-700 hover:bg-zinc-800 text-zinc-300">
+                <Button type="button" variant="outline" onClick={onClose} className="border-border hover:bg-accent text-foreground">
                   Cancel
                 </Button>
                 <Button 
