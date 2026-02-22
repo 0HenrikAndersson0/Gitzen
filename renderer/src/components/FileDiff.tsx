@@ -532,9 +532,9 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                       </div>
 
                       {/* Hunk Content */}
-                      <div className="grid grid-cols-2">
+                      <div className="grid w-fit min-w-full" style={{ gridTemplateColumns: '1fr 1fr' }}>
                         {/* Left Pane - Original */}
-                        <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                        <div className="border-r border-zinc-800 bg-zinc-950/30 font-mono text-sm">
                           {hunk.lines.map((line, lineIndex) => {
                             const isAddition = line.type === 'add';
                             const isSelectable = line.type === 'remove';
@@ -584,7 +584,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
                         </div>
 
                         {/* Right Pane - Modified */}
-                        <div className="bg-zinc-950/30 font-mono text-sm overflow-x-auto">
+                        <div className="bg-zinc-950/30 font-mono text-sm">
                           {hunk.lines.map((line, lineIndex) => {
                             const isRemoval = line.type === 'remove';
                             const isSelectable = line.type === 'add';
