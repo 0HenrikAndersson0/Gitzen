@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, Shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import * as path from 'path';
 import * as recentReposService from './recentReposService';
 import * as settingsService from './settingsService';
+import * as updateService from './updateService';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -383,6 +384,16 @@ ipcMain.handle('git:performInteractiveRebase', async (_, targetBranch, todoLines
   return await gitService.performInteractiveRebase(targetBranch, todoLines);
 });
 
+// Update handlers
+ipcMain.handle('update:check', async () => {
+  return await updateService.checkForUpdates();
+});
+
+ipcMain.handle('app:openExternal', async (_, url) => {
+  await shell.openExternal(url);
+  return { success: true };
+});
+
 // Dialog handlers
 ipcMain.handle('dialog:showOpenDialog', async (_, options?: { properties?: string[]; title?: string }) => {
   const dialogOptions: Electron.OpenDialogOptions = {
@@ -494,6 +505,17 @@ ipcMain.handle('settings:setTheme', (_, theme: string) => {
 // This method will be called when Electron has finished initialization
 app.whenReady().then(() => {
   createWindow();
+
+  // Check for updates after a short delay
+  setTimeout(async () => {
+    const updateInfo = await updateService.checkForUpdates();
+    if (updateInfo) {
+      const windows = BrowserWindow.getAllWindows();
+      if (windows.length > 0) {
+        windows[0].webContents.send('app:update-available', updateInfo);
+      }
+    }
+  }, 5000);
 
   app.on('activate', () => {
     // On macOS, re-create a window when the dock icon is clicked

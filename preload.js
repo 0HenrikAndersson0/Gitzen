@@ -85,6 +85,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setMaxCommits: (maxCommits) => ipcRenderer.invoke('settings:setMaxCommits', maxCommits),
   getTheme: () => ipcRenderer.invoke('settings:getTheme'),
   setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   onShowShortcuts: (callback) => ipcRenderer.on('menu:show-shortcuts', callback),
   onThemeChanged: (callback) => ipcRenderer.on('menu:theme-changed', (_, theme) => callback(theme)),
+  onUpdateAvailable: (callback) => ipcRenderer.on('app:update-available', (_, updateInfo) => callback(updateInfo)),
 });

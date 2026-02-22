@@ -106,8 +106,11 @@ declare global {
       setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string }>;
       getTheme: () => Promise<{ success: boolean; theme?: string; error?: string }>;
       setTheme: (theme: string) => Promise<{ success: boolean; error?: string }>;
+      checkForUpdates: () => Promise<any>;
+      openExternal: (url: string) => Promise<{ success: boolean }>;
       onShowShortcuts: (callback: () => void) => void;
       onThemeChanged: (callback: (theme: string) => void) => void;
+      onUpdateAvailable: (callback: (updateInfo: any) => void) => void;
     };
   }
 }
