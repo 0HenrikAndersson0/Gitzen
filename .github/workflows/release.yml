@@ -13,8 +13,8 @@ jobs:
       contents: write  # Allows the action to create releases and upload assets
     strategy:
       matrix:
-        # We use a matrix to run Windows and Linux in parallel
-        os: [windows-latest, ubuntu-latest]
+        # We use a matrix to run Windows, Linux, and macOS in parallel
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout Code
@@ -50,6 +50,8 @@ jobs:
             release/*.exe
             release/*.AppImage
             release/*.deb
+            release/*.dmg
+            release/*.zip
           if-no-files-found: warn
           retention-days: 1
 
@@ -81,7 +83,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
           RELEASE_REPO: 0HenrikAndersson0/gitzen-release
         run: |
-          node scripts/virustotal-scan.mjs dist/*.exe dist/*.AppImage dist/*.deb
+          node scripts/virustotal-scan.mjs dist/*.exe dist/*.AppImage dist/*.deb dist/*.dmg dist/*.zip
 
       - name: Cleanup Artifacts
         if: always()
