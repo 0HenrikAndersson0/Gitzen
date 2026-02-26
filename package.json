@@ -11,6 +11,7 @@
     "build:renderer": "vite build",
     "build:linux": "npm run compile && npm run build:renderer && electron-builder --linux",
     "build:win": "npm run compile && npm run build:renderer && electron-builder --win",
+    "build:mac": "npm run compile && npm run build:renderer && electron-builder --mac dir",
     "compile": "tsc",
     "compile:watch": "tsc --watch",
     "test": "vitest run --dir src",
