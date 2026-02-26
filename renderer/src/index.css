@@ -4,27 +4,43 @@
 
 @layer base {
   :root {
-    /* LaPom Light Theme (Default) */
-    --background: 240 5% 96%;
-    --foreground: 240 3% 12%;
+    /* LaPom Light Theme (Clean Neutral) */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 240 3% 12%;
+    --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 3% 12%;
-    --primary: 211 100% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5% 83%;
-    --input: 240 5% 83%;
-    --ring: 211 100% 50%;
-    --radius: 0.75rem; /* More rounded like Apple */
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 9%;
+    --radius: 0.75rem;
+    /* More rounded like Apple */
+
+    /* Semantic Status Colors mapped to Grayscale in Light Mode */
+    --success: 0 0% 9%;
+    /* foreground */
+    --success-foreground: 0 0% 98%;
+    --warning: 0 0% 45%;
+    /* muted-foreground */
+    --warning-foreground: 0 0% 98%;
+    --info: 0 0% 45%;
+    /* muted-foreground */
+    --info-foreground: 0 0% 98%;
+
+    /* Extra Semantic Highlights mapping to Grayscale */
+    --accent-purple: 0 0% 9%;
+    --accent-purple-foreground: 0 0% 98%;
   }
 
   .dark {
@@ -48,6 +64,22 @@
     --border: 240 2% 23%;
     --input: 240 2% 23%;
     --ring: 211 100% 50%;
+
+    /* Semantic Status Colors (Original Colorful Theme) */
+    --success: 158 64% 52%;
+    /* emerald-400 */
+    --success-foreground: 240 3% 11%;
+    --warning: 43 96% 56%;
+    /* amber-400 */
+    --warning-foreground: 240 3% 11%;
+    --info: 213 94% 68%;
+    /* blue-400 */
+    --info-foreground: 240 3% 11%;
+
+    /* Extra Semantic Highlights */
+    --accent-purple: 270 95% 75%;
+    /* purple-400 */
+    --accent-purple-foreground: 240 3% 11%;
   }
 }
 
@@ -55,15 +87,24 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
 }
 
 @keyframes loading-bar {
-  0% { transform: translateX(-100%); }
-  50% { transform: translateX(0%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  50% {
+    transform: translateX(0%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .animate-loading-bar {
@@ -71,6 +112,7 @@
 }
 
 @layer utilities {
+
   /* Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
@@ -93,4 +135,3 @@
     @apply bg-transparent;
   }
 }
-

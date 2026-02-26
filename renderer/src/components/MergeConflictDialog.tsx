@@ -135,7 +135,7 @@ export function MergeConflictDialog({
                 <Checkbox
                   checked={allSelected}
                   onCheckedChange={handleSelectAll}
-                  className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                 />
                 <span className="text-sm text-muted-foreground">
                   Select all standard conflicts
@@ -144,7 +144,7 @@ export function MergeConflictDialog({
               <Button
                 onClick={handleResolveSelected}
                 disabled={resolving || selectedFiles.size === 0}
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 size="sm"
               >
                 <CheckCircle2 className="size-4 mr-2" />
@@ -164,7 +164,7 @@ export function MergeConflictDialog({
                     <div
                       key={index}
                       className={`flex flex-col gap-2 p-3 transition-colors ${
-                        isSelected ? 'bg-blue-600/10' : 'hover:bg-card'
+                        isSelected ? 'bg-secondary' : 'hover:bg-card'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -173,7 +173,7 @@ export function MergeConflictDialog({
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => handleToggleFile(file.path)}
-                              className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                              className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                             />
                           )}
                           <div className="flex flex-col min-w-0">
@@ -229,7 +229,7 @@ export function MergeConflictDialog({
               </div>
             ) : (
               <div className="p-4 text-center text-muted-foreground">
-                <CheckCircle2 className="size-8 mx-auto mb-2 text-green-400" />
+                <CheckCircle2 className="size-8 mx-auto mb-2 text-foreground" />
                 <p className="font-medium">All conflicts resolved!</p>
                 <p className="text-xs mt-1">You can now complete the merge.</p>
               </div>
@@ -240,7 +240,7 @@ export function MergeConflictDialog({
         <DialogFooter className="flex-row justify-between sm:justify-between">
           <Button
             onClick={onAbortMerge}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             variant="destructive"
             disabled={resolving}
           >

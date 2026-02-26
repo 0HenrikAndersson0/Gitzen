@@ -165,7 +165,7 @@ export const BranchesPanel = memo(function BranchesPanel({
     const branch = contextMenu.branch;
     const upstream = contextMenu.upstream;
     const isRemote = contextMenu.isRemote;
-    
+
     switch (action) {
       case 'merge':
         onMergeBranch?.(branch);
@@ -173,20 +173,20 @@ export const BranchesPanel = memo(function BranchesPanel({
       case 'rebase':
         onSetLoading?.(true, `Rebasing onto ${branch}...`);
         window.electronAPI.gitRebaseBranch(branch).then(result => {
-           if (result.success) {
-             toast.success(`Successfully rebased current branch onto ${branch}`);
-           } else {
-             if (result.error && result.error.includes('conflict')) {
-                toast.warning('Rebase started but encountered conflicts. Please resolve them.');
-             } else {
-                toast.error(`Rebase failed: ${result.error}`);
-             }
-           }
+          if (result.success) {
+            toast.success(`Successfully rebased current branch onto ${branch}`);
+          } else {
+            if (result.error && result.error.includes('conflict')) {
+              toast.warning('Rebase started but encountered conflicts. Please resolve them.');
+            } else {
+              toast.error(`Rebase failed: ${result.error}`);
+            }
+          }
         }).catch(err => {
-           toast.error(`Rebase failed: ${err.message}`);
+          toast.error(`Rebase failed: ${err.message}`);
         }).finally(() => {
-           onRefresh?.();
-           onSetLoading?.(false);
+          onRefresh?.();
+          onSetLoading?.(false);
         });
         break;
       case 'interactive-rebase':
@@ -202,20 +202,20 @@ export const BranchesPanel = memo(function BranchesPanel({
         } else if (isRemote && branch.includes('/')) {
           fetchRemote = branch.split('/')[0];
         }
-        
+
         onSetLoading?.(true, `Fetching ${fetchRemote}...`);
         try {
           const result = await window.electronAPI.gitFetch(fetchRemote);
           if (result.success) {
-             toast.success(`Successfully fetched from ${fetchRemote}`);
-             onRefresh?.();
+            toast.success(`Successfully fetched from ${fetchRemote}`);
+            onRefresh?.();
           } else {
-             toast.error(`Fetch failed: ${result.error}`);
+            toast.error(`Fetch failed: ${result.error}`);
           }
         } catch (err: any) {
-           toast.error(`Fetch failed: ${err.message}`);
+          toast.error(`Fetch failed: ${err.message}`);
         } finally {
-           onSetLoading?.(false);
+          onSetLoading?.(false);
         }
         break;
       case 'pull':
@@ -243,15 +243,15 @@ export const BranchesPanel = memo(function BranchesPanel({
           // Pass the local branch name ('branch') as the target branch
           const result = await window.electronAPI.gitPull(pullRemote, pullBranch, branch);
           if (result.success) {
-             toast.success(`Successfully pulled ${pullRemote}/${pullBranch}`);
-             onRefresh?.();
+            toast.success(`Successfully pulled ${pullRemote}/${pullBranch}`);
+            onRefresh?.();
           } else {
-             toast.error(`Pull failed: ${result.error}`);
+            toast.error(`Pull failed: ${result.error}`);
           }
         } catch (err: any) {
-           toast.error(`Pull failed: ${err.message}`);
+          toast.error(`Pull failed: ${err.message}`);
         } finally {
-           onSetLoading?.(false);
+          onSetLoading?.(false);
         }
         break;
     }
@@ -260,24 +260,24 @@ export const BranchesPanel = memo(function BranchesPanel({
   };
 
   const handleStartInteractiveRebase = async (targetBranch: string, todoLines: string[]) => {
-      onSetLoading?.(true, 'Starting interactive rebase...');
-      try {
-        const result = await window.electronAPI.gitInteractiveRebase(targetBranch, todoLines);
-        if (result.success) {
-           toast.success('Interactive rebase started successfully');
+    onSetLoading?.(true, 'Starting interactive rebase...');
+    try {
+      const result = await window.electronAPI.gitInteractiveRebase(targetBranch, todoLines);
+      if (result.success) {
+        toast.success('Interactive rebase started successfully');
+      } else {
+        if (result.error && result.error.includes('conflict')) {
+          toast.warning('Rebase encountered conflicts. Please resolve them.');
         } else {
-           if (result.error && result.error.includes('conflict')) {
-              toast.warning('Rebase encountered conflicts. Please resolve them.');
-           } else {
-              toast.error(`Rebase failed: ${result.error}`);
-           }
+          toast.error(`Rebase failed: ${result.error}`);
         }
-      } catch (error: any) {
-        toast.error(`Rebase failed: ${error.message}`);
-      } finally {
-        onRefresh?.();
-        onSetLoading?.(false);
       }
+    } catch (error: any) {
+      toast.error(`Rebase failed: ${error.message}`);
+    } finally {
+      onRefresh?.();
+      onSetLoading?.(false);
+    }
   };
 
   useEffect(() => {
@@ -298,10 +298,10 @@ export const BranchesPanel = memo(function BranchesPanel({
       {/* Local Branches Panel */}
       <div className="rounded-lg border border-border bg-card/50 flex flex-col">
         <div className="border-b border-border p-3 flex items-center justify-between cursor-pointer hover:bg-accent/30 transition-colors"
-             onClick={() => setLocalBranchesExpanded(!localBranchesExpanded)}>
+          onClick={() => setLocalBranchesExpanded(!localBranchesExpanded)}>
           <div className="flex items-center gap-2 text-foreground">
             {localBranchesExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
-            <GitBranch className="size-4" />
+            <GitBranch className="size-4 text-accent-purple" />
             <h3 className="font-semibold text-sm">Local Branches</h3>
           </div>
           <button
@@ -309,7 +309,7 @@ export const BranchesPanel = memo(function BranchesPanel({
               e.stopPropagation();
               handleCreateBranchClick();
             }}
-            className="flex items-center gap-1.5 rounded-md bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-600/20"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors bg-secondary text-foreground hover:bg-muted dark:bg-emerald-600/10 dark:text-emerald-400 dark:hover:bg-emerald-600/20"
           >
             <Plus className="size-3" />
             New
@@ -335,54 +335,54 @@ export const BranchesPanel = memo(function BranchesPanel({
                 {localBranches
                   .filter(b => b.name.toLowerCase().includes(localFilter.toLowerCase()))
                   .map((branch) => (
-                  <div
-                    key={branch.name}
-                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
-                    onContextMenu={(e) => handleContextMenu(e, branch)}
-                  >
-                    <button
-                      onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
-                      className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                      disabled={branch.isCurrent}
+                    <div
+                      key={branch.name}
+                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                      onContextMenu={(e) => handleContextMenu(e, branch)}
                     >
-                      <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-blue-400' : 'text-muted-foreground'}`} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`truncate text-sm ${branch.isCurrent ? 'text-blue-400 font-medium' : 'text-foreground'}`}>
-                            {branch.name}
-                          </span>
-                          {branch.isCurrent && (
-                            <CheckCircle2 className="size-3 flex-shrink-0 text-blue-400" />
-                          )}
-                          {/* Ahead/Behind Indicators */}
-                          {(branch.ahead || 0) > 0 && (
-                            <div className="flex items-center gap-0.5 text-[10px] text-green-400 bg-green-950/30 px-1 rounded">
-                              <ArrowUp className="size-2.5" />
-                              {branch.ahead}
-                            </div>
-                          )}
-                          {(branch.behind || 0) > 0 && (
-                            <div className="flex items-center gap-0.5 text-[10px] text-amber-400 bg-amber-950/30 px-1 rounded">
-                              <ArrowDown className="size-2.5" />
-                              {branch.behind}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                    {!branch.isCurrent && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteBranch(branch.name);
-                        }}
-                        className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
+                        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                        disabled={branch.isCurrent}
                       >
-                        <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                        <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-info' : 'text-muted-foreground'}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`truncate text-sm ${branch.isCurrent ? 'text-info font-medium' : 'text-foreground'}`}>
+                              {branch.name}
+                            </span>
+                            {branch.isCurrent && (
+                              <CheckCircle2 className="size-3 flex-shrink-0 text-info" />
+                            )}
+                            {/* Ahead/Behind Indicators */}
+                            {(branch.ahead || 0) > 0 && (
+                              <div className="flex items-center gap-0.5 text-[10px] text-foreground bg-secondary px-1 rounded">
+                                <ArrowUp className="size-2.5" />
+                                {branch.ahead}
+                              </div>
+                            )}
+                            {(branch.behind || 0) > 0 && (
+                              <div className="flex items-center gap-0.5 text-[10px] text-amber-400 bg-amber-950/30 px-1 rounded">
+                                <ArrowDown className="size-2.5" />
+                                {branch.behind}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </button>
-                    )}
-                  </div>
-                ))}
+                      {!branch.isCurrent && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBranch(branch.name);
+                          }}
+                          className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
               </div>
             )}
           </div>
@@ -392,7 +392,7 @@ export const BranchesPanel = memo(function BranchesPanel({
       {/* Remote Branches Panel */}
       <div className="rounded-lg border border-border bg-card/50 flex flex-col">
         <div className="border-b border-border p-3 flex items-center gap-2 text-foreground cursor-pointer hover:bg-accent/30 transition-colors"
-             onClick={() => setRemoteBranchesExpanded(!remoteBranchesExpanded)}>
+          onClick={() => setRemoteBranchesExpanded(!remoteBranchesExpanded)}>
           {remoteBranchesExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
           <GitMerge className="size-4" />
           <h3 className="font-semibold text-sm">Remote Branches</h3>
@@ -417,43 +417,43 @@ export const BranchesPanel = memo(function BranchesPanel({
                 {remoteBranches
                   .filter(b => b.name.toLowerCase().includes(remoteFilter.toLowerCase()))
                   .map((branch) => {
-                  const branchName = extractBranchNameFromRemote(branch.name);
-                  const isLocalBranch = localBranches.some(b => b.name === branchName);
-                  
-                  return (
-                    <div
-                      key={branch.name}
-                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
-                      onContextMenu={(e) => handleContextMenu(e, branch)}
-                    >
+                    const branchName = extractBranchNameFromRemote(branch.name);
+                    const isLocalBranch = localBranches.some(b => b.name === branchName);
+
+                    return (
                       <div
-                        className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
-                        onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                        key={branch.name}
+                        className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                        onContextMenu={(e) => handleContextMenu(e, branch)}
                       >
-                        <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-purple-400" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm text-foreground">
-                            {branch.name}
-                          </div>
-                          {isLocalBranch && (
-                            <div className="text-[10px] text-muted-foreground">
-                              Local branch exists
+                        <div
+                          className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
+                          onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                        >
+                          <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-accent-purple" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm text-foreground">
+                              {branch.name}
                             </div>
-                          )}
+                            {isLocalBranch && (
+                              <div className="text-[10px] text-muted-foreground">
+                                Local branch exists
+                              </div>
+                            )}
+                          </div>
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteRemoteBranch(branch.name);
+                          }}
+                          className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteRemoteBranch(branch.name);
-                        }}
-                        className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                      >
-                        <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
-                      </button>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -481,14 +481,14 @@ export const BranchesPanel = memo(function BranchesPanel({
             <DialogDescription className="text-muted-foreground mt-3 text-base">
               {deleteDialog?.type === 'branch' && (
                 <>
-                  Are you sure you want to delete the branch <span className="font-mono font-semibold text-foreground">{deleteDialog.name}</span>? 
+                  Are you sure you want to delete the branch <span className="font-mono font-semibold text-foreground">{deleteDialog.name}</span>?
                   <br />
                   <span className="text-sm text-muted-foreground mt-2 block">This action cannot be undone.</span>
                 </>
               )}
               {deleteDialog?.type === 'remoteBranch' && (
                 <>
-                  Are you sure you want to delete the remote branch <span className="font-mono font-semibold text-foreground">{deleteDialog.name}</span>? 
+                  Are you sure you want to delete the remote branch <span className="font-mono font-semibold text-foreground">{deleteDialog.name}</span>?
                   <br />
                   <span className="text-sm text-muted-foreground mt-2 block">This will delete the branch on the remote repository.</span>
                 </>
@@ -505,7 +505,7 @@ export const BranchesPanel = memo(function BranchesPanel({
             </Button>
             <Button
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-medium"
             >
               <Trash2 className="size-4 mr-2" />
               Delete
@@ -601,11 +601,11 @@ export const BranchesPanel = memo(function BranchesPanel({
 
       {rebaseTargetBranch && (
         <RebaseModal
-            isOpen={rebaseModalOpen}
-            onClose={() => setRebaseModalOpen(false)}
-            targetBranch={rebaseTargetBranch}
-            currentBranch={currentBranch}
-            onStartRebase={handleStartInteractiveRebase}
+          isOpen={rebaseModalOpen}
+          onClose={() => setRebaseModalOpen(false)}
+          targetBranch={rebaseTargetBranch}
+          currentBranch={currentBranch}
+          onStartRebase={handleStartInteractiveRebase}
         />
       )}
     </div>

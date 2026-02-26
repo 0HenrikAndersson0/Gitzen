@@ -118,7 +118,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       <DialogContent className="bg-card border-border max-w-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Settings className="size-5 text-blue-400" />
+            <Settings className="size-5 text-foreground" />
             <DialogTitle>Settings</DialogTitle>
           </div>
           <DialogDescription>
@@ -129,7 +129,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-2">
           <div className="space-y-4 border-b border-border pb-6">
             <div className="flex items-center gap-2 mb-2">
-              <User className="size-4 text-blue-400" />
+              <User className="size-4 text-foreground" />
               <h3 className="text-sm font-medium text-foreground">Git Identity</h3>
             </div>
 
@@ -181,7 +181,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
           <div className="space-y-4 border-b border-border pb-6">
             <div className="flex items-center gap-2 mb-2">
-              <Globe className="size-4 text-blue-400" />
+              <Globe className="size-4 text-foreground" />
               <h3 className="text-sm font-medium text-foreground">Remote</h3>
             </div>
             
@@ -263,7 +263,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           </Button>
           <Button
             onClick={handleSave}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
             disabled={saving || loading}
           >
             {saving ? 'Saving...' : 'Save'}

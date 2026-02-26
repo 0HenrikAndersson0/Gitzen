@@ -32,7 +32,7 @@ export function SplashScreen({ visible, onHidden }: SplashScreenProps) {
         <p className="text-muted-foreground text-sm">Loading your workspace...</p>
         
         <div className="mt-8 w-48 h-1 bg-secondary rounded-full overflow-hidden">
-          <div className="h-full bg-blue-500 animate-loading-bar rounded-full"></div>
+          <div className="h-full bg-primary animate-loading-bar rounded-full"></div>
         </div>
       </div>
     </div>
