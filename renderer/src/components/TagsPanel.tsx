@@ -41,7 +41,7 @@ export const TagsPanel = memo(function TagsPanel({
         window.electronAPI.getRemoteTags('origin'),
         window.electronAPI.getRemoteUrl('origin')
       ]);
-      
+
       const remoteExists = !!remoteUrlResult.url;
       setHasRemote(remoteExists);
 
@@ -54,11 +54,11 @@ export const TagsPanel = memo(function TagsPanel({
           date: new Date(tag.date),
           isPushed: remoteExists ? remoteTags.has(tag.name) : undefined,
         }));
-        
+
         setTags((prev) => {
           const prevIdentifier = prev.map(t => `${t.name}-${t.isPushed}`).sort().join(',');
           const newIdentifier = newTags.map(t => `${t.name}-${t.isPushed}`).sort().join(',');
-          
+
           if (prevIdentifier !== newIdentifier) {
             return newTags;
           }
@@ -102,9 +102,9 @@ export const TagsPanel = memo(function TagsPanel({
         toast.error(result.error || 'Failed to push tag');
       }
     } catch (error) {
-        toast.error('Failed to push tag');
+      toast.error('Failed to push tag');
     } finally {
-        onSetLoading?.(false);
+      onSetLoading?.(false);
     }
   };
 
@@ -138,7 +138,7 @@ export const TagsPanel = memo(function TagsPanel({
   return (
     <div className="rounded-lg border border-border bg-card/50 flex flex-col">
       <div className="border-b border-border p-3 flex items-center justify-between cursor-pointer hover:bg-accent/30 transition-colors"
-           onClick={() => setIsExpanded(!isExpanded)}>
+        onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex items-center gap-2 text-foreground">
           {isExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
           <Tag className="size-4" />
@@ -149,7 +149,7 @@ export const TagsPanel = memo(function TagsPanel({
             e.stopPropagation();
             handleCreateTagClick();
           }}
-          className="flex items-center gap-1.5 rounded-md bg-amber-600/10 px-2 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-600/20"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors bg-secondary text-foreground hover:bg-muted dark:bg-amber-600/10 dark:text-amber-400 dark:hover:bg-amber-600/20"
         >
           <Plus className="size-3" />
           New
@@ -176,49 +176,49 @@ export const TagsPanel = memo(function TagsPanel({
                 {tags
                   .filter(t => t.name.toLowerCase().includes(filter.toLowerCase()))
                   .map((tag) => (
-                  <div
-                    key={tag.name}
-                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
-                  >
-                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                      <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm text-foreground">
-                          {tag.name}
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                          <span className="font-mono">{tag.commit.substring(0, 7)}</span>
-                          <span>•</span>
-                          <span>{tag.date.toLocaleDateString()}</span>
+                    <div
+                      key={tag.name}
+                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                    >
+                      <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                        <Tag className="size-3.5 flex-shrink-0 mt-0.5 text-black dark:text-amber-400" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm text-foreground">
+                            {tag.name}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                            <span className="font-mono">{tag.commit.substring(0, 7)}</span>
+                            <span>•</span>
+                            <span>{tag.date.toLocaleDateString()}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         {hasRemote && tag.isPushed === false && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePushTag(tag.name);
-                                }}
-                                title="Push to origin"
-                                className="p-1 rounded-md hover:bg-muted text-blue-400 hover:text-blue-300"
-                            >
-                                <CloudUpload className="size-3.5" />
-                            </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePushTag(tag.name);
+                            }}
+                            title="Push to origin"
+                            className="p-1 rounded-md hover:bg-muted text-foreground hover:text-muted-foreground"
+                          >
+                            <CloudUpload className="size-3.5" />
+                          </button>
                         )}
                         <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteTag(tag.name);
-                            }}
-                            title="Delete tag"
-                            className="p-1 rounded-md hover:bg-muted text-red-400 hover:text-red-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTag(tag.name);
+                          }}
+                          title="Delete tag"
+                          className="p-1 rounded-md hover:bg-muted text-red-400 hover:text-red-300"
                         >
-                            <Trash2 className="size-3.5" />
+                          <Trash2 className="size-3.5" />
                         </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>
@@ -234,7 +234,7 @@ export const TagsPanel = memo(function TagsPanel({
               Delete Tag
             </DialogTitle>
             <DialogDescription className="text-muted-foreground mt-3 text-base">
-              Are you sure you want to delete the tag <span className="font-mono font-semibold text-foreground">{deleteDialog}</span>? 
+              Are you sure you want to delete the tag <span className="font-mono font-semibold text-foreground">{deleteDialog}</span>?
               <br />
               <span className="text-sm text-muted-foreground mt-2 block">This action cannot be undone.</span>
             </DialogDescription>
@@ -249,7 +249,7 @@ export const TagsPanel = memo(function TagsPanel({
             </Button>
             <Button
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-medium"
             >
               <Trash2 className="size-4 mr-2" />
               Delete
@@ -258,10 +258,10 @@ export const TagsPanel = memo(function TagsPanel({
         </DialogContent>
       </Dialog>
 
-      <CreateTagDialog 
-        open={showCreateDialog} 
-        onOpenChange={setShowCreateDialog} 
-        onTagCreated={() => loadTags(true)} 
+      <CreateTagDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onTagCreated={() => loadTags(true)}
       />
     </div>
   );

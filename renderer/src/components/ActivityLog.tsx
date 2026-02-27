@@ -15,11 +15,11 @@ export function ActivityLog({ logs }: ActivityLogProps) {
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'success':
-        return 'text-green-400';
+        return 'text-foreground';
       case 'error':
         return 'text-red-400';
       case 'warning':
-        return 'text-yellow-400';
+        return 'text-foreground';
       default:
         return 'text-muted-foreground';
     }
@@ -41,7 +41,7 @@ export function ActivityLog({ logs }: ActivityLogProps) {
   return (
     <div className="rounded-lg border border-border bg-card/50 p-6 flex flex-col h-full overflow-hidden">
       <div className="mb-4 flex items-center gap-2 flex-none">
-        <Terminal className="size-5 text-purple-400" />
+        <Terminal className="size-5 text-foreground" />
         <h2 className="font-semibold">Activity Log</h2>
       </div>
 

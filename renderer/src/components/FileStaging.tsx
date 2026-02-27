@@ -49,13 +49,13 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'modified':
-        return 'text-yellow-400';
+        return 'text-warning';
       case 'added':
-        return 'text-green-400';
+        return 'text-success';
       case 'deleted':
-        return 'text-red-400';
+        return 'text-destructive';
       default:
-        return 'text-gray-400';
+        return 'text-muted-foreground';
     }
   };
 
@@ -138,11 +138,10 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
           <div
             key={file.path}
             ref={(el) => (itemRefs.current[index] = el)}
-            className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${
-              selectedFileIndex === index
-                ? 'border-blue-500/50 bg-blue-900/20'
+            className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${selectedFileIndex === index
+                ? 'border-border bg-accent'
                 : 'border-border bg-background/50 hover:bg-card/50'
-            }`}
+              }`}
             onContextMenu={(e) => handleContextMenu(e, file)}
             onClick={() => setSelectedFile(file)}
           >
@@ -157,7 +156,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
             </span>
             <span className="flex-1 font-mono text-sm truncate min-w-0">{file.path}</span>
             {file.status === 'deleted' && (
-              <FileX className="size-4 text-red-400" />
+              <FileX className="size-4 text-destructive" />
             )}
           </div>
         ))
@@ -193,7 +192,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
         <FileDiff
           file={selectedFile}
           onClose={() => setSelectedFile(null)}
-          onRefresh={onRefresh || (() => {})}
+          onRefresh={onRefresh || (() => { })}
           onNext={files.length > 1 ? handleNextFile : undefined}
           onPrevious={files.length > 1 ? handlePrevFile : undefined}
         />

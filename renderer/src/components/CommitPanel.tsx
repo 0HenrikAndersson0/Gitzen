@@ -51,7 +51,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   return (
     <div className="rounded-lg border border-border bg-card/50 p-6 flex flex-col">
       <div className="mb-4 flex items-center gap-2 flex-none">
-        <GitCommitHorizontal className="size-5 text-green-400" />
+        <GitCommitHorizontal className="size-5 text-foreground" />
         <h2 className="font-semibold">Changes</h2>
       </div>
 
@@ -70,7 +70,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
               {unstagedFiles.length > 0 && (
                 <button
                   onClick={onStageAll}
-                  className="text-xs text-muted-foreground hover:text-green-400 transition-colors flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
                   Stage All
                 </button>
@@ -78,7 +78,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
               {stagedFiles.length > 0 && (
                 <button
                   onClick={onUnstageAll}
-                  className="text-xs text-muted-foreground hover:text-yellow-400 transition-colors flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
                   Unstage All
                 </button>
@@ -103,7 +103,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
           <Button
             onClick={handleCommit}
             disabled={stagedFiles.length === 0 || !commitMessage.trim()}
-            className="flex-1 bg-green-600 hover:bg-green-700"
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <GitCommitHorizontal className="mr-2 size-4" />
             Commit

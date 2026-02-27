@@ -160,7 +160,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
       case 'deleted':
         return <FileX className="h-4 w-4 text-red-600 dark:text-red-400" />;
       default:
-        return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
+        return <FileText className="h-4 w-4 text-foreground dark:text-foreground" />;
     }
   };
 
@@ -171,7 +171,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
       case 'deleted':
         return 'text-red-600 dark:text-red-400';
       default:
-        return 'text-blue-600 dark:text-blue-400';
+        return 'text-foreground dark:text-foreground';
     }
   };
 

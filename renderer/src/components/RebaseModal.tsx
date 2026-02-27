@@ -107,7 +107,7 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
         <DialogHeader>
           <DialogTitle>Interactive Rebase</DialogTitle>
           <DialogDescription>
-            Rebasing <span className="font-mono text-blue-400">{currentBranch}</span> onto <span className="font-mono text-purple-400">{targetBranch}</span>.
+            Rebasing <span className="font-mono text-foreground">{currentBranch}</span> onto <span className="font-mono text-foreground">{targetBranch}</span>.
             Drag and drop or use arrows to reorder. Change actions to squash, fixup, etc.
           </DialogDescription>
           <div className="text-xs text-amber-500/80 bg-amber-500/10 p-2 rounded border border-amber-500/20 mt-2">
@@ -175,7 +175,7 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
 
         <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-border">
           <Button variant="outline" onClick={onClose} className="bg-secondary border-border text-foreground">Cancel</Button>
-          <Button onClick={handleStart} className="bg-blue-600 hover:bg-blue-700 text-white" disabled={loading || commits.length === 0}>
+          <Button onClick={handleStart} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={loading || commits.length === 0}>
             Start Rebase
           </Button>
         </div>

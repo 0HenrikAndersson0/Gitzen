@@ -47,14 +47,14 @@ interface GraphEdge {
 }
 
 const COLORS = [
-  '#10b981', // emerald
-  '#3b82f6', // blue
-  '#a855f7', // purple
-  '#f97316', // orange
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-  '#84cc16', // lime
-  '#f43f5e', // rose
+  'hsl(var(--success))', // emerald
+  'hsl(var(--info))',    // blue
+  'hsl(var(--foreground))', // purple -> neutral foreground
+  'hsl(var(--warning))',   // orange
+  'hsl(var(--muted-foreground))', // pink -> muted
+  'hsl(var(--success))', // cyan -> success 
+  'hsl(var(--warning))', // lime -> warning
+  'hsl(var(--destructive))', // rose -> destructive
 ];
 
 function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: number = 40) {
@@ -64,7 +64,7 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
     // Map of commit hash -> occupied lane index
     // Note: commits are processed newest to oldest (top to bottom)
-    
+
     // Map commit hash -> lane index it was assigned to
     const commitLaneMap = new Map<string, number>();
 
@@ -100,16 +100,16 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
         // Expected by one or more lanes (continuation or merge base)
         // Pick the leftmost lane to keep graph compact
         laneIndex = Math.min(...expectingLanes);
-        
+
         // Clear ALL lanes that were expecting this commit to free them up
         expectingLanes.forEach(idx => {
-            activeLanes[idx] = null;
+          activeLanes[idx] = null;
         });
       }
 
       // Assign lane
       commitLaneMap.set(commit.id, laneIndex);
-      
+
       // Determine color based on lane index
       const color = COLORS[laneIndex % COLORS.length];
 
@@ -128,7 +128,7 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
       if (parents.length > 0) {
         const p1 = parents[0];
         // If the lane was cleared above, we can now reuse it for the parent
-        activeLanes[laneIndex] = p1; 
+        activeLanes[laneIndex] = p1;
 
         // Merge parents (2nd, 3rd...) need new lanes
         for (let i = 1; i < parents.length; i++) {
@@ -137,15 +137,15 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
           // Note: We check if p is already expected by *another* lane is not strictly necessary 
           // because the resolution step (1) will handle merging lanes later.
           // We just need to ensure we output an expectation.
-          
+
           // However, optimization: if we can find a lane ALREADY expecting p, we don't need another one?
           // No, because valid graph structure might have parallel lines merging later.
           // Visual separation is good.
-          
+
           let pLane = activeLanes.findIndex(l => l === null);
           if (pLane === -1) {
-              pLane = activeLanes.length;
-              activeLanes.push(null);
+            pLane = activeLanes.length;
+            activeLanes.push(null);
           }
           activeLanes[pLane] = p;
         }
@@ -155,30 +155,30 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
     // Second pass to create edges since we now know all coordinates
     commits.forEach((commit, index) => {
-        const sourceNode = nodes[index];
-        const parents = commit.parents || [];
+      const sourceNode = nodes[index];
+      const parents = commit.parents || [];
 
-        parents.forEach(parentId => {
-            const targetNode = nodes.find(n => n.id === parentId);
-            if (targetNode) {
-                edges.push({
-                    fromX: sourceNode.x,
-                    fromY: sourceNode.y,
-                    toX: targetNode.x,
-                    toY: targetNode.y,
-                    color: sourceNode.color
-                });
-            } else {
-                // Parent is not in the list (history truncated), point downwards to infinity
-                edges.push({
-                    fromX: sourceNode.x,
-                    fromY: sourceNode.y,
-                    toX: sourceNode.x,
-                    toY: (commits.length + 1) * spacingY,
-                    color: sourceNode.color
-                });
-            }
-        });
+      parents.forEach(parentId => {
+        const targetNode = nodes.find(n => n.id === parentId);
+        if (targetNode) {
+          edges.push({
+            fromX: sourceNode.x,
+            fromY: sourceNode.y,
+            toX: targetNode.x,
+            toY: targetNode.y,
+            color: sourceNode.color
+          });
+        } else {
+          // Parent is not in the list (history truncated), point downwards to infinity
+          edges.push({
+            fromX: sourceNode.x,
+            fromY: sourceNode.y,
+            toX: sourceNode.x,
+            toY: (commits.length + 1) * spacingY,
+            color: sourceNode.color
+          });
+        }
+      });
     });
 
     return { nodes, edges, width: activeLanes.length * spacingX + 40, height: commits.length * spacingY + 40 };
@@ -199,7 +199,7 @@ export const CommitGraph = memo(function CommitGraph({
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
   const [loadAmount, setLoadAmount] = useState('50');
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commitHash: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -220,10 +220,10 @@ export const CommitGraph = memo(function CommitGraph({
   const currentBranchHeadId = useMemo(() => {
     if (!currentBranch || !commits.length) return null;
     return commits.find(c => {
-        if (!c.refs) return false;
-        // Check for "HEAD -> branchName" or just "branchName"
-        const refs = c.refs.split(',').map(r => r.trim());
-        return refs.includes(`HEAD -> ${currentBranch}`) || refs.includes(currentBranch);
+      if (!c.refs) return false;
+      // Check for "HEAD -> branchName" or just "branchName"
+      const refs = c.refs.split(',').map(r => r.trim());
+      return refs.includes(`HEAD -> ${currentBranch}`) || refs.includes(currentBranch);
     })?.id;
   }, [commits, currentBranch]);
 
@@ -247,7 +247,7 @@ export const CommitGraph = memo(function CommitGraph({
       if (result.success && result.tags) {
         // Create a map of commit hash -> tags
         const tagsMap = new Map<string, string[]>();
-        
+
         result.tags.forEach(tag => {
           if (tag.commit) {
             const existing = tagsMap.get(tag.commit) || [];
@@ -259,11 +259,11 @@ export const CommitGraph = memo(function CommitGraph({
         const commitsWithTagsData = commits.map(commit => {
           // Try to find tags for this commit using its short hash (id)
           let tags = tagsMap.get(commit.id) || [];
-          
+
           // Fallback: Check if we have tags for the full hash if available
           if (tags.length === 0 && commit.hash) {
-             const fullHashTags = tagsMap.get(commit.hash);
-             if (fullHashTags) tags = fullHashTags;
+            const fullHashTags = tagsMap.get(commit.hash);
+            if (fullHashTags) tags = fullHashTags;
           }
 
           if (tags.length > 0) {
@@ -271,7 +271,7 @@ export const CommitGraph = memo(function CommitGraph({
           }
           return commit;
         });
-        
+
         setCommitsWithTags(commitsWithTagsData);
       }
     } catch (error) {
@@ -325,7 +325,7 @@ export const CommitGraph = memo(function CommitGraph({
     return (
       <div className="rounded-lg border border-border bg-card/50 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <GitBranch className="h-5 w-5 text-black dark:text-emerald-400" />
           <h2 className="font-semibold text-foreground">Commit History</h2>
         </div>
         <div className="text-center text-muted-foreground py-8">
@@ -338,73 +338,73 @@ export const CommitGraph = memo(function CommitGraph({
   return (
     <div className="rounded-lg border border-border bg-card/50 overflow-hidden flex flex-col h-full">
       <div className="p-6 pb-4 flex items-center gap-2 border-b border-border">
-        <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+        <GitBranch className="h-5 w-5 text-black dark:text-emerald-400" />
         <h2 className="font-semibold text-foreground">Commit History</h2>
         <span className="ml-auto text-sm text-muted-foreground">
           {commits.length} commit{commits.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      <div 
+      <div
         ref={containerRef}
-        className="flex-1 overflow-auto bg-background relative" 
+        className="flex-1 overflow-auto bg-background relative"
       >
         <div className="relative" style={{ height: height + 80, minWidth: '100%' }}>
-           {/* Graph Layer - Absolute positioned behind content */}
-           <svg
-             width={width + 20}
-             height={height}
-             className="absolute top-0 left-0 pointer-events-none z-10"
-           >
-             {edges.map((edge, i) => (
-               <path
-                 key={`edge-${i}`}
-                 d={`M ${edge.fromX} ${edge.fromY} L ${edge.fromX} ${edge.fromY + 10} L ${edge.toX} ${edge.fromY + 25} L ${edge.toX} ${edge.toY}`}
-                 stroke={edge.color}
-                 strokeWidth="2"
-                 fill="none"
-                 opacity="0.6"
-               />
-             ))}
-             {nodes.map((node) => (
-               <g key={`node-${node.id}`}>
-                 {node.id === currentBranchHeadId && (
-                   <circle
-                     cx={node.x}
-                     cy={node.y}
-                     r="8"
-                     fill="none"
-                     stroke={node.color}
-                     strokeWidth="2"
-                     className="animate-pulse"
-                     opacity="0.8"
-                   />
-                 )}
-                 <circle
-                   cx={node.x}
-                   cy={node.y}
-                   r="4"
-                   fill={node.color}
-                   stroke="#18181b" // zinc-950
-                   strokeWidth="2"
-                 />
-                 {hoveredCommitId === node.id && (
-                   <circle
-                     cx={node.x}
-                     cy={node.y}
-                     r="6"
-                     fill="none"
-                     stroke={node.color}
-                     strokeWidth="2"
-                     opacity="0.5"
-                   />
-                 )}
-               </g>
-             ))}
-           </svg>
+          {/* Graph Layer - Absolute positioned behind content */}
+          <svg
+            width={width + 20}
+            height={height}
+            className="absolute top-0 left-0 pointer-events-none z-10"
+          >
+            {edges.map((edge, i) => (
+              <path
+                key={`edge-${i}`}
+                d={`M ${edge.fromX} ${edge.fromY} L ${edge.fromX} ${edge.fromY + 10} L ${edge.toX} ${edge.fromY + 25} L ${edge.toX} ${edge.toY}`}
+                stroke={edge.color}
+                strokeWidth="2"
+                fill="none"
+                opacity="0.6"
+              />
+            ))}
+            {nodes.map((node) => (
+              <g key={`node-${node.id}`}>
+                {node.id === currentBranchHeadId && (
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r="8"
+                    fill="none"
+                    stroke={node.color}
+                    strokeWidth="2"
+                    className="animate-pulse"
+                    opacity="0.8"
+                  />
+                )}
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r="4"
+                  fill={node.color}
+                  stroke="#18181b" // zinc-950
+                  strokeWidth="2"
+                />
+                {hoveredCommitId === node.id && (
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r="6"
+                    fill="none"
+                    stroke={node.color}
+                    strokeWidth="2"
+                    opacity="0.5"
+                  />
+                )}
+              </g>
+            ))}
+          </svg>
 
-           {/* Commit List Layer */}
-           <div className="absolute top-0 left-0 right-0 z-20">
+          {/* Commit List Layer */}
+          <div className="absolute top-0 left-0 right-0 z-20">
             {nodes.map((node) => {
               const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
               const isCurrentHead = node.id === currentBranchHeadId;
@@ -412,13 +412,12 @@ export const CommitGraph = memo(function CommitGraph({
               return (
                 <div
                   key={commit.id}
-                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-border/30 cursor-pointer ${
-                    hoveredCommitId === commit.id
-                      ? 'bg-secondary/50'
-                      : isCurrentHead 
-                        ? 'bg-emerald-100 dark:bg-emerald-950/20' 
-                        : 'hover:bg-accent/30'
-                  }`}
+                  className={`absolute right-0 px-4 flex flex-col justify-center transition-colors border-b border-border/30 cursor-pointer ${hoveredCommitId === commit.id
+                    ? 'bg-secondary/50'
+                    : isCurrentHead
+                      ? 'bg-accent font-medium'
+                      : 'hover:bg-accent/30'
+                    }`}
                   style={{
                     top: node.y - 18,
                     height: spacingY,
@@ -435,17 +434,17 @@ export const CommitGraph = memo(function CommitGraph({
                     </p>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
-                        {commit.branch && (
-                            <span className="inline-flex items-center gap-1 rounded bg-emerald-100 dark:bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-                            {commit.branch}
-                            </span>
-                        )}
-                        {commit.tags && commit.tags.map(tag => (
-                            <span key={tag} className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
-                                <Tag className="h-2 w-2" />
-                                {tag}
-                            </span>
-                        ))}
+                      {commit.branch && (
+                        <span className="inline-flex items-center gap-1 rounded bg-success/20 px-1.5 py-0.5 text-[10px] text-success border border-success/30">
+                          {commit.branch}
+                        </span>
+                      )}
+                      {commit.tags && commit.tags.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1 rounded bg-warning/20 px-1.5 py-0.5 text-[10px] text-black dark:text-warning border border-warning/30">
+                          <Tag className="h-2 w-2" />
+                          {tag}
+                        </span>
+                      ))}
                     </div>
 
                     <div className="flex items-center gap-3 text-xs text-muted-foreground w-32 justify-end">
@@ -460,9 +459,9 @@ export const CommitGraph = memo(function CommitGraph({
                 </div>
               );
             })}
-           </div>
+          </div>
 
-           {onLoadMore && hasMore && (
+          {onLoadMore && hasMore && (
             <div
               className="absolute left-0 right-0 flex items-center justify-center gap-2 border-t border-border/30"
               style={{ top: height, height: 80 }}
@@ -489,7 +488,7 @@ export const CommitGraph = memo(function CommitGraph({
                 Load
               </Button>
             </div>
-           )}
+          )}
         </div>
       </div>
 
@@ -516,7 +515,7 @@ export const CommitGraph = memo(function CommitGraph({
               setContextMenu(null);
             }}
           >
-            <Tag className="size-3.5 text-amber-600 dark:text-amber-400" />
+            <Tag className="size-3.5 text-black dark:text-amber-400" />
             Add Tag...
           </div>
           {onCherryPick && (
@@ -527,7 +526,7 @@ export const CommitGraph = memo(function CommitGraph({
                 setContextMenu(null);
               }}
             >
-              <ArrowRight className="size-3.5 text-blue-400" />
+              <ArrowRight className="size-3.5 text-foreground" />
               Cherry Pick Commit
             </div>
           )}
@@ -551,7 +550,7 @@ export const CommitGraph = memo(function CommitGraph({
                 setContextMenu(null);
               }}
             >
-              <div className="size-3.5 flex items-center justify-center font-bold text-orange-400 text-xs">X</div>
+              <div className="size-3.5 flex items-center justify-center font-bold text-foreground text-xs">X</div>
               Reset Branch to Here...
             </div>
           )}

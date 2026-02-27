@@ -67,7 +67,7 @@ export function CloneRepo({ onClone }: CloneRepoProps) {
   return (
     <div className="rounded-lg border border-border bg-card/50 p-6">
       <div className="mb-4 flex items-center gap-2">
-        <FolderGit className="size-5 text-blue-400" />
+        <FolderGit className="size-5 text-foreground" />
         <h2>Clone Repository</h2>
       </div>
       
@@ -109,7 +109,7 @@ export function CloneRepo({ onClone }: CloneRepoProps) {
         <Button
           onClick={handleClone}
           disabled={!repoUrl || !localPath}
-          className="w-full bg-blue-600 hover:bg-blue-700"
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <Download className="mr-2 size-4" />
           Clone Repository

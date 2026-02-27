@@ -103,7 +103,7 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
     <div className="rounded-lg border border-border bg-card/50 p-6">
       <div className="mb-6">
         <h2 className="mb-2 flex items-center gap-2 font-semibold text-foreground">
-          <FolderOpen className="h-5 w-5 text-blue-400" />
+          <FolderOpen className="h-5 w-5 text-foreground" />
           Open Local Repository
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -152,7 +152,7 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground group-hover:text-blue-400" />
+                      <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground group-hover:text-foreground" />
                       <span className="truncate text-sm font-medium text-foreground group-hover:text-foreground">
                         {repo.name || formatPath(repo.path)}
                       </span>
@@ -176,7 +176,7 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
                     >
                         <Trash2 className="size-4" />
                     </button>
-                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-blue-400" />
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-foreground" />
                   </div>
                 </div>
               ))}

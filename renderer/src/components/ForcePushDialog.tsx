@@ -41,7 +41,7 @@ export function ForcePushDialog({ open, onClose, onConfirm, targetBranch }: Forc
             onCheckedChange={(checked) => setOverwrite(checked as boolean)}
           />
           <Label htmlFor="overwrite" className="text-sm font-normal cursor-pointer text-foreground">
-            Use <code className="text-red-400">--force</code> instead of <code className="text-blue-400">--force-with-lease</code>
+            Use <code className="text-red-400">--force</code> instead of <code className="text-foreground">--force-with-lease</code>
           </Label>
         </div>
 
@@ -54,7 +54,7 @@ export function ForcePushDialog({ open, onClose, onConfirm, targetBranch }: Forc
               onConfirm(overwrite);
               onClose();
             }} 
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
           >
             Force Push
           </Button>

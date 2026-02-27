@@ -93,8 +93,8 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
     <div className="rounded-lg border border-border bg-card p-6">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-blue-600/10 p-3">
-            <FolderGit className="size-8 text-blue-400" />
+          <div className="rounded-lg bg-secondary p-3">
+            <FolderGit className="size-8 text-foreground" />
           </div>
           <div>
             {repoName ? (
@@ -132,7 +132,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                             className="group/item flex w-full items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-accent cursor-pointer"
                             onClick={() => handleSwitchRepo(repo.name, repo.path)}
                           >
-                            <FolderOpen className="size-4 text-blue-400 flex-shrink-0" />
+                            <FolderOpen className="size-4 text-foreground flex-shrink-0" />
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium text-foreground">
                                 {repo.name}
@@ -161,11 +161,11 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                     <span>{currentBranch}</span>
                     {branchStatus && branchStatus.hasUpstream && (
                       <div className="flex items-center gap-2 ml-2 text-xs">
-                        <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-yellow-400' : 'text-muted-foreground'}`} title={`${branchStatus.behind} commits behind`}>
+                        <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-foreground' : 'text-muted-foreground'}`} title={`${branchStatus.behind} commits behind`}>
                           <ArrowDown className="size-3 mr-0.5" />
                           {branchStatus.behind}
                         </span>
-                        <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-blue-400' : 'text-muted-foreground'}`} title={`${branchStatus.ahead} commits ahead`}>
+                        <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-foreground' : 'text-muted-foreground'}`} title={`${branchStatus.ahead} commits ahead`}>
                           <ArrowUp className="size-3 mr-0.5" />
                           {branchStatus.ahead}
                         </span>
@@ -204,7 +204,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 <DownloadCloud className="size-4" />
                 <span className="hidden sm:inline">Pull</span>
                 {branchStatus && branchStatus.behind > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 border-none">
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-secondary text-secondary-foreground border-none">
                     {branchStatus.behind}
                   </Badge>
                 )}
@@ -219,7 +219,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 <UploadCloud className="size-4" />
                 <span className="hidden sm:inline">Push</span>
                 {branchStatus && branchStatus.ahead > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-blue-500/20 text-blue-400 border-none">
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-secondary text-secondary-foreground border-none">
                     {branchStatus.ahead}
                   </Badge>
                 )}
@@ -235,7 +235,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
             <Settings className="size-4 text-muted-foreground hover:text-foreground" />
           </button>
           {hasCredentials ? (
-            <Badge className="bg-green-600/10 text-green-400 border-green-600/20 cursor-help" title="Gitzen uses your system's git credentials (e.g. SSH keys, GCM, keychain).">
+            <Badge className="bg-success/20 text-success border-success/30 cursor-help" title="Gitzen uses your system's git credentials (e.g. SSH keys, GCM, keychain).">
               Authenticated
             </Badge>
           ) : (

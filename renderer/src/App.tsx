@@ -181,7 +181,7 @@ export default function App() {
                    </span>
                    <button 
                       onClick={() => window.electronAPI.openExternal(updateInfo.url)}
-                      className="mt-2 text-xs font-medium px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded w-fit"
+                      className="mt-2 text-xs font-medium px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded w-fit"
                    >
                       View on GitHub
                    </button>
@@ -1525,10 +1525,10 @@ export default function App() {
       </div>
                 
       {rebaseStatus.inProgress && (
-        <div className="flex-none bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 flex items-center justify-between">
+        <div className="flex-none bg-secondary border border-border rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="size-2 rounded-full bg-purple-500 animate-pulse" />
-                    <span className="font-medium text-purple-200">
+                    <div className="size-2 rounded-full bg-primary animate-pulse" />
+                    <span className="font-medium text-foreground">
                         Rebase in progress
                         {rebaseStatus.totalSteps ? ` (Step ${rebaseStatus.currentStep} of ${rebaseStatus.totalSteps})` : ''}
                     </span>
@@ -1542,7 +1542,7 @@ export default function App() {
                     </button>
                     <button
                         onClick={handleContinueRebase}
-                        className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-colors"
+                        className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md transition-colors"
                     >
                         Continue
                     </button>
@@ -1551,10 +1551,10 @@ export default function App() {
         )}
 
         {cherryPickStatus.inProgress && (
-          <div className="flex-none bg-blue-900/30 border border-blue-500/50 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex-none bg-secondary border border-border rounded-lg p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="font-medium text-blue-200">
+                    <div className="size-2 rounded-full bg-primary animate-pulse" />
+                    <span className="font-medium text-foreground">
                         Cherry-pick in progress
                     </span>
                 </div>
@@ -1573,7 +1573,7 @@ export default function App() {
                     </button>
                     <button
                         onClick={handleContinueCherryPick}
-                        className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition-colors"
+                        className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md transition-colors"
                     >
                         Continue
                     </button>
@@ -1733,7 +1733,7 @@ export default function App() {
                 onClick={() => handleConfirmReset('soft')}
                 className="flex flex-col items-start gap-1 p-4 rounded-lg border border-border bg-card/50 hover:bg-accent transition-colors text-left"
               >
-                <span className="font-semibold text-emerald-400">Soft Reset</span>
+                <span className="font-semibold text-foreground">Soft Reset</span>
                 <span className="text-xs text-muted-foreground">
                   Keeps all changes in the staging area (Index). Useful if you want to recommit changes.
                 </span>
@@ -1742,7 +1742,7 @@ export default function App() {
                 onClick={() => handleConfirmReset('mixed')}
                 className="flex flex-col items-start gap-1 p-4 rounded-lg border border-border bg-card/50 hover:bg-accent transition-colors text-left"
               >
-                <span className="font-semibold text-blue-400">Mixed Reset (Default)</span>
+                <span className="font-semibold text-foreground">Mixed Reset (Default)</span>
                 <span className="text-xs text-muted-foreground">
                   Keeps changes in Working Directory but unstages them.
                 </span>

@@ -105,7 +105,7 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
                 <Button type="button" variant="outline" onClick={onClose} className="border-border hover:bg-accent text-foreground">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={!name || !url} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button type="submit" disabled={!name || !url} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                   Add Remote
                 </Button>
               </DialogFooter>
@@ -114,11 +114,11 @@ export function AddRemoteDialog({ open, onClose, onAddRemote }: AddRemoteDialogP
 
           <TabsContent value="create">
             <div className="grid gap-4 py-4">
-               <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-3 mb-2">
-                <p className="text-xs text-blue-300 leading-relaxed">
+               <div className="bg-secondary border border-border rounded-md p-3 mb-2">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   <strong>Instruction:</strong> To create a repository on GitHub, you need a <strong>Personal Access Token (PAT)</strong>. 
-                  Generate one at <span className="text-blue-400 underline">github.com/settings/tokens</span> with the <code>repo</code> scope enabled.
-                  <br/><span className="text-blue-200/70 mt-1 block">Note: This token is used once for creation and not stored.</span>
+                  Generate one at <span className="text-foreground underline">github.com/settings/tokens</span> with the <code>repo</code> scope enabled.
+                  <br/><span className="text-foreground/70 mt-1 block">Note: This token is used once for creation and not stored.</span>
                 </p>
               </div>
                <div className="grid gap-2">
