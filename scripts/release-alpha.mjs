@@ -43,36 +43,41 @@ function run() {
         console.log('📦 Bumping package versions...');
         execSync(`npm version ${newVersion} --no-git-tag-version`, { stdio: 'inherit' });
 
-        // 5. Stage files
-        console.log('📝 Staging changes...');
-        execSync('git add package.json package-lock.json', { stdio: 'inherit' });
-
-        // 6. Commit
-        console.log('🚀 Committing...');
-        execSync(`git commit -m "chore: release v${newVersion}"`, { stdio: 'inherit' });
-
-        // 7. Tag
         const tagName = `v${newVersion}`;
-        console.log(`🏷️  Creating tag ${tagName}...`);
-        execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
 
-        // 8. Generate Release Notes
+        // 5. Generate Release Notes
         console.log('📝 Generating release notes...');
         try {
-            // Find previous tag (exclude the one we just created)
-            // HEAD is the current release commit. We look for the closest tag reachable from HEAD^
-            const previousTag = execSync('git describe --tags --abbrev=0 HEAD^').toString().trim();
+            // Find previous tag
+            // We look for the closest tag reachable from HEAD
+            const previousTag = execSync('git describe --tags --abbrev=0').toString().trim();
             console.log(`   Previous tag: ${previousTag}`);
 
             const commits = execSync(`git log ${previousTag}..HEAD --pretty=format:"- %s (%h)" --no-merges`).toString().trim();
-            
+
             const releaseNotes = `# Release Notes: ${tagName}\n\n## Changes\n\n${commits}\n\n---\n*Compared to ${previousTag}*`;
-            
+
             fs.writeFileSync('RELEASE_NOTES.md', releaseNotes);
             console.log('   ✅ RELEASE_NOTES.md created.');
         } catch (e) {
             console.warn('   ⚠️ Could not generate release notes (first release?):', e.message);
         }
+
+        // 6. Stage files
+        console.log('📝 Staging changes...');
+        const filesToStage = ['package.json', 'package-lock.json'];
+        if (fs.existsSync('RELEASE_NOTES.md')) {
+            filesToStage.push('RELEASE_NOTES.md');
+        }
+        execSync(`git add ${filesToStage.join(' ')}`, { stdio: 'inherit' });
+
+        // 7. Commit
+        console.log('🚀 Committing...');
+        execSync(`git commit -m "chore: release v${newVersion}"`, { stdio: 'inherit' });
+
+        // 8. Tag
+        console.log(`🏷️  Creating tag ${tagName}...`);
+        execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: 'inherit' });
 
         // 9. Push
         console.log('⬆️  Pushing changes and tag...');
