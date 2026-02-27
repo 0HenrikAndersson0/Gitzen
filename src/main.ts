@@ -73,10 +73,10 @@ function createWindow() {
           label: 'Keyboard Shortcuts',
           accelerator: 'CmdOrCtrl+/',
           click: () => {
-             const win = BrowserWindow.getFocusedWindow();
-             if (win) {
-                win.webContents.send('menu:show-shortcuts');
-             }
+            const win = BrowserWindow.getFocusedWindow();
+            if (win) {
+              win.webContents.send('menu:show-shortcuts');
+            }
           }
         },
         {
@@ -222,6 +222,26 @@ ipcMain.handle('git:getRepoPath', () => {
 
 ipcMain.handle('git:getRepoName', async () => {
   return await gitService.getRepoName();
+});
+
+ipcMain.handle('git:getFilesChurn', async (_, limit) => {
+  return await gitService.getFilesChurn(limit);
+});
+
+ipcMain.handle('git:getCommitActivity', async () => {
+  return await gitService.getCommitActivity();
+});
+
+ipcMain.handle('git:getTopContributors', async (_, limit) => {
+  return await gitService.getTopContributors(limit);
+});
+
+ipcMain.handle('git:getCodebaseGrowth', async () => {
+  return await gitService.getCodebaseGrowth();
+});
+
+ipcMain.handle('git:getFileTypeDistribution', async () => {
+  return await gitService.getFileTypeDistribution();
 });
 
 ipcMain.handle('git:getRemoteUrl', async (_, remote) => {
@@ -400,7 +420,7 @@ ipcMain.handle('dialog:showOpenDialog', async (_, options?: { properties?: strin
     properties: options?.properties as Electron.OpenDialogOptions['properties'] || ['openDirectory'],
     title: options?.title || 'Select Git Repository Folder',
   };
-  
+
   // If selecting a file (for merge tool), add file filters
   if (options?.properties?.includes('openFile')) {
     dialogOptions.properties = ['openFile'];
@@ -409,13 +429,13 @@ ipcMain.handle('dialog:showOpenDialog', async (_, options?: { properties?: strin
       { name: 'All Files', extensions: ['*'] },
     ];
   }
-  
+
   const result = await dialog.showOpenDialog(dialogOptions);
-  
+
   if (result.canceled || result.filePaths.length === 0) {
     return { success: false };
   }
-  
+
   return { success: true, path: result.filePaths[0] };
 });
 

@@ -1,4 +1,4 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2, Archive } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2, Archive, BarChart2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from './ui/button';
@@ -14,15 +14,17 @@ interface RepoHeaderProps {
   };
   isDisabled?: boolean;
   canStash?: boolean;
+  isShowingGraphs?: boolean;
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
   onOpenSettings?: () => void;
   onPush?: () => void;
   onPull?: () => void;
   onStash?: () => void;
+  onToggleGraphs?: () => void;
 }
 
-export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash, onToggleGraphs }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -146,7 +148,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                               className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-muted rounded transition-all flex-shrink-0"
                               title="Remove from recent list"
                             >
-                                <Trash2 className="size-3.5 text-muted-foreground hover:text-red-400" />
+                              <Trash2 className="size-3.5 text-muted-foreground hover:text-red-400" />
                             </button>
                           </div>
                         ))}
@@ -179,10 +181,23 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
             )}
           </div>
         </div>
-        
+
         <div className="flex gap-2 items-center">
           {repoName && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleGraphs}
+                className={`gap-2 border-border transition-colors ${isShowingGraphs
+                    ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                    : 'bg-secondary/50 hover:bg-accent text-foreground'
+                  }`}
+                title="View repository graphs"
+              >
+                <BarChart2 className="size-4" />
+                <span className="hidden sm:inline">Graphs</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

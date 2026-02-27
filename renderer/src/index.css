@@ -134,4 +134,18 @@
   ::-webkit-scrollbar-corner {
     @apply bg-transparent;
   }
+
+  /* Make numbers in the file type pie chart tooltip white */
+  .pie-tooltip-white-numbers .recharts-tooltip-item-value,
+  .pie-tooltip-white-numbers .recharts-tooltip-item-name,
+  .pie-tooltip-white-numbers .recharts-tooltip-item-separator {
+    color: #ffffff !important;
+  }
+
+  /* Make text in the activity punchcard tooltip white */
+  .activity-tooltip-white-text .recharts-tooltip-item-name,
+  .activity-tooltip-white-text .recharts-tooltip-item-separator,
+  .activity-tooltip-white-text .recharts-tooltip-item-value {
+    color: #ffffff !important;
+  }
 }
