@@ -190,7 +190,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 size="sm"
                 onClick={onToggleGraphs}
                 className={`gap-2 border-border transition-colors ${isShowingGraphs
-                    ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                    ? 'bg-zinc-500/20 text-zinc-400 hover:bg-zinc-500/30'
                     : 'bg-secondary/50 hover:bg-accent text-foreground'
                   }`}
                 title="View repository graphs"

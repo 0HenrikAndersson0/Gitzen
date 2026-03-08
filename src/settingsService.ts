@@ -71,14 +71,7 @@ export function setMaxCommits(maxCommits: number): void {
 }
 
 export function getTheme(): string {
-  const settings = loadSettings();
-  const theme = settings.theme || 'lapom-dark';
-  
-  // Backward compatibility
-  if (theme === 'dark' || theme === 'zinc-dark') return 'lapom-dark';
-  if (theme === 'light' || theme === 'zinc-light') return 'lapom-light';
-  
-  return theme;
+  return 'lapom-dark';
 }
 
 export function setTheme(theme: string): void {

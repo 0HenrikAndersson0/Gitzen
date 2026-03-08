@@ -301,7 +301,7 @@ export const BranchesPanel = memo(function BranchesPanel({
           onClick={() => setLocalBranchesExpanded(!localBranchesExpanded)}>
           <div className="flex items-center gap-2 text-foreground">
             {localBranchesExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
-            <GitBranch className="size-4 text-accent-purple" />
+            <GitBranch className="size-4" />
             <h3 className="font-semibold text-sm">Local Branches</h3>
           </div>
           <button

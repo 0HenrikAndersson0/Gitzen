@@ -33,40 +33,6 @@ function createWindow() {
       ]
     },
     {
-      label: 'Layout',
-      submenu: [
-        {
-          label: 'Theme',
-          submenu: [
-            {
-              label: 'Light',
-              type: 'radio',
-              checked: settingsService.getTheme() === 'lapom-light',
-              click: () => {
-                settingsService.setTheme('lapom-light');
-                const win = BrowserWindow.getFocusedWindow();
-                if (win) {
-                  win.webContents.send('menu:theme-changed', 'lapom-light');
-                }
-              }
-            },
-            {
-              label: 'Dark',
-              type: 'radio',
-              checked: settingsService.getTheme() === 'lapom-dark',
-              click: () => {
-                settingsService.setTheme('lapom-dark');
-                const win = BrowserWindow.getFocusedWindow();
-                if (win) {
-                  win.webContents.send('menu:theme-changed', 'lapom-dark');
-                }
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
       label: 'Help',
       submenu: [
         {
