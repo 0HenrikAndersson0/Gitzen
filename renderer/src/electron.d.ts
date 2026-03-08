@@ -1,4 +1,4 @@
-export {};
+export { };
 
 interface FileChange {
   path: string;
@@ -80,6 +80,11 @@ declare global {
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string }>;
+      getFilesChurn: (limit?: number) => Promise<{ success: boolean; files?: Array<{ path: string; changes: number }>; error?: string }>;
+      getCommitActivity: () => Promise<{ success: boolean; activity?: Array<{ day: number; hour: number; count: number }>; error?: string }>;
+      getTopContributors: (limit?: number) => Promise<{ success: boolean; contributors?: Array<{ name: string; commits: number }>; error?: string }>;
+      getCodebaseGrowth: () => Promise<{ success: boolean; growth?: Array<{ date: string; additions: number; deletions: number; totalLines: number }>; error?: string }>;
+      getFileTypeDistribution: () => Promise<{ success: boolean; distribution?: Array<{ type: string; count: number }>; error?: string }>;
       getRemoteUrl: (remote?: string) => Promise<{ success: boolean; url?: string; error?: string }>;
       setRemoteUrl: (remote: string, url: string) => Promise<{ success: boolean; error?: string }>;
       getRemoteBranches: () => Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }>;
@@ -98,10 +103,10 @@ declare global {
       getTagsForCommit: (commitHash: string) => Promise<{ success: boolean; tags?: string[]; error?: string }>;
       testGitCredentials: (remoteUrl: string) => Promise<{ success: boolean; error?: string }>;
       showOpenDialog: (options?: { properties?: string[]; title?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
-        getRecentRepos: () => Promise<{ success: boolean; repos?: RecentRepo[]; error?: string }>;
-        addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
-        removeRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
-        getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>;      setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
+      getRecentRepos: () => Promise<{ success: boolean; repos?: RecentRepo[]; error?: string }>;
+      addRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
+      removeRecentRepo: (path: string) => Promise<{ success: boolean; error?: string }>;
+      getMergeToolPath: () => Promise<{ success: boolean; mergeToolPath?: string; error?: string }>; setMergeToolPath: (path: string) => Promise<{ success: boolean; error?: string }>;
       getMaxCommits: () => Promise<{ success: boolean; maxCommits?: number; error?: string }>;
       setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string }>;
       getTheme: () => Promise<{ success: boolean; theme?: string; error?: string }>;

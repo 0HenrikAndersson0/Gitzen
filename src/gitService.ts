@@ -38,7 +38,7 @@ async function runGitExecFile(args: string[], options: any = {}): Promise<GitExe
   // This regex looks for ://user:pass@ and masks pass
   const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
   console.log(`[GIT] ${maskedCmd}`);
-  
+
   const result = await execFileAsync('git', args, { encoding: 'utf8', ...options });
   return result as unknown as GitExecResult;
 }
@@ -48,7 +48,7 @@ async function runGitCommand(command: string, cwd?: string, env?: NodeJS.Process
   if (!repoPath) {
     throw new Error('No repository open');
   }
-  
+
   // Mask credentials in log if they appear in command string (e.g. push url)
   const maskedCmd = command.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
   console.log(`[GIT] git ${maskedCmd}`);
@@ -56,11 +56,11 @@ async function runGitCommand(command: string, cwd?: string, env?: NodeJS.Process
   return await execAsync(`git ${command}`, {
     cwd: repoPath,
     maxBuffer: 10 * 1024 * 1024, // 10MB
-    env: { 
-      ...process.env, 
+    env: {
+      ...process.env,
       GIT_TERMINAL_PROMPT: '0',
       LC_ALL: 'C',
-      ...env 
+      ...env
     },
   });
 }
@@ -75,11 +75,11 @@ export async function cloneRepository(url: string, localPath: string): Promise<{
     const env = getAuthEnv(url);
 
     await runGitExecFile([
-        'clone', url, localPath
+      'clone', url, localPath
     ], {
       maxBuffer: 10 * 1024 * 1024,
-      env: { 
-        ...process.env, 
+      env: {
+        ...process.env,
         ...env
       },
     });
@@ -214,11 +214,11 @@ export async function getStatus(): Promise<{ success: boolean; files?: Array<{ p
 
     for (const line of stdout.split('\n')) {
       if (!line || line.length < 4) continue;
-      
+
       // Git porcelain format: XY filename
       const status = line.substring(0, 2);
       let filePath = line.substring(3).trim();
-      
+
       // Handle renamed files: "R  old -> new"
       if (status.startsWith('R')) {
         const parts = filePath.split(' -> ');
@@ -231,12 +231,12 @@ export async function getStatus(): Promise<{ success: boolean; files?: Array<{ p
       if (filePath.startsWith('"') && filePath.endsWith('"')) {
         filePath = filePath.slice(1, -1);
       }
-      
+
       const indexStatus = status[0];
       const worktreeStatus = status[1];
 
       let statusType: 'modified' | 'added' | 'deleted' = 'added';
-      
+
       if (indexStatus === '?' || worktreeStatus === '?') {
         statusType = 'added'; // Untracked
       } else if (indexStatus === 'A' || worktreeStatus === 'A') {
@@ -276,7 +276,7 @@ export async function stageFiles(filePaths: string[]): Promise<{ success: boolea
     // The -- separator tells git that everything after is a file path
     for (const filePath of filePaths) {
       const fileStatus = fileStatusMap.get(filePath);
-      
+
       // For deleted files that were previously tracked, use git rm to stage the deletion
       // For new files or modified files, use git add
       if (fileStatus === 'deleted') {
@@ -370,14 +370,14 @@ export async function push(remote: string = 'origin', branch?: string, force: bo
 
     const authEnv = getAuthEnv(url);
     const branchName = branch || await getCurrentBranch().then(r => r.branch || 'main');
-    
+
     let forceFlag = '';
     if (overwrite) {
       forceFlag = ' --force';
     } else if (force) {
       forceFlag = ' --force-with-lease';
     }
-    
+
     await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`, undefined, authEnv);
     return { success: true };
 
@@ -451,13 +451,13 @@ export async function getBranchStatus(): Promise<{ success: boolean; ahead?: num
     // Output: "ahead    behind" (tab separated)
     const { stdout } = await runGitCommand('rev-list --left-right --count HEAD...@{upstream}');
     const parts = stdout.trim().split(/\s+/);
-    
+
     if (parts.length >= 2) {
       const ahead = parseInt(parts[0], 10);
       const behind = parseInt(parts[1], 10);
       return { success: true, ahead, behind, hasUpstream: true, upstream };
     }
-    
+
     return { success: true, ahead: 0, behind: 0, hasUpstream: true, upstream };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -515,7 +515,7 @@ export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpus
     try {
       const { stdout: countOutput } = await runGitCommand('rev-list --count @{upstream}..HEAD');
       const count = parseInt(countOutput.trim(), 10);
-      
+
       return { success: true, hasUnpushed: count > 0, count };
     } catch (error: any) {
       // No upstream branch configured, so no unpushed commits
@@ -549,10 +549,10 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
     try {
       const currentBranch = currentBranchResult.branch;
       // Use --no-ff to always create a merge commit, and -m to set a proper merge message
-      const mergeMessage = currentBranch === branchToMerge 
-        ? `Merge branch '${branchToMerge}'` 
+      const mergeMessage = currentBranch === branchToMerge
+        ? `Merge branch '${branchToMerge}'`
         : `Merge branch '${branchToMerge}' into ${currentBranch}`;
-      
+
       // Use execFile to avoid shell quoting issues
       await runGitExecFile(['merge', branchToMerge, '--no-ff', '-m', mergeMessage], {
         cwd: currentRepoPath!,
@@ -567,19 +567,19 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
         // We're in a merge state, check for conflicted files
         const conflictedFilesResult = await getConflictedFiles();
         if (conflictedFilesResult.success && conflictedFilesResult.files && conflictedFilesResult.files.length > 0) {
-          return { 
-            success: false, 
+          return {
+            success: false,
             hasConflicts: true,
             conflictedFiles: conflictedFilesResult.files,
-            error: `Merge conflict occurred while merging ${branchToMerge}` 
+            error: `Merge conflict occurred while merging ${branchToMerge}`
           };
         }
         // In merge state but no conflicted files (shouldn't happen, but handle gracefully)
-        return { 
-          success: false, 
+        return {
+          success: false,
           hasConflicts: true,
           conflictedFiles: [],
-          error: `Merge conflict occurred while merging ${branchToMerge}` 
+          error: `Merge conflict occurred while merging ${branchToMerge}`
         };
       }
       // Not in merge state, so this is a different kind of error
@@ -647,8 +647,8 @@ export async function getHistory(maxCount: number = 50): Promise<{
             if (match) {
               const refBranch = match[1].trim();
 
-                commitToBranch[hash] = refBranch;
-                break;
+              commitToBranch[hash] = refBranch;
+              break;
 
             }
           }
@@ -766,7 +766,7 @@ export async function getBranches(): Promise<{ success: boolean; branches?: stri
       .filter(b => b)
       // Remove duplicates by converting to Set and back to array
       .filter((b, index, self) => self.indexOf(b) === index);
-    
+
     return { success: true, branches };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -784,20 +784,20 @@ export async function getBranchesDetailed(): Promise<{ success: boolean; branche
     // %(upstream:track) - Tracking status [ahead X, behind Y]
     // %(HEAD) - '*' if current branch
     const { stdout } = await runGitCommand('for-each-ref --format="%(refname:short)|%(upstream:short)|%(upstream:track)|%(HEAD)" refs/heads');
-    
+
     const branches = stdout.trim().split('\n')
       .filter(line => line.trim())
       .map(line => {
         const [name, upstream, track, head] = line.split('|');
-        
+
         let ahead = 0;
         let behind = 0;
-        
+
         // Parse track info "[ahead 1, behind 2]"
         if (track) {
           const aheadMatch = track.match(/ahead (\d+)/);
           if (aheadMatch) ahead = parseInt(aheadMatch[1], 10);
-          
+
           const behindMatch = track.match(/behind (\d+)/);
           if (behindMatch) behind = parseInt(behindMatch[1], 10);
         }
@@ -862,7 +862,7 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
     if (name.includes('/')) {
       const parts = name.split('/');
       const possibleRemote = parts[0];
-      
+
       // Check if the first part is actually a remote
       let isRemoteBranch = false;
       try {
@@ -873,12 +873,12 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
         // If we can't check remotes, assume it's not a remote branch
         isRemoteBranch = false;
       }
-      
+
       if (isRemoteBranch) {
         // This is a remote branch - extract branch name properly
         const remoteName = parts[0];
         const branchName = parts.slice(1).join('/'); // Handle branch names with slashes
-        
+
         // Check if the local branch already exists by trying to check it out
         // If it doesn't exist, Git will error, then we create it from remote
         try {
@@ -899,10 +899,10 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
         }
       }
     }
-    
+
     // Local branch checkout (either no slash, or slash but not a remote branch)
     await runGitExecFile(['checkout', name], {
-                cwd: currentRepoPath!,      maxBuffer: 10 * 1024 * 1024,
+      cwd: currentRepoPath!, maxBuffer: 10 * 1024 * 1024,
     });
     return { success: true };
   } catch (error: any) {
@@ -1063,11 +1063,11 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
         errors.push(e.message || String(e));
       }
     }
-    
+
     if (errors.length > 0) {
       return { success: false, error: errors[0] };
     }
-    
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
@@ -1139,7 +1139,7 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
 
     const diffLines = fullDiff.split('\n');
     const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
-    
+
     let currentFile: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string } | null = null;
     let fileDiffStart = 0;
 
@@ -1161,31 +1161,31 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
         // or just capturing the whole line and relying on fallback.
         // Standard format: diff --git a/path b/path
         // Quoted: diff --git "a/path with spaces" "b/path with spaces"
-        
+
         // Strategy: Initialize with empty path. Wait for +++ or --- or extended header to confirm path.
         // But we can try to guess from the diff line for renames/mode changes.
         const match = line.match(/^diff --git (?:a\/|"?a\/)(.+) (?:b\/|"?b\/)(.+?)(?:"?)$/);
         if (match) {
-           const path = match[2] || match[1];
-           currentFile = {
-            path: path.replace(/^"|"$/g, ''), 
-            status: 'modified', 
+          const path = match[2] || match[1];
+          currentFile = {
+            path: path.replace(/^"|"$/g, ''),
+            status: 'modified',
             additions: 0,
             deletions: 0,
             diff: '',
           };
         } else {
-           // Fallback init
-           currentFile = {
-            path: '', 
-            status: 'modified', 
+          // Fallback init
+          currentFile = {
+            path: '',
+            status: 'modified',
             additions: 0,
             deletions: 0,
             diff: '',
           };
         }
-      } 
-      
+      }
+
       if (currentFile) {
         if (line.startsWith('new file mode')) {
           currentFile.status = 'added';
@@ -1226,7 +1226,7 @@ export async function getFileDiff(filePath: string, staged: boolean): Promise<{ 
     // Check if the file is untracked (new)
     // If it's untracked, 'git diff' normally shows nothing.
     // We want to show the whole file as an addition.
-    
+
     let isUntracked = false;
     if (!staged) {
       const statusResult = await getStatus();
@@ -1275,8 +1275,8 @@ export async function getFileDiff(filePath: string, staged: boolean): Promise<{ 
         // If we used --no-index against /dev/null, the header might look weird.
         // We might want to fix it up to look like a standard git diff.
         if (isUntracked) {
-           diff = diff.replace(/^--- (?:.*)$/m, `--- /dev/null`);
-           diff = diff.replace(/^\+\+\+ (?:.*)$/m, `+++ b/${filePath}`);
+          diff = diff.replace(/^--- (?:.*)$/m, `--- /dev/null`);
+          diff = diff.replace(/^\+\+\+ (?:.*)$/m, `+++ b/${filePath}`);
         }
         return { success: true, diff };
       }
@@ -1326,18 +1326,18 @@ export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ su
 
     // Delete remote branch using git push --delete
     try {
-        const { url } = await getRemoteUrl(remoteName);
-        if (url) {
-            const authEnv = getAuthEnv(url);
-            await runGitExecFile(['push', remoteName, '--delete', branchName], {
-                cwd: repoPath,
-                maxBuffer: 10 * 1024 * 1024,
-                env: {
-                  ...process.env,
-                  ...authEnv
-                },
-            });
-        }
+      const { url } = await getRemoteUrl(remoteName);
+      if (url) {
+        const authEnv = getAuthEnv(url);
+        await runGitExecFile(['push', remoteName, '--delete', branchName], {
+          cwd: repoPath,
+          maxBuffer: 10 * 1024 * 1024,
+          env: {
+            ...process.env,
+            ...authEnv
+          },
+        });
+      }
     } catch (error: any) {
       const errorMsg = error.message || '';
       // If the branch is already gone from remote, we consider it a success for the user
@@ -1420,7 +1420,7 @@ export async function getRemoteTags(remote: string = 'origin'): Promise<{ succes
 
     const authEnv = getAuthEnv(url);
     const { stdout } = await runGitCommand(`ls-remote --tags --refs ${remote}`, undefined, authEnv);
-    
+
     const tags = stdout.split('\n')
       .map(line => {
         const parts = line.split('\t');
@@ -1444,19 +1444,19 @@ export async function revertFileChanges(filePath: string): Promise<{ success: bo
       return { success: false, error: 'No repository open' };
     }
 
-        // Use git checkout to revert changes (works for both modified and deleted files)
+    // Use git checkout to revert changes (works for both modified and deleted files)
 
-        // The -- flag tells git that everything after is a file path
+    // The -- flag tells git that everything after is a file path
 
-        await runGitExecFile(['checkout', '--', filePath], {
+    await runGitExecFile(['checkout', '--', filePath], {
 
-          cwd: currentRepoPath!,
+      cwd: currentRepoPath!,
 
-          maxBuffer: 10 * 1024 * 1024,
+      maxBuffer: 10 * 1024 * 1024,
 
-        });
+    });
 
-        return { success: true };
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -1489,13 +1489,13 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
       if (match) {
         let status = match[1];
         let filePath = match[2];
-        
+
         // Remove quotes if present
         if ((filePath.startsWith('"') && filePath.endsWith('"')) ||
-            (filePath.startsWith("'") && filePath.endsWith("'"))) {
+          (filePath.startsWith("'") && filePath.endsWith("'"))) {
           filePath = filePath.slice(1, -1);
         }
-        
+
         // Ensure status is always 2 characters
         if (status.length === 1) {
           status = ' ' + status;
@@ -1508,8 +1508,8 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
         // U = unmerged, A = added, D = deleted
         // UU = both modified, AA = both added, DD = both deleted, AU/UA = one added one modified, etc.
         if ((indexStatus === 'U' || indexStatus === 'A' || indexStatus === 'D') &&
-            (worktreeStatus === 'U' || worktreeStatus === 'A' || worktreeStatus === 'D')) {
-          
+          (worktreeStatus === 'U' || worktreeStatus === 'A' || worktreeStatus === 'D')) {
+
           let type: ConflictedFile['type'] = 'unknown';
 
           if (indexStatus === 'D' && worktreeStatus === 'D') type = 'both-deleted';
@@ -1523,7 +1523,7 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
           // Skip if both are deleted (DD) as there's nothing to resolve? 
           // Actually user might want to acknowledge it. But typically git status handles it.
           // Let's include it so UI can show it if needed.
-          
+
           conflictedFiles.push({ path: filePath, type });
         }
       }
@@ -1571,17 +1571,17 @@ export async function abortMerge(): Promise<{ success: boolean; error?: string }
       return { success: false, error: 'Not in a merge state' };
     }
 
-        await runGitExecFile(['merge', '--abort'], {
+    await runGitExecFile(['merge', '--abort'], {
 
-          cwd: currentRepoPath!,
+      cwd: currentRepoPath!,
 
-          maxBuffer: 10 * 1024 * 1024,
+      maxBuffer: 10 * 1024 * 1024,
 
-        });
+    });
 
-    
 
-        return { success: true };
+
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }
@@ -1724,7 +1724,7 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
     // Try git ls-remote without explicit credentials
     // Git will use credential helper, SSH keys, or prompt
     // We rely on getAuthEnv to inject known credentials if available, otherwise fallback to system.
-    
+
     const authEnv = getAuthEnv(remoteUrl);
 
     await runGitCommand(`ls-remote "${remoteUrl}"`, undefined, authEnv);
@@ -1732,21 +1732,21 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || String(error);
     const errorCode = error.code;
-    
+
     // Check for authentication-related errors
-    if (errorCode === 128 || 
-        errorMsg.includes('Authentication failed') || 
-        errorMsg.includes('fatal: could not read Username') ||
-        errorMsg.includes('fatal: could not read Password') ||
-        errorMsg.includes('Permission denied') ||
-        errorMsg.includes('401') ||
-        errorMsg.includes('403') ||
-        errorMsg.includes('Unauthorized')) {
-        return { success: false, error: 'Git credential system could not authenticate' };
-      }
-      
-      // For other errors, return failure but don't assume it's auth-related
-      return { success: false, error: errorMsg };
+    if (errorCode === 128 ||
+      errorMsg.includes('Authentication failed') ||
+      errorMsg.includes('fatal: could not read Username') ||
+      errorMsg.includes('fatal: could not read Password') ||
+      errorMsg.includes('Permission denied') ||
+      errorMsg.includes('401') ||
+      errorMsg.includes('403') ||
+      errorMsg.includes('Unauthorized')) {
+      return { success: false, error: 'Git credential system could not authenticate' };
+    }
+
+    // For other errors, return failure but don't assume it's auth-related
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -1762,8 +1762,8 @@ export async function rebaseBranch(branch: string): Promise<{ success: boolean; 
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
     if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
-       // This is expected for conflicts
-       return { success: false, error: 'Rebase paused due to conflicts' };
+      // This is expected for conflicts
+      return { success: false, error: 'Rebase paused due to conflicts' };
     }
     return { success: false, error: errorMsg };
   }
@@ -1792,9 +1792,9 @@ export async function continueRebase(): Promise<{ success: boolean; error?: stri
     await runGitCommand('rebase --continue', undefined, { GIT_EDITOR: 'true' });
     return { success: true };
   } catch (error: any) {
-     const errorMsg = error.message || error.stderr || 'Unknown error';
+    const errorMsg = error.message || error.stderr || 'Unknown error';
     if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
-       return { success: false, error: 'Rebase paused due to conflicts' };
+      return { success: false, error: 'Rebase paused due to conflicts' };
     }
     return { success: false, error: errorMsg };
   }
@@ -1823,18 +1823,18 @@ export async function getRebaseStatus(): Promise<{ success: boolean; inProgress:
       }
       return { success: true, inProgress: true, currentStep: current, totalSteps: total };
     } else if (fs.existsSync(rebaseApplyPath)) {
-       // Apply based rebase
-       let current = 0;
-       let total = 0;
-       try {
+      // Apply based rebase
+      let current = 0;
+      let total = 0;
+      try {
         const next = fs.readFileSync(path.join(rebaseApplyPath, 'next'), 'utf8').trim();
         const last = fs.readFileSync(path.join(rebaseApplyPath, 'last'), 'utf8').trim();
         current = parseInt(next, 10);
         total = parseInt(last, 10);
-       } catch (e) {
-         // ignore
-       }
-       return { success: true, inProgress: true, currentStep: current, totalSteps: total };
+      } catch (e) {
+        // ignore
+      }
+      return { success: true, inProgress: true, currentStep: current, totalSteps: total };
     }
 
     return { success: true, inProgress: false };
@@ -1857,11 +1857,11 @@ export async function revertCommit(commitHash: string): Promise<{ success: boole
     } catch (revertError: any) {
       // Check if we are in a conflict state
       const conflictedResult = await getConflictedFiles();
-      
+
       if (conflictedResult.success && conflictedResult.files && conflictedResult.files.length > 0) {
-         return { success: false, error: 'Revert conflict detected. Please resolve conflicts.' };
+        return { success: false, error: 'Revert conflict detected. Please resolve conflicts.' };
       }
-      
+
       return { success: false, error: revertError.message || revertError.stderr || 'Revert failed' };
     }
   } catch (error: any) {
@@ -1929,7 +1929,7 @@ export async function cherryPick(commitHash: string): Promise<{ success: boolean
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
     if (errorMsg.includes('conflict') || errorMsg.includes('after resolving the conflicts')) {
-       return { success: false, error: 'Cherry-pick paused due to conflicts' };
+      return { success: false, error: 'Cherry-pick paused due to conflicts' };
     }
     return { success: false, error: errorMsg };
   }
@@ -1955,16 +1955,16 @@ export async function continueCherryPick(): Promise<{ success: boolean; error?: 
     await runGitCommand('cherry-pick --continue', undefined, { GIT_EDITOR: 'true' });
     return { success: true };
   } catch (error: any) {
-     const errorMsg = error.message || error.stderr || 'Unknown error';
+    const errorMsg = error.message || error.stderr || 'Unknown error';
     if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
-       // Check if it's actually an empty commit error which contains "conflict resolution" text
-       if (errorMsg.includes('The previous cherry-pick is now empty')) {
-          // If empty, we can't continue a commit, so we must skip/reset or allow empty.
-          // Usually usually users want to skip if it's already included.
-          // Let's try to run with --allow-empty? Or just fail with specific message?
-          return { success: false, error: 'The cherry-pick resulted in an empty commit (changes already exist?). Try aborting.' };
-       }
-       return { success: false, error: 'Cherry-pick paused due to conflicts' };
+      // Check if it's actually an empty commit error which contains "conflict resolution" text
+      if (errorMsg.includes('The previous cherry-pick is now empty')) {
+        // If empty, we can't continue a commit, so we must skip/reset or allow empty.
+        // Usually usually users want to skip if it's already included.
+        // Let's try to run with --allow-empty? Or just fail with specific message?
+        return { success: false, error: 'The cherry-pick resulted in an empty commit (changes already exist?). Try aborting.' };
+      }
+      return { success: false, error: 'Cherry-pick paused due to conflicts' };
     }
     return { success: false, error: errorMsg };
   }
@@ -2002,7 +2002,7 @@ export interface RebaseTodoItem {
 
 export async function getCommitsForInteractiveRebase(targetBranch: string): Promise<{ success: boolean; commits?: RebaseTodoItem[]; error?: string }> {
   try {
-     if (!currentRepoPath) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
@@ -2028,7 +2028,7 @@ export async function getCommitsForInteractiveRebase(targetBranch: string): Prom
 
 export async function performInteractiveRebase(targetBranch: string, todoLines: string[]): Promise<{ success: boolean; error?: string }> {
   try {
-     if (!currentRepoPath) {
+    if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
@@ -2085,8 +2085,206 @@ export async function performInteractiveRebase(targetBranch: string, todoLines: 
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
     if (errorMsg.includes('conflict') || errorMsg.includes('resolve all conflicts')) {
-       return { success: false, error: 'Rebase paused due to conflicts' };
+      return { success: false, error: 'Rebase paused due to conflicts' };
     }
     return { success: false, error: errorMsg };
+  }
+}
+
+export async function getFilesChurn(limit: number = 20): Promise<{ success: boolean; files?: Array<{ path: string; changes: number }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Use git log with --name-only, empty format, and merge filter to count file occurrences
+    const { stdout } = await runGitCommand('log --name-only --format="" --no-merges');
+
+    const fileCountMap = new Map<string, number>();
+    const lines = stdout.split('\n');
+
+    for (const line of lines) {
+      const filePath = line.trim();
+      if (filePath) {
+        fileCountMap.set(filePath, (fileCountMap.get(filePath) || 0) + 1);
+      }
+    }
+
+    const sortedFiles = Array.from(fileCountMap.entries())
+      .map(([path, changes]) => ({ path, changes }))
+      .sort((a, b) => b.changes - a.changes)
+      .slice(0, limit);
+
+    return { success: true, files: sortedFiles };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getCommitActivity(): Promise<{ success: boolean; activity?: Array<{ day: number; hour: number; count: number }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('log --format="%ad" --date=iso');
+    const lines = stdout.split('\n').filter(l => l.trim());
+
+    const activityMap = new Map<string, number>();
+
+    for (const line of lines) {
+      const date = new Date(line);
+      if (!isNaN(date.getTime())) {
+        const day = date.getDay(); // 0 is Sunday, 6 is Saturday
+        const hour = date.getHours();
+        const key = `${day}-${hour}`;
+        activityMap.set(key, (activityMap.get(key) || 0) + 1);
+      }
+    }
+
+    const activity = Array.from(activityMap.entries()).map(([key, count]) => {
+      const [day, hour] = key.split('-').map(Number);
+      return { day, hour, count };
+    });
+
+    return { success: true, activity };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getTopContributors(limit: number = 10): Promise<{ success: boolean; contributors?: Array<{ name: string; commits: number }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('shortlog -sn --all');
+
+    const contributors = stdout
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const match = line.match(/^\s*(\d+)\s+(.+)$/);
+        if (match) {
+          return {
+            commits: parseInt(match[1], 10),
+            name: match[2].trim()
+          };
+        }
+        return null;
+      })
+      .filter(c => c !== null)
+      .slice(0, limit) as Array<{ name: string; commits: number }>;
+
+    return { success: true, contributors };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getCodebaseGrowth(): Promise<{ success: boolean; growth?: Array<{ date: string; additions: number; deletions: number; totalLines: number }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // This command gets number of additions/deletions per file per commit, along with the date
+    const { stdout } = await runGitCommand('log --numstat --format="%ad" --date=short --reverse');
+
+    const lines = stdout.split('\n');
+    let currentDate = '';
+
+    // Group by date to reduce data points
+    const growthMap = new Map<string, { additions: number; deletions: number }>();
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // If the line looks like a date (e.g. 2023-10-25)
+      if (/^\s*\d{4}-\d{2}-\d{2}\s*$/.test(trimmed)) {
+        currentDate = trimmed;
+        if (!growthMap.has(currentDate)) {
+          growthMap.set(currentDate, { additions: 0, deletions: 0 });
+        }
+        continue;
+      }
+
+      // If it's a numstat line: "additions\tdeletions\tfile"
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2 && currentDate) {
+        // - indicates binary files, which we ignore for line counts
+        if (parts[0] === '-' || parts[1] === '-') continue;
+
+        const additions = parseInt(parts[0], 10);
+        const deletions = parseInt(parts[1], 10);
+
+        if (!isNaN(additions) && !isNaN(deletions)) {
+          const current = growthMap.get(currentDate)!;
+          current.additions += additions;
+          current.deletions += deletions;
+        }
+      }
+    }
+
+    let totalLines = 0;
+    const growth = Array.from(growthMap.entries())
+      .map(([date, stats]) => {
+        totalLines += (stats.additions - stats.deletions);
+        // Ensure totalLines doesn't go negative conceptually (though git could start with deletes if rebasing weirdly)
+        if (totalLines < 0) totalLines = 0;
+        return {
+          date,
+          additions: stats.additions,
+          deletions: stats.deletions,
+          totalLines
+        };
+      });
+
+    return { success: true, growth };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+export async function getFileTypeDistribution(): Promise<{ success: boolean; distribution?: Array<{ type: string; count: number }>; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const { stdout } = await runGitCommand('ls-tree -r HEAD --name-only');
+    const lines = stdout.split('\n').filter(l => l.trim());
+
+    const extMap = new Map<string, number>();
+
+    for (const filePath of lines) {
+      // Find the last dot to get extension
+      const lastDotIndex = filePath.lastIndexOf('.');
+      let type = 'Other';
+
+      if (lastDotIndex > 0 && lastDotIndex < filePath.length - 1) {
+        const ext = filePath.substring(lastDotIndex + 1).toLowerCase();
+        // Ignore known hidden or binary or unimportant extensions if we want, but let's map them
+        if (ext.length <= 5 && /^[a-z0-9]+$/.test(ext)) {
+          type = '.' + ext;
+        }
+      }
+
+      extMap.set(type, (extMap.get(type) || 0) + 1);
+    }
+
+    // Sort logic to handle "Other" and biggest first
+    const distribution = Array.from(extMap.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Group small extensions into "Other"? Let's just return all or top 20
+    const top20 = distribution.slice(0, 20);
+
+    return { success: true, distribution: top20 };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }

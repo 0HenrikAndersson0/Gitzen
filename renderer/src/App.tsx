@@ -10,6 +10,7 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { CommitGraph } from './components/CommitGraph';
 import { BranchesPanel } from './components/BranchesPanel';
 import { TagsPanel } from './components/TagsPanel';
+import { GraphsView } from './components/GraphsView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
@@ -90,10 +91,11 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState<string | undefined>(undefined);
   const [showSplash, setShowSplash] = useState(true);
   const [hasCredentials, setHasCredentials] = useState(true);
-  
+
   // UI Layout State
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showBottomPanel, setShowBottomPanel] = useState(true);
+  const [showGraphs, setShowGraphs] = useState(false);
 
   // Keyboard Shortcuts State
   const [commitMessage, setCommitMessage] = useState('');
@@ -119,16 +121,16 @@ export default function App() {
   // Keep selected file index in bounds
   useEffect(() => {
     if (selectedFileIndex !== undefined) {
-       if (files.length === 0) setSelectedFileIndex(undefined);
-       else if (selectedFileIndex >= files.length) setSelectedFileIndex(files.length - 1);
+      if (files.length === 0) setSelectedFileIndex(undefined);
+      else if (selectedFileIndex >= files.length) setSelectedFileIndex(files.length - 1);
     }
   }, [files.length]); // Intentionally not including selectedFileIndex to avoid loops
 
   const runQueued = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const nextOp = gitOperationQueue.current.then(operation);
     gitOperationQueue.current = nextOp.then(
-      () => {},
-      () => {} // Continue queue even if operation fails
+      () => { },
+      () => { } // Continue queue even if operation fails
     );
     return nextOp;
   }, []);
@@ -147,7 +149,7 @@ export default function App() {
   const applyTheme = (theme: string) => {
     // Remove theme classes
     document.documentElement.classList.remove('dark');
-    
+
     // Add classes based on theme string
     if (theme.includes('dark')) {
       document.documentElement.classList.add('dark');
@@ -157,54 +159,54 @@ export default function App() {
   useEffect(() => {
     // Listen for menu events
     if (window.electronAPI) {
-       if (window.electronAPI.onShowShortcuts) {
-          window.electronAPI.onShowShortcuts(() => {
-             setShowShortcutsModal(true);
-          });
-       }
-       
-       if (window.electronAPI.onThemeChanged) {
-          window.electronAPI.onThemeChanged((theme) => {
-             applyTheme(theme);
-          });
-       }
+      if (window.electronAPI.onShowShortcuts) {
+        window.electronAPI.onShowShortcuts(() => {
+          setShowShortcutsModal(true);
+        });
+      }
 
-       if (window.electronAPI.onUpdateAvailable) {
-          window.electronAPI.onUpdateAvailable((updateInfo) => {
-             toast.info(
-                <div className="flex flex-col gap-1">
-                   <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm">Update Available: {updateInfo.version}</span>
-                   </div>
-                   <span className="text-xs text-muted-foreground line-clamp-2">
-                      {updateInfo.name}
-                   </span>
-                   <button 
-                      onClick={() => window.electronAPI.openExternal(updateInfo.url)}
-                      className="mt-2 text-xs font-medium px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded w-fit"
-                   >
-                      View on GitHub
-                   </button>
-                </div>,
-                { duration: 10000, id: 'update-available' }
-             );
-          });
-       }
+      if (window.electronAPI.onThemeChanged) {
+        window.electronAPI.onThemeChanged((theme) => {
+          applyTheme(theme);
+        });
+      }
+
+      if (window.electronAPI.onUpdateAvailable) {
+        window.electronAPI.onUpdateAvailable((updateInfo) => {
+          toast.info(
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm">Update Available: {updateInfo.version}</span>
+              </div>
+              <span className="text-xs text-muted-foreground line-clamp-2">
+                {updateInfo.name}
+              </span>
+              <button
+                onClick={() => window.electronAPI.openExternal(updateInfo.url)}
+                className="mt-2 text-xs font-medium px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded w-fit"
+              >
+                View on GitHub
+              </button>
+            </div>,
+            { duration: 10000, id: 'update-available' }
+          );
+        });
+      }
     }
 
     const init = async () => {
       try {
         if (window.electronAPI.getTheme) {
-           const themeResult = await window.electronAPI.getTheme();
-           if (themeResult.success && themeResult.theme) {
-              applyTheme(themeResult.theme);
-           } else {
-              // Fallback
-              document.documentElement.classList.add('dark');
-           }
+          const themeResult = await window.electronAPI.getTheme();
+          if (themeResult.success && themeResult.theme) {
+            applyTheme(themeResult.theme);
+          } else {
+            // Fallback
+            document.documentElement.classList.add('dark');
+          }
         } else {
-           // Fallback if API not available yet
-           document.documentElement.classList.add('dark');
+          // Fallback if API not available yet
+          document.documentElement.classList.add('dark');
         }
 
         const result = await window.electronAPI.getMaxCommits();
@@ -223,9 +225,9 @@ export default function App() {
 
   const checkAuthError = (errorMsg: string, silent = false): boolean => {
     if (!errorMsg) return false;
-    
-    const isAuthError = 
-      errorMsg.includes('Authentication failed') || 
+
+    const isAuthError =
+      errorMsg.includes('Authentication failed') ||
       errorMsg.includes('fatal: could not read Username') ||
       errorMsg.includes('fatal: could not read Password') ||
       errorMsg.includes('Permission denied') ||
@@ -240,7 +242,7 @@ export default function App() {
           <div className="flex flex-col gap-1">
             <span className="font-bold">Authentication Failed</span>
             <span className="text-xs">
-              Gitzen relies on your system's git credentials (e.g., SSH keys, GCM). 
+              Gitzen relies on your system's git credentials (e.g., SSH keys, GCM).
               Please use <code>gh auth login</code> or check your credential helper configuration.
             </span>
           </div>,
@@ -255,7 +257,7 @@ export default function App() {
   const initApp = async () => {
     const path = await loadRepository();
     if (path) {
-        await refreshAllData(path);
+      await refreshAllData(path);
     }
     // Small delay to ensure smooth transition
     setTimeout(() => setShowSplash(false), 500);
@@ -283,11 +285,11 @@ export default function App() {
       if (recentResult.success && recentResult.repos && recentResult.repos.length > 0) {
         const lastRepo = recentResult.repos[0];
         const openResult = await window.electronAPI.gitOpen(lastRepo.path);
-        
+
         if (openResult.success) {
-            setRepoPath(lastRepo.path);
-            setRepoName(lastRepo.name);
-            return lastRepo.path;
+          setRepoPath(lastRepo.path);
+          setRepoName(lastRepo.name);
+          return lastRepo.path;
         }
       }
     } catch (error) {
@@ -297,37 +299,37 @@ export default function App() {
   };
 
   const refreshAllData = async (path: string) => {
-      // Force update the ref for this operation sequence if needed, but the callbacks handle override
-      repoPathRef.current = path; 
-      
-      await Promise.all([
-          refreshStatusInternal(path),
-          refreshBranchInternal(path),
-          refreshBranchesInternal(path),
-          refreshHistoryInternal(path),
-          refreshStashesInternal(path),
-          refreshBranchStatusInternal(path),
-          refreshRebaseStatusInternal(path)
-      ]);
+    // Force update the ref for this operation sequence if needed, but the callbacks handle override
+    repoPathRef.current = path;
+
+    await Promise.all([
+      refreshStatusInternal(path),
+      refreshBranchInternal(path),
+      refreshBranchesInternal(path),
+      refreshHistoryInternal(path),
+      refreshStashesInternal(path),
+      refreshBranchStatusInternal(path),
+      refreshRebaseStatusInternal(path)
+    ]);
   };
 
   const refreshStatusInternal = useCallback(async (pathOverride?: string) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-        const result = await window.electronAPI.gitStatus();
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
-        if (result.success && result.files) {
-          setFiles(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(result.files)) {
-              return result.files!;
-            }
-            return prev;
-          });
-        }
-      } catch (error) {
-        console.error('Failed to refresh status:', error);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.gitStatus();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success && result.files) {
+        setFiles(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(result.files)) {
+            return result.files!;
+          }
+          return prev;
+        });
       }
+    } catch (error) {
+      console.error('Failed to refresh status:', error);
+    }
   }, [repoPath]);
 
   const refreshStatus = useCallback((pathOverride?: string) => {
@@ -335,20 +337,20 @@ export default function App() {
   }, [refreshStatusInternal, runQueued]);
 
   const refreshBranchInternal = useCallback(async (pathOverride?: string) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-        const result = await window.electronAPI.gitGetCurrentBranch();
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
-        if (result.success && result.branch && result.branch.trim()) {
-          const newBranch = result.branch.trim();
-          setCurrentBranch((prevBranch) => {
-            return newBranch !== prevBranch ? newBranch : prevBranch;
-          });
-        }
-      } catch (error) {
-        console.error('Failed to refresh branch:', error);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.gitGetCurrentBranch();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success && result.branch && result.branch.trim()) {
+        const newBranch = result.branch.trim();
+        setCurrentBranch((prevBranch) => {
+          return newBranch !== prevBranch ? newBranch : prevBranch;
+        });
       }
+    } catch (error) {
+      console.error('Failed to refresh branch:', error);
+    }
   }, [repoPath]);
 
   const refreshBranch = useCallback((pathOverride?: string) => {
@@ -356,51 +358,51 @@ export default function App() {
   }, [refreshBranchInternal, runQueued]);
 
   const refreshBranchesInternal = useCallback(async (pathOverride?: string, silent = false) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      if (!silent) setIsRefreshingBranches(true);
-      try {
-        const [localResult, remoteResult] = await Promise.all([
-          window.electronAPI.gitGetBranchesDetailed(),
-          window.electronAPI.getRemoteBranches(),
-        ]);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    if (!silent) setIsRefreshingBranches(true);
+    try {
+      const [localResult, remoteResult] = await Promise.all([
+        window.electronAPI.gitGetBranchesDetailed(),
+        window.electronAPI.getRemoteBranches(),
+      ]);
 
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
 
-        if (localResult.success && localResult.branches) {
-          const newLocalBranches = localResult.branches.map((b: any) => ({
-              name: b.name,
-              isRemote: false,
-              isCurrent: b.current,
-              ahead: b.ahead,
-              behind: b.behind,
-              upstream: b.upstream
-          }));
-          setLocalBranches(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(newLocalBranches)) {
-              return newLocalBranches;
-            }
-            return prev;
-          });
-        }
-        if (remoteResult.success && remoteResult.branches) {
-          const newRemoteBranches = remoteResult.branches.map(b => ({
-              name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
-          }));
-          setRemoteBranches(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(newRemoteBranches)) {
-              return newRemoteBranches;
-            }
-            return prev;
-          });
-        }
-      } catch (e) {
-          console.error('Failed to refresh branches', e);
-      } finally {
-          if (targetPath === repoPathRef.current) {
-              setIsRefreshingBranches(false);
+      if (localResult.success && localResult.branches) {
+        const newLocalBranches = localResult.branches.map((b: any) => ({
+          name: b.name,
+          isRemote: false,
+          isCurrent: b.current,
+          ahead: b.ahead,
+          behind: b.behind,
+          upstream: b.upstream
+        }));
+        setLocalBranches(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(newLocalBranches)) {
+            return newLocalBranches;
           }
+          return prev;
+        });
       }
+      if (remoteResult.success && remoteResult.branches) {
+        const newRemoteBranches = remoteResult.branches.map(b => ({
+          name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
+        }));
+        setRemoteBranches(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(newRemoteBranches)) {
+            return newRemoteBranches;
+          }
+          return prev;
+        });
+      }
+    } catch (e) {
+      console.error('Failed to refresh branches', e);
+    } finally {
+      if (targetPath === repoPathRef.current) {
+        setIsRefreshingBranches(false);
+      }
+    }
   }, [repoPath]);
 
   const refreshBranches = useCallback((pathOverride?: string, silent = false) => {
@@ -408,28 +410,28 @@ export default function App() {
   }, [refreshBranchesInternal, runQueued]);
 
   const refreshBranchStatusInternal = useCallback(async (pathOverride?: string) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-        const result = await window.electronAPI.gitGetBranchStatus();
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
-        if (result.success) {
-          setBranchStatus(prev => {
-            const newState = {
-              ahead: result.ahead || 0,
-              behind: result.behind || 0,
-              hasUpstream: !!result.hasUpstream,
-              upstream: result.upstream
-            };
-            if (JSON.stringify(prev) !== JSON.stringify(newState)) {
-              return newState;
-            }
-            return prev;
-          });
-        }
-      } catch (error) {
-        console.error('Failed to refresh branch status:', error);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.gitGetBranchStatus();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success) {
+        setBranchStatus(prev => {
+          const newState = {
+            ahead: result.ahead || 0,
+            behind: result.behind || 0,
+            hasUpstream: !!result.hasUpstream,
+            upstream: result.upstream
+          };
+          if (JSON.stringify(prev) !== JSON.stringify(newState)) {
+            return newState;
+          }
+          return prev;
+        });
       }
+    } catch (error) {
+      console.error('Failed to refresh branch status:', error);
+    }
   }, [repoPath]);
 
   const refreshBranchStatus = useCallback((pathOverride?: string) => {
@@ -437,19 +439,19 @@ export default function App() {
   }, [refreshBranchStatusInternal, runQueued]);
 
   const performFetchInternal = useCallback(async (pathOverride?: string, silent = false) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-          const result = await window.electronAPI.gitFetchAll();
-          if (result.success) {
-            setHasCredentials(true);
-          } else if (result.error) {
-             checkAuthError(result.error, silent);
-          }
-      } catch (e) {
-          console.error('Failed to fetch', e);
-          if (e instanceof Error) checkAuthError(e.message, silent);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.gitFetchAll();
+      if (result.success) {
+        setHasCredentials(true);
+      } else if (result.error) {
+        checkAuthError(result.error, silent);
       }
+    } catch (e) {
+      console.error('Failed to fetch', e);
+      if (e instanceof Error) checkAuthError(e.message, silent);
+    }
   }, [repoPath]);
 
   const performFetch = useCallback((pathOverride?: string, silent = false) => {
@@ -462,28 +464,28 @@ export default function App() {
   }, [performFetchInternal, refreshBranchStatusInternal, refreshBranchesInternal, runQueued, repoPath]);
 
   const refreshHistoryInternal = useCallback(async (pathOverride?: string) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-        const result = await window.electronAPI.gitGetHistory(historyLimit);
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
-        if (result.success) {
-          if (result.commits) {
-            setCommits(prev => {
-              // Only update if commit IDs have changed or length changed
-              // Simple check: compare first and last commit IDs and length
-              // For full correctness, we should compare deep, but JSON.stringify on 2000 items is fast enough (~2-5ms)
-              if (JSON.stringify(prev) !== JSON.stringify(result.commits)) {
-                return result.commits!;
-              }
-              return prev;
-            });
-          }
-          setHasMoreCommits(!!result.hasMore);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.gitGetHistory(historyLimit);
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success) {
+        if (result.commits) {
+          setCommits(prev => {
+            // Only update if commit IDs have changed or length changed
+            // Simple check: compare first and last commit IDs and length
+            // For full correctness, we should compare deep, but JSON.stringify on 2000 items is fast enough (~2-5ms)
+            if (JSON.stringify(prev) !== JSON.stringify(result.commits)) {
+              return result.commits!;
+            }
+            return prev;
+          });
         }
-      } catch (error) {
-        console.error('Failed to refresh history:', error);
+        setHasMoreCommits(!!result.hasMore);
       }
+    } catch (error) {
+      console.error('Failed to refresh history:', error);
+    }
   }, [repoPath, historyLimit]);
 
   const refreshHistory = useCallback((pathOverride?: string) => {
@@ -498,24 +500,24 @@ export default function App() {
   }, [historyLimit, refreshHistory, repoPath]);
 
   const refreshStashesInternal = useCallback(async (pathOverride?: string) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-        const result = await (window.electronAPI as any).getStashes();
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
-        if (result.success) {
-          if (result.stashes) {
-            setStashes(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(result.stashes)) {
-                return result.stashes!;
-              }
-              return prev;
-            });
-          }
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await (window.electronAPI as any).getStashes();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success) {
+        if (result.stashes) {
+          setStashes(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(result.stashes)) {
+              return result.stashes!;
+            }
+            return prev;
+          });
         }
-      } catch (error) {
-        console.error('Failed to refresh stashes:', error);
       }
+    } catch (error) {
+      console.error('Failed to refresh stashes:', error);
+    }
   }, [repoPath]);
 
   const refreshStashes = useCallback((pathOverride?: string) => {
@@ -523,63 +525,63 @@ export default function App() {
   }, [refreshStashesInternal, runQueued]);
 
   const refreshRebaseStatusInternal = useCallback(async (pathOverride?: string) => {
-      const targetPath = pathOverride || repoPath;
-      if (!targetPath) return;
-      try {
-        const [rebaseResult, cherryPickResult] = await Promise.all([
-          window.electronAPI.gitGetRebaseStatus(),
-          window.electronAPI.gitGetCherryPickStatus()
-        ]);
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const [rebaseResult, cherryPickResult] = await Promise.all([
+        window.electronAPI.gitGetRebaseStatus(),
+        window.electronAPI.gitGetCherryPickStatus()
+      ]);
 
-        if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
 
-        if (cherryPickResult.success) {
-          setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
-        }
+      if (cherryPickResult.success) {
+        setCherryPickStatus({ inProgress: cherryPickResult.inProgress });
+      }
 
-        if (rebaseResult.success) {
-          setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
+      if (rebaseResult.success) {
+        setRebaseStatus({ inProgress: rebaseResult.inProgress, currentStep: rebaseResult.currentStep, totalSteps: rebaseResult.totalSteps });
 
-          // If rebase OR cherry-pick is in progress, check for conflicts
-          if (rebaseResult.inProgress || cherryPickResult.inProgress) {
-              const conflictResult = await window.electronAPI.getConflictedFiles();
-              const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
-              setConflictedFiles(conflicts);
+        // If rebase OR cherry-pick is in progress, check for conflicts
+        if (rebaseResult.inProgress || cherryPickResult.inProgress) {
+          const conflictResult = await window.electronAPI.getConflictedFiles();
+          const conflicts = conflictResult.success && conflictResult.files ? conflictResult.files : [];
+          setConflictedFiles(conflicts);
 
-              // Rebase specific logic
-              if (rebaseResult.inProgress) {
-                  const currentStep = rebaseResult.currentStep;
-                  const hasConflicts = conflicts.length > 0;
+          // Rebase specific logic
+          if (rebaseResult.inProgress) {
+            const currentStep = rebaseResult.currentStep;
+            const hasConflicts = conflicts.length > 0;
 
-                  if (hasConflicts) {
-                      const stepChanged = currentStep !== lastRebaseStepRef.current;
-                      const conflictsAppeared = lastConflictCountRef.current === 0;
+            if (hasConflicts) {
+              const stepChanged = currentStep !== lastRebaseStepRef.current;
+              const conflictsAppeared = lastConflictCountRef.current === 0;
 
-                      // Show dialog if we're at a new rebase step or if conflicts just appeared
-                      if (stepChanged || conflictsAppeared) {
-                          setShowMergeConflictDialog(true);
-                      }
-                  }
-                  lastRebaseStepRef.current = currentStep;
-              } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
-                  // Show dialog for cherry-pick conflicts
-                  setShowMergeConflictDialog(true);
+              // Show dialog if we're at a new rebase step or if conflicts just appeared
+              if (stepChanged || conflictsAppeared) {
+                setShowMergeConflictDialog(true);
               }
+            }
+            lastRebaseStepRef.current = currentStep;
+          } else if (cherryPickResult.inProgress && conflicts.length > 0 && lastConflictCountRef.current === 0) {
+            // Show dialog for cherry-pick conflicts
+            setShowMergeConflictDialog(true);
+          }
 
-              lastConflictCountRef.current = conflicts.length;
-          } else {
-              // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
-              if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
-                  setConflictedFiles([]);
-                  setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
-                  lastRebaseStepRef.current = undefined;
-                  lastConflictCountRef.current = 0;
-              }
+          lastConflictCountRef.current = conflicts.length;
+        } else {
+          // Only reset if we were tracking a rebase to avoid closing dialog during normal merges
+          if (lastRebaseStepRef.current !== undefined || lastConflictCountRef.current > 0) {
+            setConflictedFiles([]);
+            setShowMergeConflictDialog(false); // Close dialog if rebase/cherry-pick finished/aborted
+            lastRebaseStepRef.current = undefined;
+            lastConflictCountRef.current = 0;
           }
         }
-      } catch (error) {
-        console.error('Failed to check rebase/cherry-pick status:', error);
       }
+    } catch (error) {
+      console.error('Failed to check rebase/cherry-pick status:', error);
+    }
   }, [repoPath]);
 
   const refreshRebaseStatus = useCallback((pathOverride?: string) => {
@@ -663,7 +665,7 @@ export default function App() {
   const handleClone = async (url: string, path: string) => {
     addLog('info', `Cloning repository from ${url}...`);
     setRemoteUrl(url);
-    
+
     await withLoading(`Cloning repository...`, async () => {
       try {
         const result = await window.electronAPI.gitClone(url, path);
@@ -673,7 +675,7 @@ export default function App() {
           setHasCredentials(true);
           addLog('success', `Repository cloned successfully to ${path}`);
           toast.success('Repository cloned successfully!');
-          
+
           await refreshAllData(path);
         } else {
           const errorMsg = result.error || 'Failed to clone repository';
@@ -892,11 +894,11 @@ export default function App() {
           }
         }
       } catch (error) {
-         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-         addLog('error', `Pull failed: ${errorMsg}`);
-         if (!checkAuthError(errorMsg)) {
-            toast.error(`Pull failed: ${errorMsg}`);
-         }
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Pull failed: ${errorMsg}`);
+        if (!checkAuthError(errorMsg)) {
+          toast.error(`Pull failed: ${errorMsg}`);
+        }
       }
     });
   };
@@ -908,8 +910,8 @@ export default function App() {
       try {
         const remoteResult = await window.electronAPI.getRemoteUrl('origin');
         if (!remoteResult.success || !remoteResult.url) {
-           setShowAddRemoteDialog(true);
-           return;
+          setShowAddRemoteDialog(true);
+          return;
         }
         setRemoteUrl(remoteResult.url);
       } catch (e) {
@@ -919,7 +921,7 @@ export default function App() {
     }
 
     addLog('info', `Pushing to origin/${currentBranch}...`);
-    
+
     await withLoading(`Pushing to origin/${currentBranch}...`, async () => {
       try {
         const result = await window.electronAPI.gitPush('origin', currentBranch);
@@ -934,14 +936,14 @@ export default function App() {
             addLog('error', errorMsg);
             return;
           }
-          
-          if (errorMsg.includes('Updates were rejected') || 
-              errorMsg.includes('non-fast-forward') || 
-              errorMsg.includes('failed to push some refs') ||
-              errorMsg.includes('fetch first')) {
-             setShowForcePushDialog(true);
-             addLog('warning', 'Push failed: Remote contains work that you do not have locally. Force push may be required.');
-             return; 
+
+          if (errorMsg.includes('Updates were rejected') ||
+            errorMsg.includes('non-fast-forward') ||
+            errorMsg.includes('failed to push some refs') ||
+            errorMsg.includes('fetch first')) {
+            setShowForcePushDialog(true);
+            addLog('warning', 'Push failed: Remote contains work that you do not have locally. Force push may be required.');
+            return;
           }
 
           addLog('error', errorMsg);
@@ -987,56 +989,56 @@ export default function App() {
   const handleAbortRebase = async () => {
     await withLoading('Aborting rebase...', async () => {
       try {
-          const result = await window.electronAPI.gitAbortRebase();
-          if (result.success) {
-              toast.success('Rebase aborted');
-              addLog('info', 'Rebase aborted');
-              await refreshRebaseStatusInternal();
-              await refreshStatusInternal();
-              await refreshHistoryInternal();
-              await refreshBranchInternal();
-          } else {
-              toast.error(result.error || 'Failed to abort rebase');
-          }
+        const result = await window.electronAPI.gitAbortRebase();
+        if (result.success) {
+          toast.success('Rebase aborted');
+          addLog('info', 'Rebase aborted');
+          await refreshRebaseStatusInternal();
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchInternal();
+        } else {
+          toast.error(result.error || 'Failed to abort rebase');
+        }
       } catch (error: any) {
-          toast.error(`Failed to abort rebase: ${error.message}`);
+        toast.error(`Failed to abort rebase: ${error.message}`);
       }
     });
   };
 
   const handleContinueRebase = async () => {
-      // Check for conflicts first
-      const conflictResult = await window.electronAPI.getConflictedFiles();
-      if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
-          setConflictedFiles(conflictResult.files);
-          setShowMergeConflictDialog(true);
-          toast.warning('Please resolve conflicts before continuing');
-          return;
-      }
+    // Check for conflicts first
+    const conflictResult = await window.electronAPI.getConflictedFiles();
+    if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+      setConflictedFiles(conflictResult.files);
+      setShowMergeConflictDialog(true);
+      toast.warning('Please resolve conflicts before continuing');
+      return;
+    }
 
-      await withLoading('Continuing rebase...', async () => {
-        try {
-            const result = await window.electronAPI.gitContinueRebase();
-            if (result.success) {
-                toast.success('Rebase continued');
-                addLog('info', 'Rebase continued');
-                await refreshRebaseStatusInternal();
-                await refreshStatusInternal();
-                await refreshHistoryInternal();
-                await refreshBranchInternal();
-            } else {
-               if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
-                   toast.warning('Rebase paused due to conflicts');
-                   await refreshRebaseStatusInternal();
-                   await refreshStatusInternal(); // To show conflicted files
-               } else {
-                   toast.error(result.error || 'Failed to continue rebase');
-               }
-            }
-        } catch (error: any) {
-            toast.error(`Failed to continue rebase: ${error.message}`);
+    await withLoading('Continuing rebase...', async () => {
+      try {
+        const result = await window.electronAPI.gitContinueRebase();
+        if (result.success) {
+          toast.success('Rebase continued');
+          addLog('info', 'Rebase continued');
+          await refreshRebaseStatusInternal();
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchInternal();
+        } else {
+          if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
+            toast.warning('Rebase paused due to conflicts');
+            await refreshRebaseStatusInternal();
+            await refreshStatusInternal(); // To show conflicted files
+          } else {
+            toast.error(result.error || 'Failed to continue rebase');
+          }
         }
-      });
+      } catch (error: any) {
+        toast.error(`Failed to continue rebase: ${error.message}`);
+      }
+    });
   };
 
   const handleCherryPick = async (commitHash: string) => {
@@ -1051,13 +1053,13 @@ export default function App() {
         } else {
           const errorMsg = result.error || 'Failed to cherry-pick';
           if (errorMsg.includes('conflict')) {
-             toast.warning('Cherry-pick conflict detected');
-             addLog('warning', 'Cherry-pick conflict detected. Please resolve conflicts.');
-             await refreshRebaseStatusInternal(); // This updates conflicts too
-             await refreshStatusInternal(); 
+            toast.warning('Cherry-pick conflict detected');
+            addLog('warning', 'Cherry-pick conflict detected. Please resolve conflicts.');
+            await refreshRebaseStatusInternal(); // This updates conflicts too
+            await refreshStatusInternal();
           } else {
-             toast.error(errorMsg);
-             addLog('error', errorMsg);
+            toast.error(errorMsg);
+            addLog('error', errorMsg);
           }
         }
       } catch (error: any) {
@@ -1086,35 +1088,35 @@ export default function App() {
   };
 
   const handleContinueCherryPick = async () => {
-      // Check for conflicts first
-      const conflictResult = await window.electronAPI.getConflictedFiles();
-      if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
-          setConflictedFiles(conflictResult.files);
-          setShowMergeConflictDialog(true);
-          toast.warning('Please resolve conflicts before continuing');
-          return;
-      }
+    // Check for conflicts first
+    const conflictResult = await window.electronAPI.getConflictedFiles();
+    if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+      setConflictedFiles(conflictResult.files);
+      setShowMergeConflictDialog(true);
+      toast.warning('Please resolve conflicts before continuing');
+      return;
+    }
 
-      await withLoading('Continuing cherry-pick...', async () => {
-        try {
-            const result = await window.electronAPI.gitContinueCherryPick();
-            if (result.success) {
-                toast.success('Cherry-pick continued');
-                addLog('info', 'Cherry-pick continued');
-                if (repoPath) await refreshAllData(repoPath);
-            } else {
-               if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
-                   toast.warning('Cherry-pick paused due to conflicts');
-                   await refreshRebaseStatusInternal();
-                   await refreshStatusInternal();
-               } else {
-                   toast.error(result.error || 'Failed to continue cherry-pick');
-               }
-            }
-        } catch (error: any) {
-            toast.error(`Failed to continue cherry-pick: ${error.message}`);
+    await withLoading('Continuing cherry-pick...', async () => {
+      try {
+        const result = await window.electronAPI.gitContinueCherryPick();
+        if (result.success) {
+          toast.success('Cherry-pick continued');
+          addLog('info', 'Cherry-pick continued');
+          if (repoPath) await refreshAllData(repoPath);
+        } else {
+          if (result.error && (result.error.includes('conflict') || result.error.includes('resolve'))) {
+            toast.warning('Cherry-pick paused due to conflicts');
+            await refreshRebaseStatusInternal();
+            await refreshStatusInternal();
+          } else {
+            toast.error(result.error || 'Failed to continue cherry-pick');
+          }
         }
-      });
+      } catch (error: any) {
+        toast.error(`Failed to continue cherry-pick: ${error.message}`);
+      }
+    });
   };
 
   const handleSkipCherryPick = async () => {
@@ -1136,15 +1138,15 @@ export default function App() {
 
   const handleMergeBranch = async (branch: string) => {
     addLog('info', `Merging ${branch} into ${currentBranch}...`);
-    
+
     await withLoading(`Merging ${branch}...`, async () => {
       try {
         const result = await window.electronAPI.gitMergeBranchToCurrent(branch);
-        
+
         if (result.success) {
           toast.success(`Successfully merged ${branch} into ${currentBranch}`);
           addLog('success', `Merged ${branch} into ${currentBranch}`);
-          
+
           await refreshStatusInternal();
           await refreshBranchInternal();
           await refreshHistoryInternal();
@@ -1196,7 +1198,7 @@ export default function App() {
           addLog('info', 'Merge aborted');
           setShowMergeConflictDialog(false);
           setConflictedFiles([]);
-          
+
           await refreshStatusInternal();
           await refreshBranchInternal();
           await refreshHistoryInternal();
@@ -1219,17 +1221,17 @@ export default function App() {
         if (result.success) {
           toast.success(`Marked ${filePaths.length} file(s) as resolved`);
           addLog('success', `Resolved ${filePaths.length} conflicted file(s)`);
-          
+
           const conflictedResult = await window.electronAPI.getConflictedFiles();
           if (conflictedResult.success && conflictedResult.files) {
             setConflictedFiles(conflictedResult.files);
-            
+
             if (conflictedResult.files.length === 0) {
               toast.success('All conflicts resolved! You can now complete the merge.');
               addLog('success', 'All merge conflicts have been resolved');
             }
           }
-          
+
           await refreshStatusInternal();
         } else {
           toast.error(result.error || 'Failed to mark files as resolved');
@@ -1254,7 +1256,7 @@ export default function App() {
           const conflictedResult = await window.electronAPI.getConflictedFiles();
           if (conflictedResult.success && conflictedResult.files) {
             setConflictedFiles(conflictedResult.files);
-            
+
             if (conflictedResult.files.length === 0) {
               toast.success('All conflicts resolved! You can now complete the merge.');
               addLog('success', 'All merge conflicts have been resolved');
@@ -1278,7 +1280,7 @@ export default function App() {
     setFiles([]);
     setCommits([]);
     addLog('info', `Switching to repository: ${name}...`);
-    
+
     await handleOpenRepo(path);
   };
 
@@ -1383,20 +1385,20 @@ export default function App() {
         } else {
           const errorMsg = result.error || 'Failed to revert commit';
           if (errorMsg.includes('conflict')) {
-             toast.warning('Revert conflict detected');
-             addLog('warning', 'Revert conflict detected. Please resolve conflicts.');
-             
-             // Check for conflicts explicitly to update UI state
-             const conflictResult = await window.electronAPI.getConflictedFiles();
-             if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
-                 setConflictedFiles(conflictResult.files);
-                 setShowMergeConflictDialog(true);
-             }
-             
-             await refreshStatusInternal();
+            toast.warning('Revert conflict detected');
+            addLog('warning', 'Revert conflict detected. Please resolve conflicts.');
+
+            // Check for conflicts explicitly to update UI state
+            const conflictResult = await window.electronAPI.getConflictedFiles();
+            if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
+              setConflictedFiles(conflictResult.files);
+              setShowMergeConflictDialog(true);
+            }
+
+            await refreshStatusInternal();
           } else {
-             toast.error(errorMsg);
-             addLog('error', errorMsg);
+            toast.error(errorMsg);
+            addLog('error', errorMsg);
           }
         }
       } catch (error: any) {
@@ -1414,12 +1416,12 @@ export default function App() {
 
   const handleConfirmReset = async (mode: 'soft' | 'mixed' | 'hard') => {
     if (!resetTargetCommit) return;
-    
+
     const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
     addLog('warning', `${modeLabel} resetting to ${resetTargetCommit.substring(0, 7)}...`);
-    
+
     setShowResetDialog(false);
-    
+
     await withLoading(`${modeLabel} resetting branch...`, async () => {
       try {
         const result = await window.electronAPI.gitResetCommits(resetTargetCommit, mode);
@@ -1427,7 +1429,7 @@ export default function App() {
           toast.success(`Successfully reset branch to ${resetTargetCommit.substring(0, 7)}`);
           addLog('success', `Reset branch (${mode}) to ${resetTargetCommit.substring(0, 7)}`);
           setResetTargetCommit(null);
-          
+
           await refreshStatusInternal();
           await refreshHistoryInternal();
           await refreshBranchStatusInternal();
@@ -1445,7 +1447,7 @@ export default function App() {
 
   const handleOpenRepo = async (path: string) => {
     addLog('info', `Opening repository from ${path}...`);
-    
+
     // Clear all state before opening
     setFiles([]);
     setCommits([]);
@@ -1464,7 +1466,7 @@ export default function App() {
     setConflictedFiles([]);
     setShowMergeConflictDialog(false);
     setRemoteUrl(null);
-    
+
     await withLoading(`Opening repository...`, async () => {
       try {
         const result = await window.electronAPI.gitOpen(path);
@@ -1476,10 +1478,10 @@ export default function App() {
           } else {
             setRepoName(path.split(/[/\\]/).pop() || 'repository');
           }
-          
+
           addLog('success', `Repository opened successfully from ${path}`);
           toast.success('Repository opened successfully!');
-          
+
           try {
             const remoteResult = await window.electronAPI.getRemoteUrl('origin');
             if (remoteResult.success && remoteResult.url) {
@@ -1488,7 +1490,7 @@ export default function App() {
           } catch (error) {
             console.log('No remote configured for this repository');
           }
-          
+
           await refreshAllData(path);
         } else {
           addLog('error', result.error || 'Failed to open repository');
@@ -1506,7 +1508,7 @@ export default function App() {
     <div className="h-screen bg-background text-foreground p-4 flex flex-col gap-4">
       <SplashScreen visible={showSplash} />
       {isLoading && <LoadingOverlay message={loadingMessage} />}
-      
+
       <div className="flex-none">
         <RepoHeader
           repoName={repoName}
@@ -1515,177 +1517,187 @@ export default function App() {
           branchStatus={branchStatus}
           isDisabled={isRefreshingBranches}
           canStash={files.length > 0}
+          isShowingGraphs={showGraphs}
           onSwitchRepo={handleSwitchRepo}
           onOpenNew={handleOpenNewRepo}
           onOpenSettings={() => setShowSettingsDialog(true)}
           onPush={handlePush}
           onPull={handlePull}
           onStash={handleStash}
+          onToggleGraphs={() => setShowGraphs(!showGraphs)}
         />
       </div>
-                
+
       {rebaseStatus.inProgress && (
         <div className="flex-none bg-secondary border border-border rounded-lg p-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="size-2 rounded-full bg-primary animate-pulse" />
-                    <span className="font-medium text-foreground">
-                        Rebase in progress
-                        {rebaseStatus.totalSteps ? ` (Step ${rebaseStatus.currentStep} of ${rebaseStatus.totalSteps})` : ''}
-                    </span>
-                </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={handleAbortRebase}
-                        className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
-                    >
-                        Abort
-                    </button>
-                    <button
-                        onClick={handleContinueRebase}
-                        className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md transition-colors"
-                    >
-                        Continue
-                    </button>
-                </div>
-            </div>
-        )}
-
-        {cherryPickStatus.inProgress && (
-          <div className="flex-none bg-secondary border border-border rounded-lg p-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="size-2 rounded-full bg-primary animate-pulse" />
-                    <span className="font-medium text-foreground">
-                        Cherry-pick in progress
-                    </span>
-                </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={handleSkipCherryPick}
-                        className="px-3 py-1.5 text-xs font-medium bg-zinc-500/10 text-muted-foreground hover:bg-zinc-500/20 border border-border/20 rounded-md transition-colors"
-                    >
-                        Skip
-                    </button>
-                    <button
-                        onClick={handleAbortCherryPick}
-                        className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
-                    >
-                        Abort
-                    </button>
-                    <button
-                        onClick={handleContinueCherryPick}
-                        className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md transition-colors"
-                    >
-                        Continue
-                    </button>
-                </div>
-            </div>
-        )}
-
-        <div className="flex-1 min-h-dvh max-h-dvh">
-          <div className="grid grid-cols-5 gap-4 h-full min-h-0">
-            {/* Left Sidebar - Branches & Tags (20%) */}
-            {repoName && showLeftPanel && (
-              <div className="col-span-1 flex flex-col gap-4 h-full overflow-y-auto min-h-0">
-                <BranchesPanel
-                  currentBranch={currentBranch}
-                  localBranches={localBranches}
-                  remoteBranches={remoteBranches}
-                  stashes={stashes}
-                  loading={isRefreshingBranches}
-                  onCheckout={handleCheckout}
-                  onCreateBranch={handleCreateBranch}
-                  onDeleteBranch={handleDeleteBranch}
-                  onMergeBranch={handleMergeBranch}
-                  onSetLoading={(loading, message) => {
-                    setIsLoading(loading);
-                    setLoadingMessage(message);
-                  }}
-                  onApplyStash={handleApplyStash}
-                  onDeleteStash={handleDeleteStash}
-                  onRefresh={() => repoPath && refreshAllData(repoPath)}
-                  isCreateDialogOpen={showCreateBranchDialog}
-                  onCloseCreateDialog={() => setShowCreateBranchDialog(false)}
-                  onOpenCreateDialog={() => setShowCreateBranchDialog(true)}
-                />
-                <TagsPanel
-                  onSetLoading={(loading, message) => {
-                    setIsLoading(loading);
-                    setLoadingMessage(message);
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Main Content Area - Graph or Repo Selector */}
-            <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full min-h-0`}>
-              {!repoName ? (
-                <div className="rounded-lg border border-border bg-card/50 overflow-hidden h-full">
-                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
-                    <TabsList className="grid w-full grid-cols-2 bg-card/50 border-b border-border rounded-none flex-none">
-                      <TabsTrigger 
-                        value="clone" 
-                        className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
-                      >
-                        Clone Repository
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="open"
-                        className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
-                      >
-                        Open Repository
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="clone" className="p-6 m-0 flex-1 overflow-y-auto">
-                      <CloneRepo onClone={handleClone} />
-                    </TabsContent>
-                    <TabsContent value="open" className="p-6 m-0 flex-1 overflow-y-auto">
-                      <OpenRepo onOpen={handleOpenRepo} />
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              ) : (
-                <CommitGraph
-                  commits={commits}
-                  currentBranch={currentBranch}
-                  hasMore={hasMoreCommits}
-                  onStashAction={refreshHistory}
-                  onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
-                  onCherryPick={handleCherryPick}
-                  onRevertCommit={handleRevertCommit}
-                  onResetCommits={handleResetCommits}
-                />
-              )}
-            </div>
+          <div className="flex items-center gap-3">
+            <div className="size-2 rounded-full bg-primary animate-pulse" />
+            <span className="font-medium text-foreground">
+              Rebase in progress
+              {rebaseStatus.totalSteps ? ` (Step ${rebaseStatus.currentStep} of ${rebaseStatus.totalSteps})` : ''}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleAbortRebase}
+              className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
+            >
+              Abort
+            </button>
+            <button
+              onClick={handleContinueRebase}
+              className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md transition-colors"
+            >
+              Continue
+            </button>
           </div>
         </div>
+      )}
 
-        {repoName && showBottomPanel ? (
-          <div className="flex-none grid grid-cols-2 gap-4 h-auto min-h-0">
-            <div className="min-h-0">
-              <CommitPanel
-                ref={commitMessageTextareaRef}
-                files={files}
-                onToggleStage={handleToggleStage}
-                onStageAll={handleStageAll}
-                onUnstageAll={handleUnstageAll}
-                onCommit={handleCommit}
-                onRevertFile={handleRevertFile}
-                onDeleteFile={handleDeleteFile}
-                onRefresh={() => refreshStatus()}
-                commitMessage={commitMessage}
-                onCommitMessageChange={setCommitMessage}
-                selectedFileIndex={selectedFileIndex}
-              />
-            </div>
-            <div className="h-0 min-h-full">
-              <ActivityLog logs={logs} />
-            </div>
+      {cherryPickStatus.inProgress && (
+        <div className="flex-none bg-secondary border border-border rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-2 rounded-full bg-primary animate-pulse" />
+            <span className="font-medium text-foreground">
+              Cherry-pick in progress
+            </span>
           </div>
-        ) : !repoName ? (
-          <div className="flex-none h-auto">
+          <div className="flex gap-2">
+            <button
+              onClick={handleSkipCherryPick}
+              className="px-3 py-1.5 text-xs font-medium bg-zinc-500/10 text-muted-foreground hover:bg-zinc-500/20 border border-border/20 rounded-md transition-colors"
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleAbortCherryPick}
+              className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-colors"
+            >
+              Abort
+            </button>
+            <button
+              onClick={handleContinueCherryPick}
+              className="px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md transition-colors"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-dvh max-h-dvh">
+        <div className="grid grid-cols-5 gap-4 h-full min-h-0">
+          {showGraphs && repoName ? (
+            <div className="col-span-5 h-full overflow-hidden flex flex-col">
+              <GraphsView />
+            </div>
+          ) : (
+            <>
+              {/* Left Sidebar - Branches & Tags (20%) */}
+              {repoName && showLeftPanel && (
+                <div className="col-span-1 flex flex-col gap-4 h-full overflow-y-auto min-h-0">
+                  <BranchesPanel
+                    currentBranch={currentBranch}
+                    localBranches={localBranches}
+                    remoteBranches={remoteBranches}
+                    stashes={stashes}
+                    loading={isRefreshingBranches}
+                    onCheckout={handleCheckout}
+                    onCreateBranch={handleCreateBranch}
+                    onDeleteBranch={handleDeleteBranch}
+                    onMergeBranch={handleMergeBranch}
+                    onSetLoading={(loading, message) => {
+                      setIsLoading(loading);
+                      setLoadingMessage(message);
+                    }}
+                    onApplyStash={handleApplyStash}
+                    onDeleteStash={handleDeleteStash}
+                    onRefresh={() => repoPath && refreshAllData(repoPath)}
+                    isCreateDialogOpen={showCreateBranchDialog}
+                    onCloseCreateDialog={() => setShowCreateBranchDialog(false)}
+                    onOpenCreateDialog={() => setShowCreateBranchDialog(true)}
+                  />
+                  <TagsPanel
+                    onSetLoading={(loading, message) => {
+                      setIsLoading(loading);
+                      setLoadingMessage(message);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Main Content Area - Graph or Repo Selector */}
+              <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full min-h-0`}>
+                {!repoName ? (
+                  <div className="rounded-lg border border-border bg-card/50 overflow-hidden h-full">
+                    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
+                      <TabsList className="grid w-full grid-cols-2 bg-card/50 border-b border-border rounded-none flex-none">
+                        <TabsTrigger
+                          value="clone"
+                          className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+                        >
+                          Clone Repository
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="open"
+                          className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+                        >
+                          Open Repository
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="clone" className="p-6 m-0 flex-1 overflow-y-auto">
+                        <CloneRepo onClone={handleClone} />
+                      </TabsContent>
+                      <TabsContent value="open" className="p-6 m-0 flex-1 overflow-y-auto">
+                        <OpenRepo onOpen={handleOpenRepo} />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                ) : (
+                  <CommitGraph
+                    commits={commits}
+                    currentBranch={currentBranch}
+                    hasMore={hasMoreCommits}
+                    onStashAction={refreshHistory}
+                    onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
+                    onCherryPick={handleCherryPick}
+                    onRevertCommit={handleRevertCommit}
+                    onResetCommits={handleResetCommits}
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {repoName && showBottomPanel && !showGraphs ? (
+        <div className="flex-none grid grid-cols-2 gap-4 h-auto min-h-0">
+          <div className="min-h-0">
+            <CommitPanel
+              ref={commitMessageTextareaRef}
+              files={files}
+              onToggleStage={handleToggleStage}
+              onStageAll={handleStageAll}
+              onUnstageAll={handleUnstageAll}
+              onCommit={handleCommit}
+              onRevertFile={handleRevertFile}
+              onDeleteFile={handleDeleteFile}
+              onRefresh={() => refreshStatus()}
+              commitMessage={commitMessage}
+              onCommitMessageChange={setCommitMessage}
+              selectedFileIndex={selectedFileIndex}
+            />
+          </div>
+          <div className="h-0 min-h-full">
             <ActivityLog logs={logs} />
           </div>
-        ) : null}
+        </div>
+      ) : !repoName ? (
+        <div className="flex-none h-auto">
+          <ActivityLog logs={logs} />
+        </div>
+      ) : null}
 
       <AddRemoteDialog
         open={showAddRemoteDialog}
