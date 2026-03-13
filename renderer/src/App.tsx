@@ -1619,17 +1619,17 @@ export default function App() {
         </div>
       )}
 
-      <div className="flex-1 min-h-dvh max-h-dvh">
-        <div className="grid grid-cols-5 gap-4 h-full min-h-0">
+      <div className="flex-1 min-h-0">
+        <div className="grid grid-cols-10 gap-4 h-full min-h-0">
           {showGraphs && repoName ? (
-            <div className="col-span-5 h-full overflow-hidden flex flex-col">
+            <div className="col-span-10 h-full overflow-hidden flex flex-col">
               <GraphsView />
             </div>
           ) : (
             <>
-              {/* Left Sidebar - Branches & Tags (20%) */}
+              {/* Column 1: Left Sidebar - Branches & Tags (20%) */}
               {repoName && showLeftPanel && (
-                <div className="col-span-1 flex flex-col gap-4 h-full overflow-y-auto min-h-0">
+                <div className="col-span-2 flex flex-col gap-4 h-full overflow-y-auto min-h-0 scrollbar-none">
                   <BranchesPanel
                     currentBranch={currentBranch}
                     localBranches={localBranches}
@@ -1660,8 +1660,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* Main Content Area - Graph or Repo Selector */}
-              <div className={`${repoName && showLeftPanel ? 'col-span-4' : 'col-span-5'} flex flex-col gap-4 h-full min-h-0`}>
+              {/* Column 2: Main Content Area - Graph or Repo Selector (50% or more) */}
+              <div className={`${repoName ? (showLeftPanel && showBottomPanel ? 'col-span-5' : showLeftPanel || showBottomPanel ? 'col-span-8' : 'col-span-10') : 'col-span-10'} flex flex-col gap-4 h-full min-h-0`}>
                 {!repoName ? (
                   <div className="rounded-lg border border-border bg-card/50 overflow-hidden h-full">
                     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
@@ -1700,38 +1700,42 @@ export default function App() {
                   />
                 )}
               </div>
+
+              {/* Column 3: Right Sidebar - Changes & Activity Log (30%) */}
+              {repoName && showBottomPanel && (
+                <div className="col-span-3 flex flex-col gap-4 h-full min-h-0">
+                  <div className="flex-1 min-h-0">
+                    <CommitPanel
+                      ref={commitMessageTextareaRef}
+                      files={files}
+                      onToggleStage={handleToggleStage}
+                      onStageAll={handleStageAll}
+                      onUnstageAll={handleUnstageAll}
+                      onCommit={handleCommit}
+                      onRevertFile={handleRevertFile}
+                      onDeleteFile={handleDeleteFile}
+                      onRefresh={() => refreshStatus()}
+                      commitMessage={commitMessage}
+                      onCommitMessageChange={setCommitMessage}
+                      selectedFileIndex={selectedFileIndex}
+                    />
+                  </div>
+                  <div className="h-[25%] min-h-[150px] flex-none">
+                    <ActivityLog logs={logs} />
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {repoName && showBottomPanel && !showGraphs ? (
-        <div className="flex-none grid grid-cols-2 gap-4 h-auto min-h-0">
-          <div className="min-h-0">
-            <CommitPanel
-              ref={commitMessageTextareaRef}
-              files={files}
-              onToggleStage={handleToggleStage}
-              onStageAll={handleStageAll}
-              onUnstageAll={handleUnstageAll}
-              onCommit={handleCommit}
-              onRevertFile={handleRevertFile}
-              onDeleteFile={handleDeleteFile}
-              onRefresh={() => refreshStatus()}
-              commitMessage={commitMessage}
-              onCommitMessageChange={setCommitMessage}
-              selectedFileIndex={selectedFileIndex}
-            />
-          </div>
-          <div className="h-0 min-h-full">
-            <ActivityLog logs={logs} />
-          </div>
-        </div>
-      ) : !repoName ? (
+      {!repoName ? (
         <div className="flex-none h-auto">
           <ActivityLog logs={logs} />
         </div>
       ) : null}
+
 
       <AddRemoteDialog
         open={showAddRemoteDialog}

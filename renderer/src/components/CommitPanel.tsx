@@ -49,7 +49,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   const unstagedFiles = files.filter((f) => !f.staged);
 
   return (
-    <div className="rounded-lg border border-border bg-card/50 p-6 flex flex-col">
+    <div className="rounded-lg border border-border bg-card/50 p-6 flex flex-col h-full">
       <div className="mb-4 flex items-center gap-2 flex-none">
         <GitCommitHorizontal className="size-5 text-foreground" />
         <h2 className="font-semibold">Changes</h2>
