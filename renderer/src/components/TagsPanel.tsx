@@ -81,11 +81,17 @@ export const TagsPanel = memo(function TagsPanel({
     loadTags(true);
   }, [loadTags]);
 
-  useAutoRefresh({
-    enabled: true,
-    intervalMs: 10000,
-    refreshFunctions: [() => loadTags(false)],
-  });
+  useEffect(() => {
+    const removeListener = window.electronAPI.onRepoChanged(() => {
+      loadTags(false);
+    });
+
+    return () => {
+      if (typeof removeListener === 'function') {
+        removeListener();
+      }
+    };
+  }, [loadTags]);
 
   const handleCreateTagClick = () => {
     setShowCreateDialog(true);

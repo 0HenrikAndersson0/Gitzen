@@ -591,21 +591,38 @@ export default function App() {
   const refreshBranchesSilent = useCallback(() => refreshBranches(undefined, true), [refreshBranches]);
   const performFetchSilent = useCallback(() => performFetch(undefined, true), [performFetch]);
 
-  // Auto-refresh every 10 seconds when repository is open
-  useAutoRefresh({
-    enabled: !!repoPath,
-    intervalMs: 10000, // 10 seconds
-    refreshFunctions: [
-      refreshStatus,
-      refreshBranch,
-      refreshBranchesSilent,
-      refreshHistory,
-      refreshStashes,
-      refreshRebaseStatus,
-      refreshBranchStatus,
-      performFetchSilent
-    ],
-  });
+  // Event-driven refresh based on file system changes (HEAD, index, refs, etc.)
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const removeListener = window.electronAPI.onRepoChanged(() => {
+      // Use silent refreshes to avoid UI flickering during auto-updates
+      refreshStatus();
+      refreshBranch();
+      refreshBranchesSilent();
+      refreshHistory();
+      refreshStashes();
+      refreshRebaseStatus();
+      refreshBranchStatus();
+      performFetchSilent();
+    });
+
+    return () => {
+      if (typeof removeListener === 'function') {
+        removeListener();
+      }
+    };
+  }, [
+    repoPath,
+    refreshStatus,
+    refreshBranch,
+    refreshBranchesSilent,
+    refreshHistory,
+    refreshStashes,
+    refreshRebaseStatus,
+    refreshBranchStatus,
+    performFetchSilent
+  ]);
 
   // ... Handlers ...
 
@@ -1504,10 +1521,27 @@ export default function App() {
     });
   };
 
+  const handleCancelOperation = async () => {
+    try {
+      const result = await window.electronAPI.gitCancelOperation();
+      if (result.success) {
+        toast.info('Operation cancellation requested');
+        addLog('info', 'Operation cancellation requested by user');
+      }
+    } catch (error) {
+      console.error('Failed to cancel operation:', error);
+    }
+  };
+
   return (
     <div className="h-screen bg-background text-foreground p-4 flex flex-col gap-4">
       <SplashScreen visible={showSplash} />
-      {isLoading && <LoadingOverlay message={loadingMessage} />}
+      {isLoading && (
+        <LoadingOverlay 
+          message={loadingMessage} 
+          onCancel={handleCancelOperation}
+        />
+      )}
 
       <div className="flex-none">
         <RepoHeader

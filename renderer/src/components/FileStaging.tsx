@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Checkbox } from './ui/checkbox';
 import { FileCheck, FileX } from 'lucide-react';
 import { FileDiff } from './FileDiff';
+import { FixedSizeList as List } from 'react-window';
 
 interface FileChange {
   path: string;
@@ -22,7 +23,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const listRef = useRef<List>(null);
 
   // Update selectedFile when files change to keep diff view in sync
   useEffect(() => {
@@ -39,10 +40,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
   // Scroll selected item into view
   useEffect(() => {
     if (selectedFileIndex !== undefined && selectedFileIndex >= 0 && selectedFileIndex < files.length) {
-      itemRefs.current[selectedFileIndex]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
+      listRef.current?.scrollToItem(selectedFileIndex, 'center');
     }
   }, [selectedFileIndex, files.length]);
 
@@ -126,40 +124,64 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
     setSelectedFile(files[prevIndex]);
   };
 
+  const Row = useCallback(({ index, style }: { index: number, style: React.CSSProperties }) => {
+    const file = files[index];
+    if (!file) return null;
+
+    // Adjust style to add gap between items
+    const adjustedStyle = {
+      ...style,
+      height: (style.height as number) - 8,
+      top: (style.top as number) + 4,
+    };
+
+    return (
+      <div
+        style={adjustedStyle}
+        className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${selectedFileIndex === index
+            ? 'border-border bg-accent'
+            : 'border-border bg-background/50 hover:bg-card/50'
+          }`}
+        onContextMenu={(e) => handleContextMenu(e, file)}
+        onClick={() => setSelectedFile(file)}
+      >
+        <Checkbox
+          checked={file.staged}
+          onCheckedChange={() => onToggleStage(file.path)}
+          onClick={(e) => e.stopPropagation()}
+          className="border-border"
+        />
+        <span className={`font-mono ${getStatusColor(file.status)} w-4`}>
+          {getStatusLabel(file.status)}
+        </span>
+        <span className="flex-1 font-mono text-sm truncate min-w-0">{file.path}</span>
+        {file.status === 'deleted' && (
+          <FileX className="size-4 text-destructive" />
+        )}
+      </div>
+    );
+  }, [files, selectedFileIndex, onToggleStage]);
+
   return (
-    <div className="space-y-2">
+    <div className="h-full flex flex-col">
       {files.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground">
+        <div className="py-8 text-center text-muted-foreground flex-1 flex flex-col items-center justify-center">
           <FileCheck className="mx-auto mb-2 size-8" />
           <p>No changes to commit</p>
         </div>
       ) : (
-        files.map((file, index) => (
-          <div
-            key={file.path}
-            ref={(el) => (itemRefs.current[index] = el)}
-            className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${selectedFileIndex === index
-                ? 'border-border bg-accent'
-                : 'border-border bg-background/50 hover:bg-card/50'
-              }`}
-            onContextMenu={(e) => handleContextMenu(e, file)}
-            onClick={() => setSelectedFile(file)}
+        <div className="flex-1 min-h-0">
+          <List
+            ref={listRef}
+            height={500} // This should ideally be handled by a parent or ResizeObserver
+            itemCount={files.length}
+            itemSize={60} // Height of each row including spacing
+            width="100%"
+            className="scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
           >
-            <Checkbox
-              checked={file.staged}
-              onCheckedChange={() => onToggleStage(file.path)}
-              onClick={(e) => e.stopPropagation()}
-              className="border-border"
-            />
-            <span className={`font-mono ${getStatusColor(file.status)} w-4`}>
-              {getStatusLabel(file.status)}
-            </span>
-            <span className="flex-1 font-mono text-sm truncate min-w-0">{file.path}</span>
-            {file.status === 'deleted' && (
-              <FileX className="size-4 text-destructive" />
-            )}
-          </div>
-        ))
+            {Row}
+          </List>
+        </div>
       )}
 
       {/* Context Menu */}

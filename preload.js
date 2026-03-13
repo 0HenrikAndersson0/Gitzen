@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitGetCherryPickStatus: () => ipcRenderer.invoke('git:getCherryPickStatus'),
   gitGetCommitsForInteractiveRebase: (targetBranch) => ipcRenderer.invoke('git:getCommitsForInteractiveRebase', targetBranch),
   gitInteractiveRebase: (targetBranch, todoLines) => ipcRenderer.invoke('git:performInteractiveRebase', targetBranch, todoLines),
+  gitCancelOperation: () => ipcRenderer.invoke('git:cancelOperation'),
   showOpenDialog: (options) => ipcRenderer.invoke('dialog:showOpenDialog', options),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),
@@ -92,7 +93,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
-  onShowShortcuts: (callback) => ipcRenderer.on('menu:show-shortcuts', callback),
-  onThemeChanged: (callback) => ipcRenderer.on('menu:theme-changed', (_, theme) => callback(theme)),
-  onUpdateAvailable: (callback) => ipcRenderer.on('app:update-available', (_, updateInfo) => callback(updateInfo)),
+  onShowShortcuts: (callback) => {
+    const sub = () => callback();
+    ipcRenderer.on('menu:show-shortcuts', sub);
+    return () => ipcRenderer.removeListener('menu:show-shortcuts', sub);
+  },
+  onThemeChanged: (callback) => {
+    const sub = (_, theme) => callback(theme);
+    ipcRenderer.on('menu:theme-changed', sub);
+    return () => ipcRenderer.removeListener('menu:theme-changed', sub);
+  },
+  onUpdateAvailable: (callback) => {
+    const sub = (_, updateInfo) => callback(updateInfo);
+    ipcRenderer.on('app:update-available', sub);
+    return () => ipcRenderer.removeListener('app:update-available', sub);
+  },
+  onRepoChanged: (callback) => {
+    const sub = (_, data) => callback(data);
+    ipcRenderer.on('git:repo-changed', sub);
+    return () => ipcRenderer.removeListener('git:repo-changed', sub);
+  },
 });

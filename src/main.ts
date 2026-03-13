@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as recentReposService from './recentReposService';
 import * as settingsService from './settingsService';
 import * as updateService from './updateService';
+import * as watcherService from './watcherService';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -79,11 +80,25 @@ settingsService.setUserDataPath(app.getPath('userData'));
 
 // IPC handlers
 ipcMain.handle('git:clone', async (_, url, localPath) => {
-  return await gitService.cloneRepository(url, localPath);
+  const result = await gitService.cloneRepository(url, localPath);
+  if (result.success) {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      watcherService.watchRepo(localPath, win);
+    }
+  }
+  return result;
 });
 
 ipcMain.handle('git:open', async (_, repoPath) => {
-  return await gitService.openRepository(repoPath);
+  const result = await gitService.openRepository(repoPath);
+  if (result.success) {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      watcherService.watchRepo(repoPath, win);
+    }
+  }
+  return result;
 });
 
 ipcMain.handle('git:status', async () => {
@@ -368,6 +383,10 @@ ipcMain.handle('git:getCommitsForInteractiveRebase', async (_, targetBranch) => 
 
 ipcMain.handle('git:performInteractiveRebase', async (_, targetBranch, todoLines) => {
   return await gitService.performInteractiveRebase(targetBranch, todoLines);
+});
+
+ipcMain.handle('git:cancelOperation', () => {
+  return gitService.cancelCurrentOperation();
 });
 
 // Update handlers

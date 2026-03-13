@@ -10,6 +10,25 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 let currentRepoPath: string | null = null;
+let currentAbortController: AbortController | null = null;
+
+export function cancelCurrentOperation(): { success: boolean } {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+    return { success: true };
+  }
+  return { success: false };
+}
+
+function startOperation(): AbortSignal {
+  // If there's an existing operation, we don't automatically cancel it here
+  // because multiple non-conflicting operations might be running (though rare)
+  // but for "main" operations, the UI should manage this.
+  const controller = new AbortController();
+  currentAbortController = controller;
+  return controller.signal;
+}
 
 export interface ConflictedFile {
   path: string;
@@ -27,45 +46,122 @@ export function initializeGitService() {
   // No initialization needed for git service
 }
 
+export interface GitOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  maxBuffer?: number;
+  onProgress?: (progress: string) => void;
+  signal?: AbortSignal;
+}
+
 interface GitExecResult {
   stdout: string;
   stderr: string;
 }
 
-async function runGitExecFile(args: string[], options: any = {}): Promise<GitExecResult> {
-  const cmdStr = `git ${args.join(' ')}`;
-  // Mask potential credentials in log (basic check for URL with password)
-  // This regex looks for ://user:pass@ and masks pass
-  const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
-  console.log(`[GIT] ${maskedCmd}`);
-
-  const result = await execFileAsync('git', args, { encoding: 'utf8', ...options });
-  return result as unknown as GitExecResult;
-}
-
-async function runGitCommand(command: string, cwd?: string, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
-  const repoPath = cwd || currentRepoPath;
-  if (!repoPath) {
+/**
+ * Core function to run git commands using spawn for better performance and streaming support.
+ * Replaces runGitExecFile and runGitCommand internal implementations.
+ */
+async function runGitSpawn(args: string[], options: GitOptions = {}): Promise<GitExecResult> {
+  const repoPath = options.cwd || currentRepoPath;
+  if (!repoPath && !args.includes('clone') && !args.includes('config')) {
     throw new Error('No repository open');
   }
 
-  // Mask credentials in log if they appear in command string (e.g. push url)
-  const maskedCmd = command.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
-  console.log(`[GIT] git ${maskedCmd}`);
+  const cmdStr = `git ${args.join(' ')}`;
+  const maskedCmd = cmdStr.replace(/:\/\/[^:]+:([^@]+)@/, '://***:***@');
+  console.log(`[GIT] ${maskedCmd}`);
 
-  return await execAsync(`git ${command}`, {
-    cwd: repoPath,
-    maxBuffer: 10 * 1024 * 1024, // 10MB
-    env: {
-      ...process.env,
-      GIT_TERMINAL_PROMPT: '0',
-      LC_ALL: 'C',
-      ...env
-    },
+  return new Promise((resolve, reject) => {
+    if (options.signal?.aborted) {
+      return reject(new Error('Operation aborted'));
+    }
+
+    const child = spawn('git', args, {
+      cwd: repoPath || undefined,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        LC_ALL: 'C',
+        ...options.env
+      },
+      // Node.js v15.1.0+ supports signal in options
+      signal: options.signal,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    const maxBuffer = options.maxBuffer || 10 * 1024 * 1024; // 10MB default
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+      if (stdout.length > maxBuffer) {
+        child.kill();
+        reject(new Error('stdout maxBuffer exceeded'));
+      }
+    });
+
+    child.stderr.on('data', (data) => {
+      const dataStr = data.toString();
+      stderr += dataStr;
+      
+      // Basic progress parsing (can be expanded)
+      if (options.onProgress && (dataStr.includes('%') || dataStr.includes('Receiving') || dataStr.includes('Resolving') || dataStr.includes('remote: '))) {
+        options.onProgress(dataStr.trim());
+      }
+      
+      if (stderr.length > maxBuffer) {
+        child.kill();
+        reject(new Error('stderr maxBuffer exceeded'));
+      }
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else if (code === null && options.signal?.aborted) {
+        // Process was killed by the signal
+        reject(new Error('Operation aborted'));
+      } else {
+        const error = new Error(`Git command failed with code ${code}: ${stderr || stdout}`);
+        (error as any).stdout = stdout;
+        (error as any).stderr = stderr;
+        (error as any).code = code;
+        reject(error);
+      }
+    });
+
+    child.on('error', (err) => {
+      if (err.name === 'AbortError') {
+        reject(new Error('Operation aborted'));
+      } else {
+        reject(err);
+      }
+    });
+
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => {
+        // Ensure the process is killed even if signal doesn't do it automatically
+        child.kill();
+      }, { once: true });
+    }
   });
 }
 
-export async function cloneRepository(url: string, localPath: string): Promise<{ success: boolean; error?: string }> {
+async function runGitExecFile(args: string[], options: GitOptions = {}): Promise<GitExecResult> {
+  return runGitSpawn(args, options);
+}
+
+async function runGitCommand(command: string, cwd?: string, env?: NodeJS.ProcessEnv, signal?: AbortSignal, onProgress?: (p: string) => void): Promise<{ stdout: string; stderr: string }> {
+  // Split command string into args, handling quotes simply for now
+  // For complex commands, we should ideally use runGitExecFile with an array
+  const args = command.match(/(?:[^\s"]+|"[^"]*")+/g)?.map(arg => arg.replace(/"/g, '')) || [];
+  return runGitSpawn(args, { cwd, env, signal, onProgress });
+}
+
+export async function cloneRepository(url: string, localPath: string, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+  const signal = startOperation();
   try {
     const dir = path.dirname(localPath);
     if (!fs.existsSync(dir)) {
@@ -82,12 +178,18 @@ export async function cloneRepository(url: string, localPath: string): Promise<{
         ...process.env,
         ...env
       },
+      signal,
+      onProgress
     });
 
     currentRepoPath = localPath;
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (currentAbortController?.signal === signal) {
+      currentAbortController = null;
+    }
   }
 }
 
@@ -359,7 +461,8 @@ export async function commit(message: string): Promise<{ success: boolean; error
   }
 }
 
-export async function push(remote: string = 'origin', branch?: string, force: boolean = false, overwrite: boolean = false): Promise<{ success: boolean; error?: string }> {
+export async function push(remote: string = 'origin', branch?: string, force: boolean = false, overwrite: boolean = false, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+  const signal = startOperation();
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -378,11 +481,15 @@ export async function push(remote: string = 'origin', branch?: string, force: bo
       forceFlag = ' --force-with-lease';
     }
 
-    await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`, undefined, authEnv);
+    await runGitCommand(`push${forceFlag} -u ${remote} ${branchName}`, undefined, authEnv, signal, onProgress);
     return { success: true };
 
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (currentAbortController?.signal === signal) {
+      currentAbortController = null;
+    }
   }
 }
 
@@ -464,7 +571,8 @@ export async function getBranchStatus(): Promise<{ success: boolean; ahead?: num
   }
 }
 
-export async function pull(remote: string = 'origin', branch?: string, targetBranch?: string): Promise<{ success: boolean; error?: string }> {
+export async function pull(remote: string = 'origin', branch?: string, targetBranch?: string, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+  const signal = startOperation();
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -480,14 +588,18 @@ export async function pull(remote: string = 'origin', branch?: string, targetBra
 
     // If targetBranch is specified and is NOT the current branch, we fetch to update it
     if (targetBranch && targetBranch !== currentBranch) {
-      await runGitCommand(`fetch ${remote} ${remoteBranchName}:${targetBranch}`, undefined, authEnv);
+      await runGitCommand(`fetch ${remote} ${remoteBranchName}:${targetBranch}`, undefined, authEnv, signal, onProgress);
       return { success: true };
     } else {
-      await runGitCommand(`pull --no-rebase --ff ${remote} ${remoteBranchName}`, undefined, authEnv);
+      await runGitCommand(`pull --no-rebase --ff ${remote} ${remoteBranchName}`, undefined, authEnv, signal, onProgress);
       return { success: true };
     }
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (currentAbortController?.signal === signal) {
+      currentAbortController = null;
+    }
   }
 }
 
@@ -817,7 +929,8 @@ export async function getBranchesDetailed(): Promise<{ success: boolean; branche
   }
 }
 
-export async function fetchRemote(remote: string = 'origin'): Promise<{ success: boolean; error?: string }> {
+export async function fetchRemote(remote: string = 'origin', onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+  const signal = startOperation();
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -827,10 +940,14 @@ export async function fetchRemote(remote: string = 'origin'): Promise<{ success:
     if (!url) throw new Error(`Remote '${remote}' has no URL`);
 
     const authEnv = getAuthEnv(url);
-    await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv);
+    await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv, signal, onProgress);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (currentAbortController?.signal === signal) {
+      currentAbortController = null;
+    }
   }
 }
 
@@ -1039,7 +1156,8 @@ export async function setRemoteUrl(remote: string, url: string): Promise<{ succe
   }
 }
 
-export async function fetchAllRemotes(): Promise<{ success: boolean; error?: string }> {
+export async function fetchAllRemotes(onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+  const signal = startOperation();
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1052,13 +1170,16 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
     // Fetch each remote individually with credentials
     let errors: string[] = [];
     for (const remote of remotes) {
+      if (signal.aborted) throw new Error('Operation aborted');
       try {
         const { url } = await getRemoteUrl(remote);
         if (url) {
           const authEnv = getAuthEnv(url);
-          await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv);
+          if (onProgress) onProgress(`Fetching ${remote}...`);
+          await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv, signal, onProgress);
         }
       } catch (e: any) {
+        if (e.message === 'Operation aborted') throw e;
         console.warn(`Failed to fetch remote ${remote}:`, e);
         errors.push(e.message || String(e));
       }
@@ -1071,6 +1192,10 @@ export async function fetchAllRemotes(): Promise<{ success: boolean; error?: str
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (currentAbortController?.signal === signal) {
+      currentAbortController = null;
+    }
   }
 }
 
@@ -1261,14 +1386,14 @@ export async function getFileDiff(filePath: string, staged: boolean): Promise<{ 
     // Unlike other commands, `git diff` can exit with code 1 if there are changes.
     // We need to handle this gracefully by catching the error and checking stdout.
     try {
-      const { stdout } = await execFileAsync('git', args, {
-        cwd: currentRepoPath,
+      const { stdout } = await runGitSpawn(args, {
+        cwd: currentRepoPath!,
         maxBuffer: 10 * 1024 * 1024, // 10MB
       });
       // No diff found, returns empty string.
       return { success: true, diff: stdout };
     } catch (error: any) {
-      // If there's a diff, git exits with 1, and execFileAsync throws.
+      // If there's a diff, git exits with 1, and runGitSpawn (via Promise rejection) throws.
       // The diff is in error.stdout.
       if (typeof error.stdout === 'string') {
         let diff = error.stdout;
