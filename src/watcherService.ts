@@ -18,19 +18,22 @@ export function watchRepo(repoPath: string, window: BrowserWindow) {
   const gitDir = path.join(repoPath, '.git');
   currentWatchedPath = repoPath;
 
-  // We primarily watch the .git directory for changes to HEAD, index, refs, etc.
-  // These indicate commits, checkouts, staging, and other git operations.
-  watcher = chokidar.watch(gitDir, {
+  // Watch the entire repository, including .git, but ignore noisy/large directories
+  watcher = chokidar.watch(repoPath, {
     ignored: [
-      '**/index.lock',
-      '**/COMMIT_EDITMSG',
-      '**/FETCH_HEAD',
-      '**/ORIG_HEAD',
-      '**/logs/**', // Avoid noise from detailed logs
+      '**/.git/objects/**',
+      '**/.git/index.lock',
+      '**/.git/COMMIT_EDITMSG',
+      '**/.git/FETCH_HEAD',
+      '**/.git/ORIG_HEAD',
+      '**/.git/logs/**', // Avoid noise from detailed logs
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.DS_Store',
     ],
     persistent: true,
     ignoreInitial: true,
-    depth: 2, // Need to watch refs/heads, etc.
   });
 
   // Debounce notification to avoid spamming refreshes during rapid changes (like rebase or heavy staging)
@@ -55,11 +58,7 @@ export function watchRepo(repoPath: string, window: BrowserWindow) {
     .on('unlink', (p) => notifyChange(p))
     .on('error', (error) => console.error(`[WATCHER] Error: ${error}`));
 
-  console.log(`[WATCHER] Started watching ${gitDir}`);
-
-  // Optionally watch the working tree for file changes (non-git files)
-  // This can be noisier but provides better UX for external edits.
-  // For Phase 1, we focus on the .git directory.
+  console.log(`[WATCHER] Started watching ${repoPath}`);
 }
 
 export function stopWatching() {
