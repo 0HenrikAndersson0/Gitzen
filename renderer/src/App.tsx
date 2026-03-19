@@ -20,6 +20,7 @@ import { ForcePushDialog } from './components/ForcePushDialog';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './components/ui/dialog';
+import { GripVertical } from 'lucide-react';
 
 import { useGitState } from './hooks/useGitState';
 import { useGitOperations } from './hooks/useGitOperations';
@@ -87,6 +88,47 @@ export default function App() {
   // Keyboard Shortcuts State
   const [commitMessage, setCommitMessage] = useState('');
   const [selectedFileIndex, setSelectedFileIndex] = useState<number | undefined>(undefined);
+
+  // Resize State
+  const [leftPanelWidth, setLeftPanelWidth] = useState(250); // px
+  const [rightPanelWidth, setRightPanelWidth] = useState(350); // px
+  const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizing === 'left') {
+        let newWidth = e.clientX;
+        if (newWidth < 150) newWidth = 150;
+        if (newWidth > window.innerWidth / 2) newWidth = window.innerWidth / 2;
+        setLeftPanelWidth(newWidth);
+      } else if (isResizing === 'right') {
+        let newWidth = window.innerWidth - e.clientX;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > window.innerWidth / 2) newWidth = window.innerWidth / 2;
+        setRightPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    // Add a class to body to prevent text selection and show resizing cursor globally
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   // Refs for shortcuts
   const filesRef = useRef(files);
@@ -373,17 +415,17 @@ export default function App() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0">
-        <div className="grid grid-cols-10 gap-4 h-full min-h-0">
-          {showGraphs && repoName ? (
-            <div className="col-span-10 h-full overflow-hidden flex flex-col">
-              <GraphsView />
-            </div>
-          ) : (
-            <>
-              {/* Column 1: Left Sidebar - Branches & Tags (20%) */}
-              {repoName && showLeftPanel && (
-                <div className="col-span-2 flex flex-col gap-4 h-full overflow-y-auto min-h-0 scrollbar-none">
+      <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-row">
+        {showGraphs && repoName ? (
+          <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
+            <GraphsView />
+          </div>
+        ) : (
+          <>
+            {/* Column 1: Left Sidebar - Branches & Tags */}
+            {repoName && showLeftPanel && (
+              <>
+                <div style={{ width: leftPanelWidth }} className="flex flex-col h-full overflow-y-auto min-w-0 min-h-0 scrollbar-none pr-2 shrink-0">
                   <BranchesPanel
                     currentBranch={currentBranch}
                     localBranches={localBranches}
@@ -405,59 +447,83 @@ export default function App() {
                     onCloseCreateDialog={() => setShowCreateBranchDialog(false)}
                     onOpenCreateDialog={() => setShowCreateBranchDialog(true)}
                   />
-                  <TagsPanel
-                    onSetLoading={(loading, message) => {
-                      setIsLoading(loading);
-                      setLoadingMessage(message);
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Column 2: Main Content Area - Graph or Repo Selector (50% or more) */}
-              <div className={`${repoName ? (showLeftPanel && showBottomPanel ? 'col-span-5' : showLeftPanel || showBottomPanel ? 'col-span-8' : 'col-span-10') : 'col-span-10'} flex flex-col gap-4 h-full min-h-0`}>
-                {!repoName ? (
-                  <div className="rounded-lg border border-border bg-card/50 overflow-hidden h-full">
-                    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
-                      <TabsList className="grid w-full grid-cols-2 bg-card/50 border-b border-border rounded-none flex-none">
-                        <TabsTrigger
-                          value="clone"
-                          className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
-                        >
-                          Clone Repository
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="open"
-                          className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
-                        >
-                          Open Repository
-                        </TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="clone" className="p-6 m-0 flex-1 overflow-y-auto">
-                        <CloneRepo onClone={handleClone} />
-                      </TabsContent>
-                      <TabsContent value="open" className="p-6 m-0 flex-1 overflow-y-auto">
-                        <OpenRepo onOpen={handleOpenRepo} />
-                      </TabsContent>
-                    </Tabs>
+                  <div className="mt-4 pb-4">
+                    <TagsPanel
+                      onSetLoading={(loading, message) => {
+                        setIsLoading(loading);
+                        setLoadingMessage(message);
+                      }}
+                    />
                   </div>
-                ) : (
-                  <CommitGraph
-                    commits={commits}
-                    currentBranch={currentBranch}
-                    hasMore={hasMoreCommits}
-                    onStashAction={refreshHistory}
-                    onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
-                    onCherryPick={handleCherryPick}
-                    onRevertCommit={handleRevertCommit}
-                    onResetCommits={handleResetCommits}
-                  />
-                )}
-              </div>
+                </div>
+                
+                {/* Drag Handle Left */}
+                <div
+                  className="relative flex w-1 cursor-col-resize items-center justify-center bg-transparent transition-all after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border hover:after:w-1 hover:after:bg-primary/50 group shrink-0 z-10"
+                  onMouseDown={(e) => { e.preventDefault(); setIsResizing('left'); }}
+                >
+                  <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GripVertical className="h-2.5 w-2.5 text-muted-foreground" />
+                  </div>
+                </div>
+              </>
+            )}
 
-              {/* Column 3: Right Sidebar - Changes & Activity Log (30%) */}
-              {repoName && showBottomPanel && (
-                <div className="col-span-3 flex flex-col gap-4 h-full min-h-0">
+            {/* Column 2: Main Content Area - Graph or Repo Selector */}
+            <div className={`flex-1 h-full w-full flex flex-col min-w-0 ${showLeftPanel ? 'pl-2' : ''} ${showBottomPanel ? 'pr-2' : ''}`}>
+              {!repoName ? (
+                <div className="rounded-lg border border-border bg-card/50 overflow-hidden h-full">
+                  <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'clone' | 'open')} className="h-full flex flex-col">
+                    <TabsList className="grid w-full grid-cols-2 bg-card/50 border-b border-border rounded-none flex-none">
+                      <TabsTrigger
+                        value="clone"
+                        className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+                      >
+                        Clone Repository
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="open"
+                        className="data-[state=active]:bg-secondary/50 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+                      >
+                        Open Repository
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="clone" className="p-6 m-0 flex-1 overflow-y-auto">
+                      <CloneRepo onClone={handleClone} />
+                    </TabsContent>
+                    <TabsContent value="open" className="p-6 m-0 flex-1 overflow-y-auto">
+                      <OpenRepo onOpen={handleOpenRepo} />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              ) : (
+                <CommitGraph
+                  commits={commits}
+                  currentBranch={currentBranch}
+                  hasMore={hasMoreCommits}
+                  onStashAction={refreshHistory}
+                  onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
+                  onCherryPick={handleCherryPick}
+                  onRevertCommit={handleRevertCommit}
+                  onResetCommits={handleResetCommits}
+                />
+              )}
+            </div>
+
+            {/* Column 3: Right Sidebar - Changes & Activity Log */}
+            {repoName && showBottomPanel && (
+              <>
+                {/* Drag Handle Right */}
+                <div
+                  className="relative flex w-1 cursor-col-resize items-center justify-center bg-transparent transition-all after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border hover:after:w-1 hover:after:bg-primary/50 group shrink-0 z-10"
+                  onMouseDown={(e) => { e.preventDefault(); setIsResizing('right'); }}
+                >
+                  <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GripVertical className="h-2.5 w-2.5 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div style={{ width: rightPanelWidth }} className="flex flex-col h-full min-w-0 min-h-0 pl-2 shrink-0">
                   <div className="flex-1 min-h-0">
                     <CommitPanel
                       ref={commitMessageTextareaRef}
@@ -474,14 +540,14 @@ export default function App() {
                       selectedFileIndex={selectedFileIndex}
                     />
                   </div>
-                  <div className="h-[25%] min-h-[150px] flex-none">
+                  <div className="h-[25%] min-h-[150px] flex-none mt-4">
                     <ActivityLog logs={logs} />
                   </div>
                 </div>
-              )}
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {!repoName ? (
