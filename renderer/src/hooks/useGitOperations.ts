@@ -93,7 +93,7 @@ export function useGitOperations({
         } else {
           const errorMsg = result.error || 'Failed to clone repository';
           addLog('error', errorMsg);
-          if (!checkAuthError(errorMsg)) {
+          if (!checkAuthError(errorMsg, false, result.errorType)) {
             toast.error(errorMsg);
           }
         }
@@ -301,8 +301,15 @@ export function useGitOperations({
         } else {
           const errorMsg = result.error || 'Failed to pull';
           addLog('error', errorMsg);
-          if (!checkAuthError(errorMsg)) {
-            toast.error(errorMsg);
+          if (!checkAuthError(errorMsg, false, result.errorType)) {
+            if (result.errorType === 'MergeConflictError') {
+              setShowMergeConflictDialog(true);
+              toast.error('Pull resulted in merge conflicts. Please resolve them.');
+            } else if (result.errorType === 'DetachedHeadError') {
+              toast.error('Cannot pull in a detached HEAD state. Please create or checkout a branch.');
+            } else {
+              toast.error(errorMsg);
+            }
           }
         }
       } catch (error) {
@@ -342,8 +349,12 @@ export function useGitOperations({
           await refreshBranchStatusInternal();
         } else {
           const errorMsg = result.error || 'Failed to push';
-          if (checkAuthError(errorMsg)) {
+          if (checkAuthError(errorMsg, false, result.errorType)) {
             addLog('error', errorMsg);
+            return;
+          }
+          if (result.errorType === 'DetachedHeadError') {
+            toast.error('Cannot push in a detached HEAD state. Please create a branch.');
             return;
           }
 
@@ -382,7 +393,7 @@ export function useGitOperations({
         } else {
           const errorMsg = result.error || 'Failed to force push';
           addLog('error', errorMsg);
-          if (!checkAuthError(errorMsg)) {
+          if (!checkAuthError(errorMsg, false, result.errorType)) {
             toast.error(errorMsg);
           }
         }
@@ -565,8 +576,15 @@ export function useGitOperations({
           toast.warning(`Merge conflict: ${result.conflictedFiles.length} file(s) have conflicts`);
           addLog('warning', `Merge conflict: ${result.conflictedFiles.length} file(s) need to be resolved`);
         } else {
-          toast.error(result.error || 'Merge failed');
           addLog('error', `Merge failed: ${result.error || 'Unknown error'}`);
+          if (result.errorType === 'MergeConflictError') {
+            setShowMergeConflictDialog(true);
+            toast.error('Merge conflicts detected. Please resolve them.');
+          } else if (result.errorType === 'DetachedHeadError') {
+            toast.error('Cannot merge in a detached HEAD state. Please create or checkout a branch.');
+          } else {
+            toast.error(result.error || 'Merge failed');
+          }
         }
       } catch (error: any) {
         const errorMessage = error.message || 'Unknown error';
