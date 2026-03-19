@@ -116,6 +116,9 @@ declare global {
       onShowShortcuts: (callback: () => void) => void;
       onThemeChanged: (callback: (theme: string) => void) => void;
       onUpdateAvailable: (callback: (updateInfo: any) => void) => void;
+      onRepoChanged: (callback: (data: any) => void) => () => void;
+      getGitUserConfig: () => Promise<{ success: boolean; name?: string; email?: string; error?: string }>;
+      setGitUserConfig: (name: string, email: string, isGlobal: boolean) => Promise<{ success: boolean; error?: string }>;
     };
   }
 }

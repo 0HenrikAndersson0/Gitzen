@@ -380,6 +380,21 @@ export function useGitState({
     performFetchSilent
   ]);
 
+  // Fetch remote changes when the application regains focus
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const onFocus = () => {
+      performFetchSilent();
+    };
+
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [repoPath, performFetchSilent]);
+
   const refreshAllData = useCallback(async (path: string) => {
     repoPathRef.current = path;
 
