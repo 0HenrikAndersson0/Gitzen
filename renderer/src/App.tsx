@@ -551,7 +551,7 @@ export default function App() {
       </div>
 
       {!repoName ? (
-        <div className="flex-none h-auto">
+        <div className="flex-none max-h-[50vh] flex flex-col">
           <ActivityLog logs={logs} />
         </div>
       ) : null}
