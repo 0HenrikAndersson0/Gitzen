@@ -12,6 +12,39 @@ const execFileAsync = promisify(execFile);
 let currentRepoPath: string | null = null;
 let currentAbortController: AbortController | null = null;
 
+export function parseGitError(error: any): { message: string; type?: string } {
+  const message = error.message || error.stderr || String(error);
+
+  if (
+    message.includes('Authentication failed') ||
+    message.includes('could not read Username') ||
+    message.includes('could not read Password') ||
+    message.includes('Permission denied') ||
+    message.includes('401') ||
+    message.includes('403') ||
+    message.includes('Unauthorized')
+  ) {
+    return { message, type: 'NetworkAuthError' };
+  }
+
+  if (
+    message.includes('conflict') ||
+    message.includes('MERGE_HEAD exists') ||
+    message.includes('Automatic merge failed') ||
+    message.includes('resolve all conflicts')
+  ) {
+    return { message, type: 'MergeConflictError' };
+  }
+
+  if (message.includes('detached HEAD')) {
+    return { message, type: 'DetachedHeadError' };
+  }
+
+  return { message };
+}
+
+
+
 export function cancelCurrentOperation(): { success: boolean } {
   if (currentAbortController) {
     currentAbortController.abort();
@@ -160,7 +193,7 @@ async function runGitCommand(command: string, cwd?: string, env?: NodeJS.Process
   return runGitSpawn(args, { cwd, env, signal, onProgress });
 }
 
-export async function cloneRepository(url: string, localPath: string, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+export async function cloneRepository(url: string, localPath: string, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {
     const dir = path.dirname(localPath);
@@ -185,7 +218,8 @@ export async function cloneRepository(url: string, localPath: string, onProgress
     currentRepoPath = localPath;
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   } finally {
     if (currentAbortController?.signal === signal) {
       currentAbortController = null;
@@ -193,7 +227,7 @@ export async function cloneRepository(url: string, localPath: string, onProgress
   }
 }
 
-export async function applyPatch(patch: string, options: { reverse?: boolean, cached?: boolean } = {}): Promise<{ success: boolean; error?: string }> {
+export async function applyPatch(patch: string, options: { reverse?: boolean, cached?: boolean } = {}): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -227,7 +261,7 @@ export async function applyPatch(patch: string, options: { reverse?: boolean, ca
   }
 }
 
-export async function createStash(): Promise<{ success: boolean; error?: string }> {
+export async function createStash(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -240,11 +274,12 @@ export async function createStash(): Promise<{ success: boolean; error?: string 
     await runGitCommand(command);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getStashes(): Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string }> {
+export async function getStashes(): Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -264,11 +299,12 @@ export async function getStashes(): Promise<{ success: boolean; stashes?: { name
 
     return { success: true, stashes };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function applyStash(stashRef: string): Promise<{ success: boolean; error?: string }> {
+export async function applyStash(stashRef: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -276,11 +312,12 @@ export async function applyStash(stashRef: string): Promise<{ success: boolean; 
     await runGitCommand(`stash apply "${stashRef}"`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function deleteStash(stashRef: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteStash(stashRef: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -288,11 +325,12 @@ export async function deleteStash(stashRef: string): Promise<{ success: boolean;
     await runGitCommand(`stash drop "${stashRef}"`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function openRepository(repoPath: string): Promise<{ success: boolean; error?: string }> {
+export async function openRepository(repoPath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
       return { success: false, error: 'Not a git repository' };
@@ -300,11 +338,12 @@ export async function openRepository(repoPath: string): Promise<{ success: boole
     currentRepoPath = repoPath;
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getStatus(): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; staged: boolean }>; error?: string }> {
+export async function getStatus(): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; staged: boolean }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -358,11 +397,12 @@ export async function getStatus(): Promise<{ success: boolean; files?: Array<{ p
 
     return { success: true, files };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function stageFiles(filePaths: string[]): Promise<{ success: boolean; error?: string }> {
+export async function stageFiles(filePaths: string[]): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -397,11 +437,12 @@ export async function stageFiles(filePaths: string[]): Promise<{ success: boolea
     }
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function stageAll(): Promise<{ success: boolean; error?: string }> {
+export async function stageAll(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -410,11 +451,12 @@ export async function stageAll(): Promise<{ success: boolean; error?: string }> 
     await runGitCommand('add -A');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function unstageAll(): Promise<{ success: boolean; error?: string }> {
+export async function unstageAll(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -423,11 +465,12 @@ export async function unstageAll(): Promise<{ success: boolean; error?: string }
     await runGitCommand('reset');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function unstageFiles(filePaths: string[]): Promise<{ success: boolean; error?: string }> {
+export async function unstageFiles(filePaths: string[]): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -443,11 +486,12 @@ export async function unstageFiles(filePaths: string[]): Promise<{ success: bool
     }
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function commit(message: string): Promise<{ success: boolean; error?: string }> {
+export async function commit(message: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -457,11 +501,12 @@ export async function commit(message: string): Promise<{ success: boolean; error
     await runGitCommand(`commit -m "${escapedMessage}"`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function push(remote: string = 'origin', branch?: string, force: boolean = false, overwrite: boolean = false, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+export async function push(remote: string = 'origin', branch?: string, force: boolean = false, overwrite: boolean = false, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {
     if (!currentRepoPath) {
@@ -485,7 +530,8 @@ export async function push(remote: string = 'origin', branch?: string, force: bo
     return { success: true };
 
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   } finally {
     if (currentAbortController?.signal === signal) {
       currentAbortController = null;
@@ -493,7 +539,7 @@ export async function push(remote: string = 'origin', branch?: string, force: bo
   }
 }
 
-export async function addRemote(name: string, url: string): Promise<{ success: boolean; error?: string }> {
+export async function addRemote(name: string, url: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -501,11 +547,12 @@ export async function addRemote(name: string, url: string): Promise<{ success: b
     await runGitCommand(`remote add ${name} ${url}`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function createGitHubRepo(token: string, name: string, isPrivate: boolean, description?: string): Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string }> {
+export async function createGitHubRepo(token: string, name: string, isPrivate: boolean, description?: string): Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string; errorType?: string }> {
   try {
     const response = await fetch('https://api.github.com/user/repos', {
       method: 'POST',
@@ -530,11 +577,12 @@ export async function createGitHubRepo(token: string, name: string, isPrivate: b
     const data: any = await response.json();
     return { success: true, cloneUrl: data.clone_url, ownerLogin: data.owner.login };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getBranchStatus(): Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string }> {
+export async function getBranchStatus(): Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -567,11 +615,12 @@ export async function getBranchStatus(): Promise<{ success: boolean; ahead?: num
 
     return { success: true, ahead: 0, behind: 0, hasUpstream: true, upstream };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function pull(remote: string = 'origin', branch?: string, targetBranch?: string, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+export async function pull(remote: string = 'origin', branch?: string, targetBranch?: string, onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {
     if (!currentRepoPath) {
@@ -595,7 +644,8 @@ export async function pull(remote: string = 'origin', branch?: string, targetBra
       return { success: true };
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   } finally {
     if (currentAbortController?.signal === signal) {
       currentAbortController = null;
@@ -603,7 +653,7 @@ export async function pull(remote: string = 'origin', branch?: string, targetBra
   }
 }
 
-export async function getCurrentBranch(): Promise<{ success: boolean; branch?: string; error?: string }> {
+export async function getCurrentBranch(): Promise<{ success: boolean; branch?: string; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -612,11 +662,12 @@ export async function getCurrentBranch(): Promise<{ success: boolean; branch?: s
     const { stdout } = await runGitCommand('branch --show-current');
     return { success: true, branch: stdout.trim() };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpushed?: boolean; count?: number; error?: string }> {
+export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpushed?: boolean; count?: number; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -635,11 +686,12 @@ export async function hasUnpushedCommits(): Promise<{ success: boolean; hasUnpus
       return { success: true, hasUnpushed: false, count: 0 };
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string }> {
+export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -683,7 +735,8 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
             success: false,
             hasConflicts: true,
             conflictedFiles: conflictedFilesResult.files,
-            error: `Merge conflict occurred while merging ${branchToMerge}`
+            error: `Merge conflict occurred while merging ${branchToMerge}`,
+            errorType: 'MergeConflictError'
           };
         }
         // In merge state but no conflicted files (shouldn't happen, but handle gracefully)
@@ -691,15 +744,17 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
           success: false,
           hasConflicts: true,
           conflictedFiles: [],
-          error: `Merge conflict occurred while merging ${branchToMerge}`
+          error: `Merge conflict occurred while merging ${branchToMerge}`,
+          errorType: 'MergeConflictError'
         };
       }
       // Not in merge state, so this is a different kind of error
-      const errorMessage = mergeError.message || mergeError.stderr || 'Unknown merge error';
-      return { success: false, error: errorMessage };
+      const parsed = parseGitError(mergeError);
+      return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
@@ -717,7 +772,8 @@ export async function getHistory(maxCount: number = 50): Promise<{
     refs: string;
   }>;
   hasMore?: boolean;
-  error?: string
+  error?: string;
+  errorType?: string;
 }> {
   try {
     if (!currentRepoPath) {
@@ -860,12 +916,13 @@ export async function getHistory(maxCount: number = 50): Promise<{
 
     return { success: true, commits, hasMore };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
 
-export async function getBranches(): Promise<{ success: boolean; branches?: string[]; error?: string }> {
+export async function getBranches(): Promise<{ success: boolean; branches?: string[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -881,11 +938,12 @@ export async function getBranches(): Promise<{ success: boolean; branches?: stri
 
     return { success: true, branches };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getBranchesDetailed(): Promise<{ success: boolean; branches?: Array<{ name: string; current: boolean; upstream?: string; ahead: number; behind: number }>; error?: string }> {
+export async function getBranchesDetailed(): Promise<{ success: boolean; branches?: Array<{ name: string; current: boolean; upstream?: string; ahead: number; behind: number }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -925,11 +983,12 @@ export async function getBranchesDetailed(): Promise<{ success: boolean; branche
 
     return { success: true, branches };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function fetchRemote(remote: string = 'origin', onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+export async function fetchRemote(remote: string = 'origin', onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {
     if (!currentRepoPath) {
@@ -943,7 +1002,8 @@ export async function fetchRemote(remote: string = 'origin', onProgress?: (p: st
     await runGitCommand(`fetch ${remote} --prune`, undefined, authEnv, signal, onProgress);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   } finally {
     if (currentAbortController?.signal === signal) {
       currentAbortController = null;
@@ -951,7 +1011,7 @@ export async function fetchRemote(remote: string = 'origin', onProgress?: (p: st
   }
 }
 
-export async function createBranch(name: string, checkout: boolean = true): Promise<{ success: boolean; error?: string }> {
+export async function createBranch(name: string, checkout: boolean = true): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -964,11 +1024,12 @@ export async function createBranch(name: string, checkout: boolean = true): Prom
     }
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function checkoutBranch(name: string): Promise<{ success: boolean; error?: string }> {
+export async function checkoutBranch(name: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1036,7 +1097,7 @@ export async function checkoutBranch(name: string): Promise<{ success: boolean; 
 
 
 
-export async function getGitUserConfig(): Promise<{ success: boolean; name?: string; email?: string; isGlobal?: boolean; error?: string }> {
+export async function getGitUserConfig(): Promise<{ success: boolean; name?: string; email?: string; isGlobal?: boolean; error?: string; errorType?: string }> {
   try {
     // Try to get name and email. If they are not set, git config returns error code 1.
     // We'll try to get them using runGitExecFile directly to handle cases where no repo is open.
@@ -1074,11 +1135,12 @@ export async function getGitUserConfig(): Promise<{ success: boolean; name?: str
 
     return { success: true, name, email, isGlobal };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function setGitUserConfig(name: string, email: string, isGlobal: boolean): Promise<{ success: boolean; error?: string }> {
+export async function setGitUserConfig(name: string, email: string, isGlobal: boolean): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!isGlobal && !currentRepoPath) {
       return { success: false, error: 'No repository open to save local configuration' };
@@ -1105,7 +1167,8 @@ export async function setGitUserConfig(name: string, email: string, isGlobal: bo
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
@@ -1116,7 +1179,7 @@ export function getRepoPath(): { success: boolean; path?: string; error?: string
   return { success: false, error: 'No repository open' };
 }
 
-export async function getRepoName(): Promise<{ success: boolean; name?: string; error?: string }> {
+export async function getRepoName(): Promise<{ success: boolean; name?: string; error?: string; errorType?: string }> {
   if (!currentRepoPath) {
     return { success: false, error: 'No repository open' };
   }
@@ -1125,11 +1188,12 @@ export async function getRepoName(): Promise<{ success: boolean; name?: string; 
     const name = path.basename(currentRepoPath);
     return { success: true, name };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success: boolean; url?: string; error?: string }> {
+export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success: boolean; url?: string; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1143,7 +1207,7 @@ export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success
   }
 }
 
-export async function setRemoteUrl(remote: string, url: string): Promise<{ success: boolean; error?: string }> {
+export async function setRemoteUrl(remote: string, url: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1152,11 +1216,12 @@ export async function setRemoteUrl(remote: string, url: string): Promise<{ succe
     await runGitCommand(`remote set-url ${remote} ${url}`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function fetchAllRemotes(onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string }> {
+export async function fetchAllRemotes(onProgress?: (p: string) => void): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {
     if (!currentRepoPath) {
@@ -1191,7 +1256,8 @@ export async function fetchAllRemotes(onProgress?: (p: string) => void): Promise
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   } finally {
     if (currentAbortController?.signal === signal) {
       currentAbortController = null;
@@ -1199,7 +1265,7 @@ export async function fetchAllRemotes(onProgress?: (p: string) => void): Promise
   }
 }
 
-export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string }> {
+export async function getRemoteBranches(): Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1220,11 +1286,12 @@ export async function getRemoteBranches(): Promise<{ success: boolean; branches?
 
     return { success: true, branches };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string }> {
+export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1248,11 +1315,12 @@ export async function getTags(): Promise<{ success: boolean; tags?: Array<{ name
 
     return { success: true, tags };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getCommitDiff(commitHash: string): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }> {
+export async function getCommitDiff(commitHash: string): Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1338,11 +1406,12 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
 
     return { success: true, files };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getFileDiff(filePath: string, staged: boolean): Promise<{ success: boolean; diff?: string; error?: string }> {
+export async function getFileDiff(filePath: string, staged: boolean): Promise<{ success: boolean; diff?: string; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1409,11 +1478,12 @@ export async function getFileDiff(filePath: string, staged: boolean): Promise<{ 
       throw error;
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function deleteBranch(branchName: string, force: boolean = false): Promise<{ success: boolean; error?: string }> {
+export async function deleteBranch(branchName: string, force: boolean = false): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1428,11 +1498,12 @@ export async function deleteBranch(branchName: string, force: boolean = false): 
     await runGitCommand(command);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1481,11 +1552,12 @@ export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ su
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function deleteTag(tagName: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteTag(tagName: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1494,11 +1566,12 @@ export async function deleteTag(tagName: string): Promise<{ success: boolean; er
     await runGitCommand(`tag -d ${tagName}`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function createTag(name: string, commitHash?: string): Promise<{ success: boolean; error?: string }> {
+export async function createTag(name: string, commitHash?: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1516,7 +1589,7 @@ export async function createTag(name: string, commitHash?: string): Promise<{ su
   }
 }
 
-export async function pushTag(tagName: string, remote: string = 'origin'): Promise<{ success: boolean; error?: string }> {
+export async function pushTag(tagName: string, remote: string = 'origin'): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1529,11 +1602,12 @@ export async function pushTag(tagName: string, remote: string = 'origin'): Promi
     await runGitCommand(`push ${remote} ${tagName}`, undefined, authEnv);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getRemoteTags(remote: string = 'origin'): Promise<{ success: boolean; tags?: string[]; error?: string }> {
+export async function getRemoteTags(remote: string = 'origin'): Promise<{ success: boolean; tags?: string[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1563,7 +1637,7 @@ export async function getRemoteTags(remote: string = 'origin'): Promise<{ succes
   }
 }
 
-export async function revertFileChanges(filePath: string): Promise<{ success: boolean; error?: string }> {
+export async function revertFileChanges(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1583,11 +1657,12 @@ export async function revertFileChanges(filePath: string): Promise<{ success: bo
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getConflictedFiles(): Promise<{ success: boolean; files?: ConflictedFile[]; error?: string }> {
+export async function getConflictedFiles(): Promise<{ success: boolean; files?: ConflictedFile[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1656,11 +1731,12 @@ export async function getConflictedFiles(): Promise<{ success: boolean; files?: 
 
     return { success: true, files: conflictedFiles };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function resolveConflict(filePath: string, decision: 'keep' | 'delete'): Promise<{ success: boolean; error?: string }> {
+export async function resolveConflict(filePath: string, decision: 'keep' | 'delete'): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1680,11 +1756,12 @@ export async function resolveConflict(filePath: string, decision: 'keep' | 'dele
     }
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function abortMerge(): Promise<{ success: boolean; error?: string }> {
+export async function abortMerge(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1708,11 +1785,12 @@ export async function abortMerge(): Promise<{ success: boolean; error?: string }
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string }> {
+export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1795,11 +1873,12 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
       }
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function deleteFile(filePath: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteFile(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1814,11 +1893,12 @@ export async function deleteFile(filePath: string): Promise<{ success: boolean; 
       return { success: false, error: 'File does not exist' };
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getTagsForCommit(commitHash: string): Promise<{ success: boolean; tags?: string[]; error?: string }> {
+export async function getTagsForCommit(commitHash: string): Promise<{ success: boolean; tags?: string[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1832,7 +1912,8 @@ export async function getTagsForCommit(commitHash: string): Promise<{ success: b
 
     return { success: true, tags };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
@@ -1840,7 +1921,7 @@ export async function getTagsForCommit(commitHash: string): Promise<{ success: b
  * Tests if Git can authenticate to a remote using built-in credential mechanisms
  * (credential helper, SSH keys, etc.) without explicit credentials
  */
-export async function testGitCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string }> {
+export async function testGitCredentials(remoteUrl: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1876,7 +1957,7 @@ export async function testGitCredentials(remoteUrl: string): Promise<{ success: 
 }
 
 
-export async function rebaseBranch(branch: string): Promise<{ success: boolean; error?: string }> {
+export async function rebaseBranch(branch: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1894,7 +1975,7 @@ export async function rebaseBranch(branch: string): Promise<{ success: boolean; 
   }
 }
 
-export async function abortRebase(): Promise<{ success: boolean; error?: string }> {
+export async function abortRebase(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1902,11 +1983,12 @@ export async function abortRebase(): Promise<{ success: boolean; error?: string 
     await runGitCommand('rebase --abort');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function continueRebase(): Promise<{ success: boolean; error?: string }> {
+export async function continueRebase(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1925,7 +2007,7 @@ export async function continueRebase(): Promise<{ success: boolean; error?: stri
   }
 }
 
-export async function getRebaseStatus(): Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string }> {
+export async function getRebaseStatus(): Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open', inProgress: false };
@@ -1968,7 +2050,7 @@ export async function getRebaseStatus(): Promise<{ success: boolean; inProgress:
   }
 }
 
-export async function revertCommit(commitHash: string): Promise<{ success: boolean; error?: string }> {
+export async function revertCommit(commitHash: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1990,11 +2072,12 @@ export async function revertCommit(commitHash: string): Promise<{ success: boole
       return { success: false, error: revertError.message || revertError.stderr || 'Revert failed' };
     }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function resetCommits(commitHash: string, mode: 'soft' | 'mixed' | 'hard'): Promise<{ success: boolean; error?: string }> {
+export async function resetCommits(commitHash: string, mode: 'soft' | 'mixed' | 'hard'): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2003,11 +2086,12 @@ export async function resetCommits(commitHash: string, mode: 'soft' | 'mixed' | 
     await runGitCommand(`reset --${mode} ${commitHash}`);
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getRevertStatus(): Promise<{ success: boolean; inProgress: boolean; error?: string }> {
+export async function getRevertStatus(): Promise<{ success: boolean; inProgress: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open', inProgress: false };
@@ -2019,7 +2103,7 @@ export async function getRevertStatus(): Promise<{ success: boolean; inProgress:
   }
 }
 
-export async function abortRevert(): Promise<{ success: boolean; error?: string }> {
+export async function abortRevert(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2027,11 +2111,12 @@ export async function abortRevert(): Promise<{ success: boolean; error?: string 
     await runGitCommand('revert --abort');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function continueRevert(): Promise<{ success: boolean; error?: string }> {
+export async function continueRevert(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2039,11 +2124,12 @@ export async function continueRevert(): Promise<{ success: boolean; error?: stri
     await runGitCommand('revert --continue', undefined, { GIT_EDITOR: 'true' });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function cherryPick(commitHash: string): Promise<{ success: boolean; error?: string }> {
+export async function cherryPick(commitHash: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2060,7 +2146,7 @@ export async function cherryPick(commitHash: string): Promise<{ success: boolean
   }
 }
 
-export async function abortCherryPick(): Promise<{ success: boolean; error?: string }> {
+export async function abortCherryPick(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2068,11 +2154,12 @@ export async function abortCherryPick(): Promise<{ success: boolean; error?: str
     await runGitCommand('cherry-pick --abort');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function continueCherryPick(): Promise<{ success: boolean; error?: string }> {
+export async function continueCherryPick(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2095,7 +2182,7 @@ export async function continueCherryPick(): Promise<{ success: boolean; error?: 
   }
 }
 
-export async function skipCherryPick(): Promise<{ success: boolean; error?: string }> {
+export async function skipCherryPick(): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2103,11 +2190,12 @@ export async function skipCherryPick(): Promise<{ success: boolean; error?: stri
     await runGitCommand('cherry-pick --skip');
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getCherryPickStatus(): Promise<{ success: boolean; inProgress: boolean; error?: string }> {
+export async function getCherryPickStatus(): Promise<{ success: boolean; inProgress: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open', inProgress: false };
@@ -2125,7 +2213,7 @@ export interface RebaseTodoItem {
   message: string;
 }
 
-export async function getCommitsForInteractiveRebase(targetBranch: string): Promise<{ success: boolean; commits?: RebaseTodoItem[]; error?: string }> {
+export async function getCommitsForInteractiveRebase(targetBranch: string): Promise<{ success: boolean; commits?: RebaseTodoItem[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2147,11 +2235,12 @@ export async function getCommitsForInteractiveRebase(targetBranch: string): Prom
 
     return { success: true, commits };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function performInteractiveRebase(targetBranch: string, todoLines: string[]): Promise<{ success: boolean; error?: string }> {
+export async function performInteractiveRebase(targetBranch: string, todoLines: string[]): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2216,7 +2305,7 @@ export async function performInteractiveRebase(targetBranch: string, todoLines: 
   }
 }
 
-export async function getFilesChurn(limit: number = 20): Promise<{ success: boolean; files?: Array<{ path: string; changes: number }>; error?: string }> {
+export async function getFilesChurn(limit: number = 20): Promise<{ success: boolean; files?: Array<{ path: string; changes: number }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2242,11 +2331,12 @@ export async function getFilesChurn(limit: number = 20): Promise<{ success: bool
 
     return { success: true, files: sortedFiles };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getCommitActivity(): Promise<{ success: boolean; activity?: Array<{ day: number; hour: number; count: number }>; error?: string }> {
+export async function getCommitActivity(): Promise<{ success: boolean; activity?: Array<{ day: number; hour: number; count: number }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2274,11 +2364,12 @@ export async function getCommitActivity(): Promise<{ success: boolean; activity?
 
     return { success: true, activity };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getTopContributors(limit: number = 10): Promise<{ success: boolean; contributors?: Array<{ name: string; commits: number }>; error?: string }> {
+export async function getTopContributors(limit: number = 10): Promise<{ success: boolean; contributors?: Array<{ name: string; commits: number }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2304,11 +2395,12 @@ export async function getTopContributors(limit: number = 10): Promise<{ success:
 
     return { success: true, contributors };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getCodebaseGrowth(): Promise<{ success: boolean; growth?: Array<{ date: string; additions: number; deletions: number; totalLines: number }>; error?: string }> {
+export async function getCodebaseGrowth(): Promise<{ success: boolean; growth?: Array<{ date: string; additions: number; deletions: number; totalLines: number }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2369,11 +2461,12 @@ export async function getCodebaseGrowth(): Promise<{ success: boolean; growth?: 
 
     return { success: true, growth };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
 
-export async function getFileTypeDistribution(): Promise<{ success: boolean; distribution?: Array<{ type: string; count: number }>; error?: string }> {
+export async function getFileTypeDistribution(): Promise<{ success: boolean; distribution?: Array<{ type: string; count: number }>; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -2410,6 +2503,7 @@ export async function getFileTypeDistribution(): Promise<{ success: boolean; dis
 
     return { success: true, distribution: top20 };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }

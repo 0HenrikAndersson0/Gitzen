@@ -36,7 +36,7 @@ export interface Branch {
 
 interface UseGitStateProps {
   historyLimit: number;
-  checkAuthError: (errorMsg: string, silent?: boolean) => boolean;
+  checkAuthError: (errorMsg: string, silent?: boolean, errorType?: string) => boolean;
   setHasCredentials: (has: boolean) => void;
   setShowMergeConflictDialog: (show: boolean) => void;
 }
@@ -214,7 +214,7 @@ export function useGitState({
       if (result.success) {
         setHasCredentials(true);
       } else if (result.error) {
-        checkAuthError(result.error, silent);
+        checkAuthError(result.error, silent, result.errorType);
       }
     } catch (e) {
       console.error('Failed to fetch', e);

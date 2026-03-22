@@ -31,7 +31,21 @@ export function useUIState() {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
   }, []);
 
-  const checkAuthError = useCallback((errorMsg: string, silent = false): boolean => {
+  const checkAuthError = useCallback((errorMsg: string, silent = false, errorType?: string): boolean => {
+    if (errorType === 'NetworkAuthError') {
+      setHasCredentials(false);
+      if (!silent) {
+        toast.error(
+          <div className="flex flex-col gap-1">
+            <span className="font-bold">Authentication Failed</span>
+            <span className="text-sm opacity-90">Please use <code>gh auth login</code> or check your credential helper configuration.</span>
+          </div>,
+          { duration: 5000 }
+        );
+      }
+      return true;
+    }
+
     if (!errorMsg) return false;
 
     const isAuthError =
