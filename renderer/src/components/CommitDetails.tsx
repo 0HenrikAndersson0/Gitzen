@@ -1,7 +1,6 @@
 import { X, FileText, FilePlus, FileX, Copy, Check } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { parseDiff, FileChangeDiff } from '../lib/diffUtils';
 import { DiffViewer } from './DiffViewer/DiffViewer';
 
@@ -31,6 +30,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
   const [copiedHash, setCopiedHash] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('unified');
+  const [sidebarWidth, setSidebarWidth] = useState(300);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,6 +79,29 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
     setTimeout(() => setCopiedHash(false), 2000);
   };
 
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.pageX;
+    const startWidth = sidebarWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.pageX - startX;
+      // Constrain sidebar between 200px and 50% of the window width
+      const maxWidth = window.innerWidth * 0.5;
+      setSidebarWidth(Math.max(200, Math.min(startWidth + delta, maxWidth)));
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'default';
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'col-resize';
+  };
+
   const getFileIcon = (status: FileChange['status']) => {
     switch (status) {
       case 'added':
@@ -116,7 +139,7 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
       <div className="flex h-full w-full flex-col rounded-xl border border-border bg-card shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-border bg-muted/30 p-5 sm:px-6 z-10">
+        <div className="flex items-start justify-between border-b border-border bg-muted/30 p-5 sm:px-6 z-10 shrink-0">
           <div className="min-w-0 flex-1">
             <h2 className="mb-3 text-xl font-semibold text-foreground tracking-tight">
               {commit.message}
@@ -154,112 +177,114 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <PanelGroup orientation="horizontal">
-            {/* File List Sidebar */}
-            <Panel
-              defaultSize={25}
-              minSize={15}
-              maxSize={40}
-              className="flex flex-col bg-muted/10"
-            >
-              <div className="border-b border-border p-4 bg-background z-10 shadow-sm">
-                <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
-                  Changed Files
-                  <span className="bg-secondary px-2 py-0.5 rounded-full text-xs font-medium">{files.length}</span>
-                </h3>
-                <div className="mt-2 flex gap-4 text-xs font-medium">
-                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <span className="text-[10px] opacity-70">++</span>
-                    {files.reduce((sum, f) => sum + f.additions, 0)}
-                  </span>
-                  <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <span className="text-[10px] opacity-70">--</span>
-                    {files.reduce((sum, f) => sum + f.deletions, 0)}
-                  </span>
-                </div>
+          {/* File List Sidebar */}
+          <div
+            style={{ width: `${sidebarWidth}px` }}
+            className="flex flex-col bg-muted/10 shrink-0 border-r border-border"
+          >
+            <div className="border-b border-border p-4 bg-background z-10 shadow-sm shrink-0">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+                Changed Files
+                <span className="bg-secondary px-2 py-0.5 rounded-full text-xs font-medium">{files.length}</span>
+              </h3>
+              <div className="mt-2 flex gap-4 text-xs font-medium">
+                <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <span className="text-[10px] opacity-70">++</span>
+                  {files.reduce((sum, f) => sum + f.additions, 0)}
+                </span>
+                <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
+                  <span className="text-[10px] opacity-70">--</span>
+                  {files.reduce((sum, f) => sum + f.deletions, 0)}
+                </span>
               </div>
+            </div>
 
-              <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                {files.map((file, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedFile(file)}
-                    className={`flex w-full items-start gap-3 rounded-md p-3 text-left transition-all ${selectedFile?.path === file.path
+            <div className="overflow-y-auto flex-1 p-2 space-y-1">
+              {files.map((file, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedFile(file)}
+                  className={`flex w-full items-start gap-3 rounded-md p-3 text-left transition-all ${selectedFile?.path === file.path
                       ? 'bg-primary/10 border border-primary/20 shadow-sm'
                       : 'hover:bg-accent/50 border border-transparent'
-                      }`}
-                  >
-                    <div className="mt-0.5">{getFileIcon(file.status)}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className={`truncate text-sm font-medium ${getStatusColor(file.status)}`}>
-                        {file.path.split('/').pop()}
-                      </div>
-                      <div className="truncate text-[11px] text-muted-foreground/70 mt-0.5">{file.path}</div>
-                      <div className="mt-1.5 flex gap-3 text-[11px] font-mono">
-                        {file.additions > 0 && (
-                          <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>
-                        )}
-                        {file.deletions > 0 && (
-                          <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
-                        )}
-                      </div>
+                    }`}
+                >
+                  <div className="mt-0.5">{getFileIcon(file.status)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className={`truncate text-sm font-medium ${getStatusColor(file.status)}`}>
+                      {file.path.split('/').pop()}
                     </div>
-                  </button>
-                ))}
-              </div>
-            </Panel>
-
-            <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/50 transition-colors mx-0 cursor-col-resize active:bg-primary" />
-
-            {/* Diff Viewer Main Area */}
-            <Panel className="flex flex-col bg-background min-w-0">
-              {selectedFile ? (
-                <>
-                  <div className="flex items-center justify-between border-b border-border bg-card/50 px-5 py-3 shadow-sm z-10">
-                    <div className="flex items-center gap-2.5">
-                      {getFileIcon(selectedFile.status)}
-                      <span className="font-mono text-sm font-medium text-foreground">{selectedFile.path}</span>
+                    <div className="truncate text-[11px] text-muted-foreground/70 mt-0.5">{file.path}</div>
+                    <div className="mt-1.5 flex gap-3 text-[11px] font-mono">
+                      {file.additions > 0 && (
+                        <span className="text-emerald-600 dark:text-emerald-400">+{file.additions}</span>
+                      )}
+                      {file.deletions > 0 && (
+                        <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+                      )}
                     </div>
-                    <div className="flex rounded-md border border-border bg-secondary p-0.5 shadow-sm">
-                      <button
-                        onClick={() => setViewMode('split')}
-                        className={`rounded px-3 py-1 text-xs font-medium transition-all ${viewMode === 'split'
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            className="w-1.5 shrink-0 bg-transparent hover:bg-primary/50 transition-colors mx-0 cursor-col-resize active:bg-primary flex items-center justify-center -ml-[3px] z-20 group relative"
+            onMouseDown={startResizing}
+          >
+            <div className="absolute inset-y-0 -left-2 -right-2 bg-transparent" />
+            <div className="h-8 w-1 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
+          </div>
+
+          {/* Diff Viewer Main Area */}
+          <div className="flex flex-col bg-background min-w-0 flex-1">
+            {selectedFile ? (
+              <>
+                <div className="flex items-center justify-between border-b border-border bg-card/50 px-5 py-3 shadow-sm z-10 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    {getFileIcon(selectedFile.status)}
+                    <span className="font-mono text-sm font-medium text-foreground">{selectedFile.path}</span>
+                  </div>
+                  <div className="flex rounded-md border border-border bg-secondary p-0.5 shadow-sm">
+                    <button
+                      onClick={() => setViewMode('split')}
+                      className={`rounded px-3 py-1 text-xs font-medium transition-all ${viewMode === 'split'
                           ? 'bg-background shadow-sm text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                      >
-                        Side-by-Side
-                      </button>
-                      <button
-                        onClick={() => setViewMode('unified')}
-                        className={`rounded px-3 py-1 text-xs font-medium transition-all ${viewMode === 'unified'
+                        }`}
+                    >
+                      Side-by-Side
+                    </button>
+                    <button
+                      onClick={() => setViewMode('unified')}
+                      className={`rounded px-3 py-1 text-xs font-medium transition-all ${viewMode === 'unified'
                           ? 'bg-background shadow-sm text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                      >
-                        Unified
-                      </button>
-                    </div>
+                        }`}
+                    >
+                      Unified
+                    </button>
                   </div>
-
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-                    <DiffViewer
-                      hunks={selectedFile.diff?.hunks || []}
-                      viewMode={viewMode}
-                      readOnly={true}
-                    />
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground gap-4">
-                  <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
-                    <FileText className="h-8 w-8 opacity-50" />
-                  </div>
-                  <p>Select a file to view its changes</p>
                 </div>
-              )}
-            </Panel>
-          </PanelGroup>
+
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+                  <DiffViewer
+                    hunks={selectedFile.diff?.hunks || []}
+                    viewMode={viewMode}
+                    readOnly={true}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground gap-4">
+                <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+                  <FileText className="h-8 w-8 opacity-50" />
+                </div>
+                <p>Select a file to view its changes</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
