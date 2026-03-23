@@ -39,8 +39,7 @@ declare global {
       gitUnstage: (files: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitStageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitUnstageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
-      gitCommit: (message: string, amend?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
-      gitUndoLastCommit: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitCommit: (message: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPush: (remote?: string, branch?: string, force?: boolean, overwrite?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPull: (remote?: string, branch?: string, targetBranch?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitAddRemote: (name: string, url: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -92,6 +91,7 @@ declare global {
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string; errorType?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string; errorType?: string }>;
       getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string; errorType?: string }>;
+      getFileBlame: (filePath: string) => Promise<{ success: boolean; blame?: Array<{ commitHash: string; author: string; date: string; lineNumber: number; content: string }>; error?: string; errorType?: string }>;
       applyPatch: (patch: string, options?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       revertFileChanges: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

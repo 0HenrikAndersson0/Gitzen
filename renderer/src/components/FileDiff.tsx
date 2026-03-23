@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { parseDiff, generatePatch, FileChangeDiff } from '../lib/diffUtils';
 import { DiffViewer } from './DiffViewer/DiffViewer';
+import { FileBlame } from './FileBlame';
 
 export interface FileChange {
   path: string;
@@ -24,7 +25,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
   const [loading, setLoading] = useState(true);
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
-  const [viewMode, setViewMode] = useState<'split' | 'unified'>('unified');
+  const [viewMode, setViewMode] = useState<'split' | 'unified' | 'blame'>('unified');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -329,19 +330,32 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
             >
               Unified
             </button>
+            <button
+              onClick={() => setViewMode('blame')}
+              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${viewMode === 'blame'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
+            >
+              Blame
+            </button>
           </div>
         </div>
 
         {/* Diff Viewer */}
         <div className="flex min-h-0 flex-1 flex-col bg-background">
-          <DiffViewer
-            hunks={diff?.hunks || []}
-            viewMode={viewMode}
-            readOnly={false}
-            selectedLines={selectedLines}
-            onToggleLine={toggleLine}
-            onToggleHunk={toggleHunk}
-          />
+          {viewMode === 'blame' ? (
+            <FileBlame filePath={file.path} />
+          ) : (
+            <DiffViewer
+              hunks={diff?.hunks || []}
+              viewMode={viewMode as 'split' | 'unified'}
+              readOnly={false}
+              selectedLines={selectedLines}
+              onToggleLine={toggleLine}
+              onToggleHunk={toggleHunk}
+            />
+          )}
         </div>
       </div>
     </div>

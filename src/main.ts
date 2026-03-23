@@ -193,12 +193,8 @@ ipcMain.handle('git:unstageAll', async () => {
   return await gitService.unstageAll();
 });
 
-ipcMain.handle('git:commit', async (_, message, amend) => {
-  return await gitService.commit(message, amend);
-});
-
-ipcMain.handle('git:undoLastCommit', async () => {
-  return await gitService.undoLastCommit();
+ipcMain.handle('git:commit', async (_, message) => {
+  return await gitService.commit(message);
 });
 
 ipcMain.handle('git:push', async (_, remote, branch, force, overwrite) => {
@@ -323,6 +319,10 @@ ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
 
 ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
   return await gitService.getFileDiff(filePath, staged);
+});
+
+ipcMain.handle('git:getFileBlame', async (_, filePath) => {
+  return await gitService.getFileBlame(filePath);
 });
 
 ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {

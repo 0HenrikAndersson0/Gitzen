@@ -168,7 +168,6 @@ export default function App() {
 
   const {
     handleCommit,
-    handleUndoLastCommit,
     handleClone,
     handleStageAll,
     handleUnstageAll,
@@ -533,7 +532,6 @@ export default function App() {
                       onStageAll={handleStageAll}
                       onUnstageAll={handleUnstageAll}
                       onCommit={handleCommit}
-                      onUndoLastCommit={handleUndoLastCommit}
                       onRevertFile={handleRevertFile}
                       onDeleteFile={handleDeleteFile}
                       onRefresh={() => refreshStatus()}

@@ -491,35 +491,14 @@ export async function unstageFiles(filePaths: string[]): Promise<{ success: bool
   }
 }
 
-export async function commit(message: string, amend: boolean = false): Promise<{ success: boolean; error?: string; errorType?: string }> {
+export async function commit(message: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
     const escapedMessage = message.replace(/"/g, '\\"');
-    const amendFlag = amend ? '--amend ' : '';
-    await runGitCommand(`commit ${amendFlag}-m "${escapedMessage}"`);
-    return { success: true };
-  } catch (error: any) {
-    const parsed = parseGitError(error);
-    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
-  }
-}
-
-export async function undoLastCommit(): Promise<{ success: boolean; error?: string; errorType?: string }> {
-  try {
-    if (!currentRepoPath) {
-      return { success: false, error: 'No repository open' };
-    }
-
-    // Check if there are any commits
-    const logResult = await runGitCommand('log -1 --oneline').catch(() => null);
-    if (!logResult || !logResult.stdout.trim()) {
-      return { success: false, error: 'No commits to undo' };
-    }
-
-    await runGitCommand('reset --soft HEAD~1');
+    await runGitCommand(`commit -m "${escapedMessage}"`);
     return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);
@@ -1426,6 +1405,65 @@ export async function getCommitDiff(commitHash: string): Promise<{ success: bool
     }
 
     return { success: true, files };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export interface BlameLine {
+  commitHash: string;
+  author: string;
+  date: string;
+  lineNumber: number;
+  content: string;
+}
+
+export async function getFileBlame(filePath: string): Promise<{ success: boolean; blame?: BlameLine[]; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const result = await runGitCommand(`blame --line-porcelain "${filePath}"`);
+    const lines = result.stdout.split('\n');
+    const blameData: BlameLine[] = [];
+
+    let currentCommit = '';
+    let currentAuthor = '';
+    let currentDate = '';
+    let currentLineNumber = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+
+      // New blame entry starts with commit hash and line numbers
+      if (/^[0-9a-f]{40} \d+ \d+/.test(line)) {
+        const parts = line.split(' ');
+        currentCommit = parts[0].substring(0, 8); // Short hash
+        currentLineNumber = parseInt(parts[2], 10);
+        continue;
+      }
+
+      if (line.startsWith('author ')) {
+        currentAuthor = line.substring(7);
+      } else if (line.startsWith('author-time ')) {
+        const timestamp = parseInt(line.substring(12), 10);
+        currentDate = new Date(timestamp * 1000).toLocaleDateString();
+      } else if (line.startsWith('\t')) {
+        // The actual line content starts with a tab character
+        blameData.push({
+          commitHash: currentCommit,
+          author: currentAuthor,
+          date: currentDate,
+          lineNumber: currentLineNumber,
+          content: line.substring(1) // Remove the leading tab
+        });
+      }
+    }
+
+    return { success: true, blame: blameData };
   } catch (error: any) {
     const parsed = parseGitError(error);
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };

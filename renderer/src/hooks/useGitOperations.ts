@@ -48,25 +48,25 @@ export function useGitOperations({
 
   const { filesRef, setCommitMessage } = refs;
 
-  const handleCommit = useCallback(async (message: string, amend: boolean = false) => {
+  const handleCommit = useCallback(async (message: string) => {
     const currentFiles = filesRef.current;
     const stagedFiles = currentFiles.filter((f: any) => f.staged);
-    addLog('info', `${amend ? 'Amending' : 'Committing'} ${stagedFiles.length} file(s)...`);
+    addLog('info', `Committing ${stagedFiles.length} file(s)...`);
 
-    await withLoading(`${amend ? 'Amending' : 'Committing'} changes...`, async () => {
+    await withLoading('Committing changes...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitCommit(message, amend);
+        const result = await (window as any).electronAPI.gitCommit(message);
         if (result.success) {
-          addLog('success', `${amend ? 'Amended' : 'Committed'}: "${message}"`);
-          toast.success(amend ? 'Commit amended successfully!' : 'Changes committed successfully!');
+          addLog('success', `Committed: "${message}"`);
+          toast.success('Changes committed successfully!');
           setCommitMessage('');
           await refreshStatusInternal();
           await refreshHistoryInternal();
           await refreshBranchStatusInternal();
           await refreshBranchesInternal();
         } else {
-          addLog('error', result.error || `Failed to ${amend ? 'amend' : 'commit'}`);
-          toast.error(result.error || `Failed to ${amend ? 'amend' : 'commit'}`);
+          addLog('error', result.error || 'Failed to commit');
+          toast.error(result.error || 'Failed to commit');
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -75,30 +75,6 @@ export function useGitOperations({
       }
     });
   }, [withLoading, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal, addLog, filesRef, setCommitMessage, toast]);
-
-  const handleUndoLastCommit = useCallback(async () => {
-    addLog('info', `Undoing last commit...`);
-    await withLoading('Undoing last commit...', async () => {
-      try {
-        const result = await (window as any).electronAPI.gitUndoLastCommit();
-        if (result.success) {
-          addLog('success', `Undid last commit`);
-          toast.success('Undid last commit successfully!');
-          await refreshStatusInternal();
-          await refreshHistoryInternal();
-          await refreshBranchStatusInternal();
-          await refreshBranchesInternal();
-        } else {
-          addLog('error', result.error || 'Failed to undo last commit');
-          toast.error(result.error || 'Failed to undo last commit');
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        addLog('error', `Undo commit failed: ${errorMsg}`);
-        toast.error(`Undo commit failed: ${errorMsg}`);
-      }
-    });
-  }, [addLog, withLoading, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal, toast]);
 
   const handleClone = async (url: string, path: string) => {
     addLog('info', `Cloning repository from ${url}...`);
@@ -963,7 +939,6 @@ export function useGitOperations({
 
   return {
     handleCommit,
-    handleUndoLastCommit,
     handleClone,
     handleStageAll,
     handleUnstageAll,
