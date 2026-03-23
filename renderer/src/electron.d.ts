@@ -47,6 +47,9 @@ declare global {
       gitGetBranchStatus: () => Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string; errorType?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string; errorType?: string }>;
       gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string; errorType?: string }>;
+      getSubmodules: () => Promise<{ success: boolean; submodules?: Array<{ path: string; url: string; status: 'initialized' | 'uninitialized' | 'modified' | 'unknown' }>; error?: string; errorType?: string }>;
+      updateSubmodules: (init?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      syncSubmodules: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string; errorType?: string }>;
       createStash: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       applyStash: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -91,7 +94,6 @@ declare global {
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string; errorType?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string; errorType?: string }>;
       getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string; errorType?: string }>;
-      getFileBlame: (filePath: string) => Promise<{ success: boolean; blame?: Array<{ commitHash: string; author: string; date: string; lineNumber: number; content: string }>; error?: string; errorType?: string }>;
       applyPatch: (patch: string, options?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       revertFileChanges: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

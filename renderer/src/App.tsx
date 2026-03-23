@@ -67,6 +67,8 @@ export default function App() {
     files,
     commits,
     hasMoreCommits,
+    submodules,
+    refreshSubmodules,
     stashes,
     localBranches,
     remoteBranches,
@@ -165,6 +167,31 @@ export default function App() {
     uiState: uiStateWithQueuedLoading,
     refs: { filesRef, setCommitMessage }
   });
+
+  const handleUpdateSubmodules = async (init: boolean) => {
+    await uiStateWithQueuedLoading.withLoading('Updating submodules...', async () => {
+      const result = await window.electronAPI.updateSubmodules(init);
+      if (result.success) {
+        toast.success('Submodules updated successfully');
+        refreshSubmodules();
+        refreshStatus();
+      } else {
+        toast.error(`Failed to update submodules: ${result.error}`);
+      }
+    });
+  };
+
+  const handleSyncSubmodules = async () => {
+    await uiStateWithQueuedLoading.withLoading('Syncing submodules...', async () => {
+      const result = await window.electronAPI.syncSubmodules();
+      if (result.success) {
+        toast.success('Submodules synced successfully');
+        refreshSubmodules();
+      } else {
+        toast.error(`Failed to sync submodules: ${result.error}`);
+      }
+    });
+  };
 
   const {
     handleCommit,
@@ -431,6 +458,9 @@ export default function App() {
                     localBranches={localBranches}
                     remoteBranches={remoteBranches}
                     stashes={stashes}
+                    submodules={submodules}
+                    onUpdateSubmodules={handleUpdateSubmodules}
+                    onSyncSubmodules={handleSyncSubmodules}
                     loading={isRefreshingBranches}
                     onCheckout={handleCheckout}
                     onCreateBranch={handleCreateBranch}

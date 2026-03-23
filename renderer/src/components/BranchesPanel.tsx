@@ -3,6 +3,7 @@ import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, Ch
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
+import { SubmodulesList, Submodule } from './SubmodulesList';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { RebaseModal } from './RebaseModal';
@@ -29,6 +30,8 @@ interface BranchesPanelProps {
   onSetLoading?: (loading: boolean, message?: string) => void;
   onApplyStash: (name: string) => void;
   onDeleteStash: (name: string) => void;
+  onUpdateSubmodules?: (init: boolean) => void;
+  onSyncSubmodules?: () => void;
   onRefresh?: () => void;
   isCreateDialogOpen?: boolean;
   onCloseCreateDialog?: () => void;
@@ -40,6 +43,7 @@ export const BranchesPanel = memo(function BranchesPanel({
   localBranches,
   remoteBranches,
   stashes,
+  submodules = [],
   loading,
   onCheckout,
   onCreateBranch,
@@ -48,6 +52,8 @@ export const BranchesPanel = memo(function BranchesPanel({
   onSetLoading,
   onApplyStash,
   onDeleteStash,
+  onUpdateSubmodules,
+  onSyncSubmodules,
   onRefresh,
   isCreateDialogOpen,
   onCloseCreateDialog,
@@ -386,6 +392,15 @@ export const BranchesPanel = memo(function BranchesPanel({
               </div>
             )}
           </div>
+        )}
+
+        {/* Submodules Section */}
+        {submodules && submodules.length > 0 && onUpdateSubmodules && onSyncSubmodules && (
+          <SubmodulesList
+            submodules={submodules}
+            onUpdate={onUpdateSubmodules}
+            onSync={onSyncSubmodules}
+          />
         )}
       </div>
 
