@@ -491,14 +491,35 @@ export async function unstageFiles(filePaths: string[]): Promise<{ success: bool
   }
 }
 
-export async function commit(message: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+export async function commit(message: string, amend: boolean = false): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
     const escapedMessage = message.replace(/"/g, '\\"');
-    await runGitCommand(`commit -m "${escapedMessage}"`);
+    const amendFlag = amend ? '--amend ' : '';
+    await runGitCommand(`commit ${amendFlag}-m "${escapedMessage}"`);
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function undoLastCommit(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // Check if there are any commits
+    const logResult = await runGitCommand('log -1 --oneline').catch(() => null);
+    if (!logResult || !logResult.stdout.trim()) {
+      return { success: false, error: 'No commits to undo' };
+    }
+
+    await runGitCommand('reset --soft HEAD~1');
     return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);
