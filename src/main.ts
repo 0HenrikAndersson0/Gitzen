@@ -221,20 +221,8 @@ ipcMain.handle('git:getCurrentBranch', async () => {
   return await gitService.getCurrentBranch();
 });
 
-ipcMain.handle('git:getHistory', async (_, maxCount) => {
-  return await gitService.getHistory(maxCount);
-});
-
-ipcMain.handle('git:getSubmodules', async () => {
-  return await gitService.getSubmodules();
-});
-
-ipcMain.handle('git:updateSubmodules', async (_, init) => {
-  return await gitService.updateSubmodules(init);
-});
-
-ipcMain.handle('git:syncSubmodules', async () => {
-  return await gitService.syncSubmodules();
+ipcMain.handle('git:getHistory', async (_, maxCount, filter) => {
+  return await gitService.getHistory(maxCount, filter);
 });
 
 ipcMain.handle('git:getStashes', async () => {

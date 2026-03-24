@@ -1,9 +1,10 @@
-import { GitBranch, Tag, ArrowRight } from 'lucide-react';
+import { GitBranch, Tag, ArrowRight, Filter, X } from 'lucide-react';
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, memo, useCallback, forwardRef } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { FixedSizeList as List } from 'react-window';
 
 interface Commit {
@@ -28,6 +29,8 @@ interface CommitGraphProps {
   onCherryPick?: (commitHash: string) => void;
   onRevertCommit?: (commitHash: string) => void;
   onResetCommits?: (commitHash: string) => void;
+  historyFilter?: { author?: string; file?: string; since?: string; until?: string; branch?: string };
+  onFilterChange?: (filter: { author?: string; file?: string; since?: string; until?: string; branch?: string }) => void;
 }
 
 // Layout Engine
@@ -154,8 +157,12 @@ export const CommitGraph = memo(function CommitGraph({
   onRevertCommit,
   onResetCommits,
   currentBranch,
+  historyFilter = {},
+  onFilterChange,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [localFilter, setLocalFilter] = useState(historyFilter);
   const [commitsWithTags, setCommitsWithTags] = useState<Commit[]>(commits);
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
   const [loadAmount, setLoadAmount] = useState('50');
@@ -294,24 +301,103 @@ export const CommitGraph = memo(function CommitGraph({
     );
   }, [nodes, commitsWithTags, currentBranchHeadId, hoveredCommitId, width, formatTime]);
 
-  if (commits.length === 0) {
-    return (
-      <div className="rounded-lg border border-border bg-card/50 p-6 h-full">
-        <div className="flex items-center gap-2 mb-4"><GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /><h2 className="font-semibold text-foreground">Commit History</h2></div>
-        <div className="text-center text-muted-foreground py-8">No commits to display</div>
-      </div>
-    );
-  }
+  const handleApplyFilter = () => {
+    if (onFilterChange) {
+      onFilterChange(localFilter);
+    }
+  };
+
+  const handleClearFilter = () => {
+    setLocalFilter({});
+    if (onFilterChange) {
+      onFilterChange({});
+    }
+  };
+
+  const hasActiveFilters = Object.values(historyFilter || {}).some(val => !!val);
 
   return (
     <div className="rounded-lg border border-border bg-card/50 overflow-hidden flex flex-col h-full">
-      <div className="p-6 pb-4 flex items-center gap-2 border-b border-border flex-none">
-        <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /><h2 className="font-semibold text-foreground">Commit History</h2>
-        <span className="ml-auto text-sm text-muted-foreground">{commits.length} commit{commits.length !== 1 ? 's' : ''}</span>
+      <div className="px-6 py-4 flex flex-col gap-3 border-b border-border flex-none">
+        <div className="flex items-center gap-2">
+          <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="font-semibold text-foreground">Commit History</h2>
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm text-muted-foreground mr-2">{commits.length} commit{commits.length !== 1 ? 's' : ''}</span>
+            <Button
+              variant={hasActiveFilters ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className={`h-8 ${hasActiveFilters ? 'text-primary' : 'text-muted-foreground'} hover:text-foreground`}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
+              {hasActiveFilters && (
+                <span className="ml-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold">
+                  !
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {showFilters && (
+          <div className="flex flex-wrap items-end gap-3 p-3 bg-secondary/30 rounded-md border border-border/50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Author</label>
+              <Input
+                value={localFilter.author || ''}
+                onChange={e => setLocalFilter({...localFilter, author: e.target.value})}
+                placeholder="e.g. John Doe"
+                className="h-8 w-[150px] text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">File Path</label>
+              <Input
+                value={localFilter.file || ''}
+                onChange={e => setLocalFilter({...localFilter, file: e.target.value})}
+                placeholder="e.g. src/main.ts"
+                className="h-8 w-[180px] text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Since</label>
+              <Input
+                type="date"
+                value={localFilter.since || ''}
+                onChange={e => setLocalFilter({...localFilter, since: e.target.value})}
+                className="h-8 w-[140px] text-sm text-muted-foreground"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Until</label>
+              <Input
+                type="date"
+                value={localFilter.until || ''}
+                onChange={e => setLocalFilter({...localFilter, until: e.target.value})}
+                className="h-8 w-[140px] text-sm text-muted-foreground"
+              />
+            </div>
+            <div className="flex gap-2 ml-auto">
+              <Button variant="ghost" size="sm" onClick={handleClearFilter} className="h-8 text-xs text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5 mr-1" /> Clear
+              </Button>
+              <Button size="sm" onClick={handleApplyFilter} className="h-8 text-xs">
+                Apply Filters
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 bg-background relative" ref={measureRef}>
-        {dimensions.height > 0 && (
+        {commits.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            {hasActiveFilters ? 'No commits match the selected filters.' : 'No commits to display.'}
+          </div>
+        ) : dimensions.height > 0 && (
           <GraphContext.Provider value={{ width, height, edges, nodes, currentBranchHeadId }}>
             <List
               ref={listRef}

@@ -279,76 +279,6 @@ export async function createStash(): Promise<{ success: boolean; error?: string;
   }
 }
 
-export interface Submodule {
-  path: string;
-  url: string;
-  status: 'initialized' | 'uninitialized' | 'modified' | 'unknown';
-}
-
-export async function getSubmodules(): Promise<{ success: boolean; submodules?: Submodule[]; error?: string; errorType?: string }> {
-  try {
-    if (!currentRepoPath) {
-      return { success: false, error: 'No repository open' };
-    }
-
-    const result = await runGitCommand('submodule status');
-    if (!result.stdout.trim()) {
-      return { success: true, submodules: [] };
-    }
-
-    const lines = result.stdout.trim().split('\n');
-    const submodules: Submodule[] = lines.map(line => {
-      // line looks like:
-      //  hash path (describe) OR
-      // -hash path OR
-      // +hash path (describe)
-      const isUninitialized = line.startsWith('-');
-      const isModified = line.startsWith('+');
-      const parts = line.substring(1).trim().split(' ');
-
-      return {
-        path: parts[1],
-        url: '', // We don't get the url from 'submodule status', would need 'config'
-        status: isUninitialized ? 'uninitialized' : (isModified ? 'modified' : 'initialized')
-      };
-    });
-
-    return { success: true, submodules };
-  } catch (error: any) {
-    const parsed = parseGitError(error);
-    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
-  }
-}
-
-export async function updateSubmodules(init: boolean = true): Promise<{ success: boolean; error?: string; errorType?: string }> {
-  try {
-    if (!currentRepoPath) {
-      return { success: false, error: 'No repository open' };
-    }
-
-    const initFlag = init ? '--init ' : '';
-    await runGitCommand(`submodule update ${initFlag}--recursive`);
-    return { success: true };
-  } catch (error: any) {
-    const parsed = parseGitError(error);
-    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
-  }
-}
-
-export async function syncSubmodules(): Promise<{ success: boolean; error?: string; errorType?: string }> {
-  try {
-    if (!currentRepoPath) {
-      return { success: false, error: 'No repository open' };
-    }
-
-    await runGitCommand('submodule sync --recursive');
-    return { success: true };
-  } catch (error: any) {
-    const parsed = parseGitError(error);
-    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
-  }
-}
-
 export async function getStashes(): Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
@@ -828,7 +758,15 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
   }
 }
 
-export async function getHistory(maxCount: number = 50): Promise<{
+export interface HistoryFilter {
+  author?: string;
+  file?: string;
+  since?: string;
+  until?: string;
+  branch?: string;
+}
+
+export async function getHistory(maxCount: number = 50, filter?: HistoryFilter): Promise<{
   success: boolean;
   commits?: Array<{
     id: string;
@@ -858,7 +796,28 @@ export async function getHistory(maxCount: number = 50): Promise<{
     // Use -z to separate commits with NUL byte to handle multi-line messages safely
     // Use %B for full body
     const delimiter = '|||';
-    const { stdout } = await runGitCommand(`log -n ${fetchCount} --all --date-order --pretty=format:"%H${delimiter}%B${delimiter}%an${delimiter}%ad${delimiter}%D${delimiter}%P" --date=iso -z`);
+
+    const args = ['log', `-n ${fetchCount}`, '--date-order', `--pretty=format:%H${delimiter}%B${delimiter}%an${delimiter}%ad${delimiter}%D${delimiter}%P`, '--date=iso', '-z'];
+
+    if (filter) {
+      if (filter.author) args.push(`--author=${filter.author}`);
+      if (filter.since) args.push(`--since=${filter.since}`);
+      if (filter.until) args.push(`--until=${filter.until}`);
+      if (filter.branch) {
+        args.push(filter.branch);
+      } else {
+        args.push('--all');
+      }
+    } else {
+      args.push('--all');
+    }
+
+    if (filter?.file) {
+      args.push('--');
+      args.push(filter.file);
+    }
+
+    const { stdout } = await runGitSpawn(args, { cwd: currentRepoPath });
 
     // Split by NUL byte (the last entry might be empty if ends with NUL)
     const rawLines = stdout.split('\0').filter(line => line.trim());

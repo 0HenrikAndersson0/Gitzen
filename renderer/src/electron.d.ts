@@ -46,10 +46,7 @@ declare global {
       gitCreateGitHubRepo: (token: string, name: string, isPrivate: boolean, description?: string) => Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string; errorType?: string }>;
       gitGetBranchStatus: () => Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string; errorType?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string; errorType?: string }>;
-      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string; errorType?: string }>;
-      getSubmodules: () => Promise<{ success: boolean; submodules?: Array<{ path: string; url: string; status: 'initialized' | 'uninitialized' | 'modified' | 'unknown' }>; error?: string; errorType?: string }>;
-      updateSubmodules: (init?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
-      syncSubmodules: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGetHistory: (maxCount?: number, filter?: { author?: string; file?: string; since?: string; until?: string; branch?: string }) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string; errorType?: string }>;
       getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string; errorType?: string }>;
       createStash: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       applyStash: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

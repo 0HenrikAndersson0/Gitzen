@@ -54,7 +54,7 @@ export function useGitState({
   const [files, setFiles] = useState<FileChange[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [hasMoreCommits, setHasMoreCommits] = useState(false);
-  const [submodules, setSubmodules] = useState<any[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<{ author?: string; file?: string; since?: string; until?: string; branch?: string }>({});
   const [stashes, setStashes] = useState<{ name: string; message: string }[]>([]);
   const [localBranches, setLocalBranches] = useState<Branch[]>([]);
   const [remoteBranches, setRemoteBranches] = useState<Branch[]>([]);
@@ -235,7 +235,7 @@ export function useGitState({
     const targetPath = pathOverride || repoPath;
     if (!targetPath) return;
     try {
-      const result = await window.electronAPI.gitGetHistory(historyLimit);
+      const result = await window.electronAPI.gitGetHistory(historyLimit, historyFilter);
       if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.commits) {
@@ -251,38 +251,11 @@ export function useGitState({
     } catch (error) {
       console.error('Failed to refresh history:', error);
     }
-  }, [repoPath, historyLimit]);
+  }, [repoPath, historyLimit, historyFilter]);
 
   const refreshHistory = useCallback((pathOverride?: string) => {
     return runQueued(() => refreshHistoryInternal(pathOverride));
   }, [refreshHistoryInternal, runQueued]);
-
-  const refreshSubmodulesInternal = useCallback(async (pathOverride?: string) => {
-    const targetPath = pathOverride || repoPath;
-    if (!targetPath) return;
-    try {
-      const result = await (window.electronAPI as any).getSubmodules();
-      if (!pathOverride && targetPath !== repoPathRef.current) return;
-      if (result.success) {
-        if (result.submodules) {
-          setSubmodules(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(result.submodules)) {
-              return result.submodules!;
-            }
-            return prev;
-          });
-        }
-      } else {
-        console.error('Failed to refresh submodules:', result.error);
-      }
-    } catch (error) {
-      console.error('Failed to refresh submodules:', error);
-    }
-  }, [repoPath]);
-
-  const refreshSubmodules = useCallback((pathOverride?: string) => {
-    return runQueued(() => refreshSubmodulesInternal(pathOverride));
-  }, [refreshSubmodulesInternal, runQueued]);
 
   const refreshStashesInternal = useCallback(async (pathOverride?: string) => {
     const targetPath = pathOverride || repoPath;
@@ -375,7 +348,7 @@ export function useGitState({
     if (repoPath) {
       refreshHistory();
     }
-  }, [historyLimit, refreshHistory, repoPath]);
+  }, [historyLimit, refreshHistory, repoPath, historyFilter]);
 
   useEffect(() => {
     if (!repoPath) return;
@@ -385,7 +358,6 @@ export function useGitState({
       refreshBranch();
       refreshBranchesSilent();
       refreshHistory();
-      refreshSubmodules();
       refreshStashes();
       refreshRebaseStatus();
       refreshBranchStatus();
@@ -403,7 +375,6 @@ export function useGitState({
     refreshBranch,
     refreshBranchesSilent,
     refreshHistory,
-    refreshSubmodules,
     refreshStashes,
     refreshRebaseStatus,
     refreshBranchStatus,
@@ -433,7 +404,6 @@ export function useGitState({
       refreshBranchInternal(path),
       refreshBranchesInternal(path),
       refreshHistoryInternal(path),
-      refreshSubmodulesInternal(path),
       refreshStashesInternal(path),
       refreshBranchStatusInternal(path),
       refreshRebaseStatusInternal(path)
@@ -443,7 +413,6 @@ export function useGitState({
     refreshBranchInternal,
     refreshBranchesInternal,
     refreshHistoryInternal,
-    refreshSubmodulesInternal,
     refreshStashesInternal,
     refreshBranchStatusInternal,
     refreshRebaseStatusInternal
@@ -457,7 +426,7 @@ export function useGitState({
     files, setFiles,
     commits, setCommits,
     hasMoreCommits, setHasMoreCommits,
-    submodules, setSubmodules,
+    historyFilter, setHistoryFilter,
     stashes, setStashes,
     localBranches, setLocalBranches,
     remoteBranches, setRemoteBranches,
@@ -481,8 +450,6 @@ export function useGitState({
     performFetch,
     refreshHistoryInternal,
     refreshHistory,
-    refreshSubmodulesInternal,
-    refreshSubmodules,
     refreshStashesInternal,
     refreshStashes,
     refreshRebaseStatusInternal,
