@@ -11,9 +11,10 @@ export interface BlameLine {
 
 interface BlameViewerProps {
   filePath: string;
+  commitHash?: string;
 }
 
-export function BlameViewer({ filePath }: BlameViewerProps) {
+export function BlameViewer({ filePath, commitHash }: BlameViewerProps) {
   const [loading, setLoading] = useState(true);
   const [lines, setLines] = useState<BlameLine[]>([]);
 
@@ -21,7 +22,7 @@ export function BlameViewer({ filePath }: BlameViewerProps) {
     const fetchBlame = async () => {
       setLoading(true);
       try {
-        const result = await (window as any).electronAPI.getFileBlame(filePath);
+        const result = await (window as any).electronAPI.getFileBlame(filePath, commitHash);
         if (result.success && result.blame) {
           setLines(result.blame);
         } else {
@@ -34,7 +35,7 @@ export function BlameViewer({ filePath }: BlameViewerProps) {
       }
     };
     fetchBlame();
-  }, [filePath]);
+  }, [filePath, commitHash]);
 
   if (loading) {
     return (

@@ -1,8 +1,9 @@
-import { X, FileText, FilePlus, FileX, Copy, Check } from 'lucide-react';
+import { X, FileText, FilePlus, FileX, Copy, Check, History } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { parseDiff, FileChangeDiff } from '../lib/diffUtils';
 import { DiffViewer } from './DiffViewer/DiffViewer';
+import { BlameViewer } from './BlameViewer';
 
 interface FileChange {
   path: string;
@@ -31,6 +32,12 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('unified');
   const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [showBlame, setShowBlame] = useState(false);
+
+  // Reset blame view when switching files
+  useEffect(() => {
+    setShowBlame(false);
+  }, [selectedFile]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -248,8 +255,8 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                   </div>
                   <div className="flex rounded-md border border-border bg-secondary p-0.5 shadow-sm">
                     <button
-                      onClick={() => setViewMode('split')}
-                      className={`rounded px-3 py-1 text-xs font-medium transition-all ${viewMode === 'split'
+                      onClick={() => { setViewMode('split'); setShowBlame(false); }}
+                      className={`rounded px-3 py-1 text-xs font-medium transition-all ${!showBlame && viewMode === 'split'
                           ? 'bg-background shadow-sm text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
                         }`}
@@ -257,23 +264,37 @@ export function CommitDetails({ commit, onClose }: CommitDetailsProps) {
                       Side-by-Side
                     </button>
                     <button
-                      onClick={() => setViewMode('unified')}
-                      className={`rounded px-3 py-1 text-xs font-medium transition-all ${viewMode === 'unified'
+                      onClick={() => { setViewMode('unified'); setShowBlame(false); }}
+                      className={`rounded px-3 py-1 text-xs font-medium transition-all ${!showBlame && viewMode === 'unified'
                           ? 'bg-background shadow-sm text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
                         }`}
                     >
                       Unified
                     </button>
+                    <button
+                      onClick={() => setShowBlame(true)}
+                      className={`flex items-center gap-1 rounded px-3 py-1 text-xs font-medium transition-all ${showBlame
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                      <History className="h-3 w-3" />
+                      Blame
+                    </button>
                   </div>
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-                  <DiffViewer
-                    hunks={selectedFile.diff?.hunks || []}
-                    viewMode={viewMode}
-                    readOnly={true}
-                  />
+                  {showBlame ? (
+                    <BlameViewer filePath={selectedFile.path} commitHash={commit.hash} />
+                  ) : (
+                    <DiffViewer
+                      hunks={selectedFile.diff?.hunks || []}
+                      viewMode={viewMode}
+                      readOnly={true}
+                    />
+                  )}
                 </div>
               </>
             ) : (
