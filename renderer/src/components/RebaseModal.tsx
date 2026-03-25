@@ -84,22 +84,34 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
     // Construct todo lines
     const todoLines: string[] = [];
 
-    for (const c of commits) {
-      if (c.action === 'reword') {
-        // Use pick + exec for reword to avoid interactive editor
-        // We use single quotes for the message to avoid shell expansion (e.g. $VAR)
-        // and escape any existing single quotes by closing the quote, adding an escaped quote, and reopening
-        const escapedMessage = c.message.replace(/'/g, "'\\''");
-        todoLines.push(`pick ${c.hash} ${c.message}`); // The message here doesn't matter for pick
-        todoLines.push(`exec git commit --amend -m '${escapedMessage}'`);
-      } else if (c.action === 'squash') {
-        // For squash, we use fixup to silently merge the code, then explicitly rewrite the combined commit message
-        // to whatever the user typed in the input field, avoiding Git's messy default concatenated squash messages.
-        const escapedMessage = c.message.replace(/'/g, "'\\''");
-        todoLines.push(`fixup ${c.hash} ${c.message}`);
-        todoLines.push(`exec git commit --amend -m '${escapedMessage}'`);
+    let i = 0;
+    while (i < commits.length) {
+      const baseCommit = commits[i];
+      let amendMessage = baseCommit.action === 'reword' ? baseCommit.message : null;
+
+      // Always pick the base commit first (even if action is 'reword')
+      if (baseCommit.action === 'reword') {
+        todoLines.push(`pick ${baseCommit.hash} ${baseCommit.message}`);
+      } else if (baseCommit.action === 'squash' || baseCommit.action === 'fixup') {
+        // Technically index 0 can't be squash/fixup, but handle it gracefully
+        todoLines.push(`fixup ${baseCommit.hash} ${baseCommit.message}`);
       } else {
-        todoLines.push(`${c.action} ${c.hash} ${c.message}`);
+        todoLines.push(`${baseCommit.action} ${baseCommit.hash} ${baseCommit.message}`);
+      }
+      
+      i++;
+
+      // Automatically absorb subsequent squash/fixup commits
+      while (i < commits.length && (commits[i].action === 'squash' || commits[i].action === 'fixup')) {
+        todoLines.push(`fixup ${commits[i].hash} ${commits[i].message}`);
+        i++;
+      }
+
+      // If the base commit was 'reword', apply its new message at the very end of this chain 
+      // to overwrite any default git messages and cleanly wrap the entire squash block.
+      if (amendMessage !== null) {
+        const escapedMessage = amendMessage.replace(/'/g, "'\\''");
+        todoLines.push(`exec git commit --amend -m '${escapedMessage}'`);
       }
     }
 
@@ -166,13 +178,13 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
                 <Input
                   value={commit.message}
                   onChange={(e) => updateMessage(index, e.target.value)}
-                  disabled={commit.action !== 'reword' && commit.action !== 'squash'}
+                  disabled={commit.action !== 'reword'}
                   className={`h-8 text-sm transition-colors ${
-                    (commit.action === 'reword' || commit.action === 'squash')
+                    commit.action === 'reword' 
                       ? 'bg-card border-blue-500 ring-1 ring-blue-500/20' 
                       : 'bg-transparent border-transparent hover:border-border disabled:opacity-70'
                   } ${commit.action === 'drop' ? 'line-through text-muted-foreground' : ''}`}
-                  placeholder={commit.action === 'reword' || commit.action === 'squash' ? "Enter new commit message..." : ""}
+                  placeholder={commit.action === 'reword' ? "Enter new commit message..." : ""}
                 />
               </div>
             ))
