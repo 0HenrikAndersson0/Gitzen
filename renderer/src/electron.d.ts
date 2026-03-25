@@ -92,6 +92,7 @@ declare global {
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string; errorType?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string; errorType?: string }>;
       getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string; errorType?: string }>;
+      getFileBlame: (filePath: string, commitHash?: string) => Promise<{ success: boolean; blame?: Array<{ commitHash: string; author: string; date: string; lineNo: number; content: string; }>; error?: string; errorType?: string }>;
       applyPatch: (patch: string, options?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       revertFileChanges: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

@@ -2534,3 +2534,62 @@ export async function getFileTypeDistribution(): Promise<{ success: boolean; dis
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
+
+export interface BlameLine {
+  commitHash: string;
+  author: string;
+  date: string;
+  lineNo: number;
+  content: string;
+}
+
+export async function getFileBlame(filePath: string, commitHash?: string): Promise<{ success: boolean; blame?: BlameLine[]; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const command = commitHash
+      ? `blame --line-porcelain ${commitHash} -- "${filePath}"`
+      : `blame --line-porcelain -- "${filePath}"`;
+
+    const { stdout } = await runGitCommand(command);
+    if (!stdout.trim()) {
+      return { success: true, blame: [] };
+    }
+
+    const lines = stdout.split('\n');
+    const result: BlameLine[] = [];
+    let currentLine: Partial<BlameLine> = {};
+
+    for (const line of lines) {
+      if (line.startsWith('\t')) {
+        currentLine.content = line.substring(1);
+        if (currentLine.commitHash && currentLine.lineNo) {
+          result.push({
+            commitHash: currentLine.commitHash,
+            author: currentLine.author || 'Unknown',
+            date: currentLine.date || new Date().toISOString(),
+            lineNo: currentLine.lineNo,
+            content: currentLine.content
+          });
+        }
+        currentLine = {};
+      } else if (!currentLine.commitHash && /^[0-9a-f]{40} \d+ \d+/.test(line)) {
+        const parts = line.split(' ');
+        currentLine.commitHash = parts[0];
+        currentLine.lineNo = parseInt(parts[2], 10);
+      } else if (line.startsWith('author ')) {
+        currentLine.author = line.substring(7);
+      } else if (line.startsWith('author-time ')) {
+        const timestamp = parseInt(line.substring(12), 10);
+        currentLine.date = new Date(timestamp * 1000).toISOString();
+      }
+    }
+
+    return { success: true, blame: result };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}

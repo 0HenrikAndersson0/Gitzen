@@ -1,8 +1,9 @@
-import { X, FileText, FilePlus, FileX, Check, Undo2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, FileText, FilePlus, FileX, Check, Undo2, Trash2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { parseDiff, generatePatch, FileChangeDiff } from '../lib/diffUtils';
 import { DiffViewer } from './DiffViewer/DiffViewer';
+import { BlameViewer } from './BlameViewer';
 
 export interface FileChange {
   path: string;
@@ -25,6 +26,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('unified');
+  const [showBlame, setShowBlame] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -312,8 +314,8 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
         <div className="flex items-center justify-end border-b border-border bg-card px-4 py-2">
           <div className="flex rounded-md border border-border bg-secondary p-0.5">
             <button
-              onClick={() => setViewMode('split')}
-              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${viewMode === 'split'
+              onClick={() => { setViewMode('split'); setShowBlame(false); }}
+              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${!showBlame && viewMode === 'split'
                 ? 'bg-background shadow-sm text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -321,27 +323,41 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
               Side-by-Side
             </button>
             <button
-              onClick={() => setViewMode('unified')}
-              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${viewMode === 'unified'
+              onClick={() => { setViewMode('unified'); setShowBlame(false); }}
+              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${!showBlame && viewMode === 'unified'
                 ? 'bg-background shadow-sm text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               Unified
             </button>
+            <button
+              onClick={() => setShowBlame(true)}
+              className={`flex items-center gap-1 rounded px-3 py-1 text-xs font-medium transition-colors ${showBlame
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
+            >
+              <History className="h-3 w-3" />
+              Blame
+            </button>
           </div>
         </div>
 
-        {/* Diff Viewer */}
-        <div className="flex min-h-0 flex-1 flex-col bg-background">
-          <DiffViewer
-            hunks={diff?.hunks || []}
-            viewMode={viewMode}
-            readOnly={false}
-            selectedLines={selectedLines}
-            onToggleLine={toggleLine}
-            onToggleHunk={toggleHunk}
-          />
+        {/* Viewer */}
+        <div className="flex min-h-0 flex-1 flex-col bg-background relative overflow-hidden">
+          {showBlame ? (
+            <BlameViewer filePath={file.path} />
+          ) : (
+            <DiffViewer
+              hunks={diff?.hunks || []}
+              viewMode={viewMode}
+              readOnly={false}
+              selectedLines={selectedLines}
+              onToggleLine={toggleLine}
+              onToggleHunk={toggleHunk}
+            />
+          )}
         </div>
       </div>
     </div>

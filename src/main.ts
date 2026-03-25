@@ -325,6 +325,10 @@ ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
   return await gitService.getFileDiff(filePath, staged);
 });
 
+ipcMain.handle('git:getFileBlame', async (_, filePath, commitHash) => {
+  return await gitService.getFileBlame(filePath, commitHash);
+});
+
 ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {
   return await gitService.deleteBranch(branchName, force);
 });
