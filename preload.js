@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitCreateGitHubRepo: (token, name, isPrivate, description) => ipcRenderer.invoke('git:createGitHubRepo', token, name, isPrivate, description),
   gitGetBranchStatus: () => ipcRenderer.invoke('git:getBranchStatus'),
   gitGetCurrentBranch: () => ipcRenderer.invoke('git:getCurrentBranch'),
-  gitGetHistory: (maxCount) => ipcRenderer.invoke('git:getHistory', maxCount),
+  gitGetHistory: (maxCount, filters) => ipcRenderer.invoke('git:getHistory', maxCount, filters),
   getStashes: () => ipcRenderer.invoke('git:getStashes'),
   createStash: () => ipcRenderer.invoke('git:createStash'),
   applyStash: (name) => ipcRenderer.invoke('git:applyStash', name),

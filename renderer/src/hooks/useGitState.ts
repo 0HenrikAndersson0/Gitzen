@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { HistoryFilters } from '../electron';
 
 export interface BranchStatus {
   ahead: number;
@@ -62,6 +63,13 @@ export function useGitState({
   const [conflictedFiles, setConflictedFiles] = useState<any[]>([]);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
   const [cherryPickStatus, setCherryPickStatus] = useState<{ inProgress: boolean }>({ inProgress: false });
+  const [historyFilters, setHistoryFiltersState] = useState<HistoryFilters>({});
+  
+  const historyFiltersRef = useRef(historyFilters);
+  const setHistoryFilters = useCallback((filters: HistoryFilters) => {
+    historyFiltersRef.current = filters;
+    setHistoryFiltersState(filters);
+  }, []);
 
   const lastRebaseStepRef = useRef<number | undefined>(undefined);
   const lastConflictCountRef = useRef<number>(0);
@@ -234,7 +242,7 @@ export function useGitState({
     const targetPath = pathOverride || repoPath;
     if (!targetPath) return;
     try {
-      const result = await window.electronAPI.gitGetHistory(historyLimit);
+      const result = await window.electronAPI.gitGetHistory(historyLimit, historyFiltersRef.current);
       if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success) {
         if (result.commits) {
@@ -453,6 +461,8 @@ export function useGitState({
     refreshRebaseStatusInternal,
     refreshRebaseStatus,
     refreshBranchesSilent,
-    performFetchSilent
+    performFetchSilent,
+    historyFilters,
+    setHistoryFilters
   };
 }

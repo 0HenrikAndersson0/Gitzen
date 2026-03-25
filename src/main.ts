@@ -225,8 +225,8 @@ ipcMain.handle('git:getCurrentBranch', async () => {
   return await gitService.getCurrentBranch();
 });
 
-ipcMain.handle('git:getHistory', async (_, maxCount) => {
-  return await gitService.getHistory(maxCount);
+ipcMain.handle('git:getHistory', async (_, maxCount, filters) => {
+  return await gitService.getHistory(maxCount, filters);
 });
 
 ipcMain.handle('git:getStashes', async () => {

@@ -24,6 +24,14 @@ interface RecentRepo {
   lastOpened: number;
 }
 
+export interface HistoryFilters {
+  author?: string;
+  since?: string;
+  until?: string;
+  file?: string;
+  message?: string;
+}
+
 declare global {
   interface ConflictedFile {
     path: string;
@@ -47,7 +55,7 @@ declare global {
       gitCreateGitHubRepo: (token: string, name: string, isPrivate: boolean, description?: string) => Promise<{ success: boolean; cloneUrl?: string; ownerLogin?: string; error?: string; errorType?: string }>;
       gitGetBranchStatus: () => Promise<{ success: boolean; ahead?: number; behind?: number; hasUpstream?: boolean; upstream?: string; error?: string; errorType?: string }>;
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string; errorType?: string }>;
-      gitGetHistory: (maxCount?: number) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string; errorType?: string }>;
+      gitGetHistory: (maxCount?: number, filters?: HistoryFilters) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string; errorType?: string }>;
       getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string; errorType?: string }>;
       createStash: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       applyStash: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

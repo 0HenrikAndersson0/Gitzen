@@ -785,7 +785,15 @@ export async function mergeBranchToCurrent(branchToMerge: string): Promise<{ suc
   }
 }
 
-export async function getHistory(maxCount: number = 50): Promise<{
+export interface HistoryFilters {
+  author?: string;
+  since?: string;
+  until?: string;
+  file?: string;
+  message?: string;
+}
+
+export async function getHistory(maxCount: number = 50, filters?: HistoryFilters): Promise<{
   success: boolean;
   commits?: Array<{
     id: string;
@@ -815,7 +823,27 @@ export async function getHistory(maxCount: number = 50): Promise<{
     // Use -z to separate commits with NUL byte to handle multi-line messages safely
     // Use %B for full body
     const delimiter = '|||';
-    const { stdout } = await runGitCommand(`log -n ${fetchCount} --all --date-order --pretty=format:"%H${delimiter}%B${delimiter}%an${delimiter}%ad${delimiter}%D${delimiter}%P" --date=iso -z`);
+    
+    const args = [
+      'log',
+      `-n`, `${fetchCount}`,
+      '--all',
+      '--date-order',
+      `--pretty=format:%H${delimiter}%B${delimiter}%an${delimiter}%ad${delimiter}%D${delimiter}%P`,
+      '--date=iso',
+      '-z'
+    ];
+    
+    if (filters?.author) args.push(`--author=${filters.author}`);
+    if (filters?.message) args.push(`--grep=${filters.message}`);
+    if (filters?.since) args.push(`--since=${filters.since}`);
+    if (filters?.until) args.push(`--until=${filters.until}`);
+    if (filters?.file) {
+      args.push('--');
+      args.push(filters.file);
+    }
+
+    const { stdout } = await runGitExecFile(args, { cwd: currentRepoPath });
 
     // Split by NUL byte (the last entry might be empty if ends with NUL)
     const rawLines = stdout.split('\0').filter(line => line.trim());

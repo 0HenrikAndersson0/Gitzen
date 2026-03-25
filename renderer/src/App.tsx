@@ -11,6 +11,7 @@ import { CommitGraph } from './components/CommitGraph';
 import { BranchesPanel } from './components/BranchesPanel';
 import { TagsPanel } from './components/TagsPanel';
 import { GraphsView } from './components/GraphsView';
+import { HistoryFilterBar } from './components/HistoryFilterBar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
@@ -80,7 +81,9 @@ export default function App() {
     refreshHistoryInternal,
     refreshHistory,
     refreshBranchStatusInternal,
-    refreshBranchesInternal
+    refreshBranchesInternal,
+    historyFilters,
+    setHistoryFilters
   } = gitState;
 
   // Keyboard Shortcuts State
@@ -496,16 +499,27 @@ export default function App() {
                   </Tabs>
                 </div>
               ) : (
-                <CommitGraph
-                  commits={commits}
-                  currentBranch={currentBranch}
-                  hasMore={hasMoreCommits}
-                  onStashAction={refreshHistory}
-                  onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
-                  onCherryPick={handleCherryPick}
-                  onRevertCommit={handleRevertCommit}
-                  onResetCommits={handleResetCommits}
-                />
+                <div className="flex flex-col h-full overflow-hidden">
+                  <HistoryFilterBar
+                    filters={historyFilters}
+                    onChange={setHistoryFilters}
+                    onApply={() => refreshHistory()}
+                    onClear={() => {
+                      setHistoryFilters({});
+                      refreshHistory();
+                    }}
+                  />
+                  <CommitGraph
+                    commits={commits}
+                    currentBranch={currentBranch}
+                    hasMore={hasMoreCommits}
+                    onStashAction={refreshHistory}
+                    onLoadMore={(amount) => setHistoryLimit(prev => Math.min(prev + amount, 2000))}
+                    onCherryPick={handleCherryPick}
+                    onRevertCommit={handleRevertCommit}
+                    onResetCommits={handleResetCommits}
+                  />
+                </div>
               )}
             </div>
 
