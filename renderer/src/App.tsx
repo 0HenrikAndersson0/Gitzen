@@ -91,6 +91,7 @@ export default function App() {
   const [selectedFileIndex, setSelectedFileIndex] = useState<number | undefined>(undefined);
 
   // Resize State
+  const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(250); // px
   const [rightPanelWidth, setRightPanelWidth] = useState(350); // px
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
@@ -350,6 +351,7 @@ export default function App() {
           isDisabled={isRefreshingBranches}
           canStash={files.length > 0}
           isShowingGraphs={showGraphs}
+          isShowingFilters={showHistoryFilters}
           onSwitchRepo={handleSwitchRepo}
           onOpenNew={handleOpenNewRepo}
           onOpenSettings={() => setShowSettingsDialog(true)}
@@ -357,6 +359,7 @@ export default function App() {
           onPull={handlePull}
           onStash={handleStash}
           onToggleGraphs={() => setShowGraphs(!showGraphs)}
+          onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
         />
       </div>
 
@@ -500,15 +503,17 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex flex-col h-full overflow-hidden">
-                  <HistoryFilterBar
-                    filters={historyFilters}
-                    onChange={setHistoryFilters}
-                    onApply={() => refreshHistory()}
-                    onClear={() => {
-                      setHistoryFilters({});
-                      refreshHistory();
-                    }}
-                  />
+                  {showHistoryFilters && (
+                    <HistoryFilterBar
+                      filters={historyFilters}
+                      onChange={setHistoryFilters}
+                      onApply={() => refreshHistory()}
+                      onClear={() => {
+                        setHistoryFilters({});
+                        refreshHistory();
+                      }}
+                    />
+                  )}
                   <CommitGraph
                     commits={commits}
                     currentBranch={currentBranch}
