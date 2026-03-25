@@ -10,6 +10,7 @@ interface RebaseTodoItem {
   action: 'pick' | 'reword' | 'edit' | 'squash' | 'fixup' | 'drop';
   hash: string;
   message: string;
+  originalMessage: string;
 }
 
 interface RebaseModalProps {
@@ -35,7 +36,7 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
     try {
       const result = await window.electronAPI.gitGetCommitsForInteractiveRebase(targetBranch);
       if (result.success && result.commits) {
-        setCommits(result.commits);
+        setCommits(result.commits.map((c: any) => ({ ...c, originalMessage: c.message })));
       } else {
         toast.error(result.error || 'Failed to load commits for rebase');
         onClose();
@@ -70,7 +71,35 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
 
   const updateAction = (index: number, action: RebaseTodoItem['action']) => {
     const newCommits = [...commits];
+    const oldAction = newCommits[index].action;
     newCommits[index].action = action;
+    
+    if (action === 'squash' && oldAction !== 'squash') {
+      // Auto-combine message upwards to nearest base commit
+      for (let i = index - 1; i >= 0; i--) {
+        if (newCommits[i].action !== 'squash' && newCommits[i].action !== 'fixup' && newCommits[i].action !== 'drop') {
+          if (newCommits[i].action === 'pick') newCommits[i].action = 'reword';
+          if (!newCommits[i].message.includes(newCommits[index].originalMessage)) {
+             newCommits[i].message += '\\n\\n' + newCommits[index].originalMessage;
+          }
+          break;
+        }
+      }
+    } else if (action === 'reword' && oldAction !== 'reword') {
+       // Pull messages from all subsequent squashes downwards
+       let extraMessages = '';
+       for(let i = index + 1; i < newCommits.length; i++) {
+         if (newCommits[i].action === 'squash') {
+            if (!newCommits[index].message.includes(newCommits[i].originalMessage)) {
+              extraMessages += '\\n\\n' + newCommits[i].originalMessage;
+            }
+         } else if (newCommits[i].action !== 'fixup' && newCommits[i].action !== 'drop') {
+            break; // Stop scanning at next base commit
+         }
+       }
+       newCommits[index].message += extraMessages;
+    }
+    
     setCommits(newCommits);
   };
 
