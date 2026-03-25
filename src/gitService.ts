@@ -491,14 +491,41 @@ export async function unstageFiles(filePaths: string[]): Promise<{ success: bool
   }
 }
 
-export async function commit(message: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+export async function commit(message: string, amend: boolean = false): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
 
     const escapedMessage = message.replace(/"/g, '\\"');
-    await runGitCommand(`commit -m "${escapedMessage}"`);
+    if (amend) {
+      await runGitCommand(`commit --amend -m "${escapedMessage}"`);
+    } else {
+      await runGitCommand(`commit -m "${escapedMessage}"`);
+    }
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function undoLastCommit(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    try {
+      await runGitCommand('reset --soft HEAD~1');
+    } catch (e: any) {
+      // If it's the initial commit, HEAD~1 will not exist
+      if (e.message && e.message.includes("ambiguous argument 'HEAD~1'")) {
+        await runGitCommand('update-ref -d HEAD');
+      } else {
+        throw e;
+      }
+    }
     return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);

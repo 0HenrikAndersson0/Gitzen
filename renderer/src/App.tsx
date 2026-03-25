@@ -33,7 +33,6 @@ export default function App() {
     showAddRemoteDialog, setShowAddRemoteDialog,
     showForcePushDialog, setShowForcePushDialog,
     showResetDialog, setShowResetDialog,
-    resetTargetCommit,
     showMergeConflictDialog, setShowMergeConflictDialog,
     showSettingsDialog, setShowSettingsDialog,
     showCreateBranchDialog, setShowCreateBranchDialog,
@@ -71,7 +70,6 @@ export default function App() {
     localBranches,
     remoteBranches,
     isRefreshingBranches,
-    remoteUrl, setRemoteUrl,
     conflictedFiles,
     rebaseStatus,
     cherryPickStatus,
@@ -201,6 +199,7 @@ export default function App() {
     handleResetCommits,
     handleConfirmReset,
     handleOpenRepo,
+    handleUndoCommit,
     handleCancelOperation
   } = gitOps;
 
@@ -538,6 +537,9 @@ export default function App() {
                       commitMessage={commitMessage}
                       onCommitMessageChange={setCommitMessage}
                       selectedFileIndex={selectedFileIndex}
+                      onUndoCommit={handleUndoCommit}
+                      lastCommitMessage={commits.length > 0 ? commits[0].message : undefined}
+                      hasCommits={commits.length > 0}
                     />
                   </div>
                   <div className="h-[25%] min-h-[150px] flex-none mt-4">

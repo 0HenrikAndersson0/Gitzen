@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
-import { GitCommitHorizontal, Archive } from 'lucide-react';
+import { forwardRef, useState, useEffect } from 'react';
+import { GitCommitHorizontal, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
@@ -16,13 +16,16 @@ interface CommitPanelProps {
   onToggleStage: (path: string) => void;
   onStageAll?: () => void;
   onUnstageAll?: () => void;
-  onCommit: (message: string) => void;
+  onCommit: (message: string, amend?: boolean) => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
   onRefresh?: () => void;
   commitMessage: string;
   onCommitMessageChange: (message: string) => void;
   selectedFileIndex?: number;
+  onUndoCommit?: () => void;
+  lastCommitMessage?: string;
+  hasCommits?: boolean;
 }
 
 export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
@@ -37,11 +40,22 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   commitMessage,
   onCommitMessageChange,
   selectedFileIndex,
+  onUndoCommit,
+  lastCommitMessage,
+  hasCommits,
 }, ref) => {
+  const [isAmending, setIsAmending] = useState(false);
+
+  useEffect(() => {
+    if (isAmending && lastCommitMessage && !commitMessage.trim()) {
+      onCommitMessageChange(lastCommitMessage);
+    }
+  }, [isAmending, lastCommitMessage, commitMessage, onCommitMessageChange]);
 
   const handleCommit = () => {
     if (commitMessage.trim()) {
-      onCommit(commitMessage);
+      onCommit(commitMessage, isAmending);
+      setIsAmending(false);
     }
   };
 
@@ -99,14 +113,40 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
           />
         </div>
 
-        <div className="flex gap-2 flex-none">
+        <div className="flex gap-2 flex-none items-center">
+          <div className="flex items-center space-x-2">
+            <input 
+              type="checkbox" 
+              id="amend-commit" 
+              checked={isAmending} 
+              onChange={(e) => setIsAmending(e.target.checked)} 
+              disabled={!hasCommits} 
+              className="rounded border-border text-primary focus:ring-primary bg-background w-4 h-4 cursor-pointer" 
+            />
+            <label htmlFor="amend-commit" className={`text-sm cursor-pointer transition-opacity ${hasCommits ? 'opacity-80 hover:opacity-100' : 'opacity-40'}`}>
+              Amend previous commit
+            </label>
+          </div>
+        </div>
+
+        <div className="flex gap-2 flex-none mt-1">
+          {onUndoCommit && hasCommits && (
+            <Button
+              onClick={onUndoCommit}
+              variant="outline"
+              title="Undo Last Commit"
+              className="flex-none px-3 border-border hover:bg-secondary text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="size-4" />
+            </Button>
+          )}
           <Button
             onClick={handleCommit}
-            disabled={stagedFiles.length === 0 || !commitMessage.trim()}
-            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={(stagedFiles.length === 0 && !isAmending) || !commitMessage.trim()}
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
           >
             <GitCommitHorizontal className="mr-2 size-4" />
-            Commit
+            {isAmending ? 'Amend Commit' : 'Commit'}
           </Button>
         </div>
       </div>

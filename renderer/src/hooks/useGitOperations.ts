@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
 export function useGitOperations({
   gitState,
@@ -10,21 +10,18 @@ export function useGitOperations({
     setRepoName,
     currentBranch, setCurrentBranch,
     files, setFiles,
-    commits, setCommits,
-    stashes, setStashes,
+    setCommits,
+    setStashes,
     remoteUrl, setRemoteUrl,
     setConflictedFiles,
     setRebaseStatus,
     setBranchStatus,
-    runQueued,
     refreshAllData,
     refreshStatusInternal,
-    refreshStatus,
     refreshBranchInternal,
     refreshBranchesInternal,
     refreshBranchStatusInternal,
     refreshHistoryInternal,
-    refreshHistory,
     refreshStashesInternal,
     refreshRebaseStatusInternal
   } = gitState;
@@ -48,16 +45,16 @@ export function useGitOperations({
 
   const { filesRef, setCommitMessage } = refs;
 
-  const handleCommit = useCallback(async (message: string) => {
+  const handleCommit = useCallback(async (message: string, amend: boolean = false) => {
     const currentFiles = filesRef.current;
     const stagedFiles = currentFiles.filter((f: any) => f.staged);
-    addLog('info', `Committing ${stagedFiles.length} file(s)...`);
+    addLog('info', amend ? `Amending commit...` : `Committing ${stagedFiles.length} file(s)...`);
 
-    await withLoading('Committing changes...', async () => {
+    await withLoading(amend ? 'Amending commit...' : 'Committing changes...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitCommit(message);
+        const result = await (window as any).electronAPI.gitCommit(message, amend);
         if (result.success) {
-          addLog('success', `Committed: "${message}"`);
+          addLog('success', amend ? `Amended commit: "${message}"` : `Committed: "${message}"`);
           toast.success('Changes committed successfully!');
           setCommitMessage('');
           await refreshStatusInternal();
@@ -75,6 +72,28 @@ export function useGitOperations({
       }
     });
   }, [withLoading, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal, addLog, filesRef, setCommitMessage, toast]);
+
+  const handleUndoCommit = async () => {
+    await withLoading('Undoing last commit...', async () => {
+      try {
+        const result = await (window as any).electronAPI.gitUndoCommit();
+        if (result.success) {
+          toast.success('Last commit undone successfully');
+          addLog('success', 'Undid last commit');
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchStatusInternal();
+          await refreshBranchesInternal();
+        } else {
+          toast.error(result.error || 'Failed to undo commit');
+          addLog('error', `Failed to undo commit: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Failed to undo commit: ${error.message}`);
+        addLog('error', `Failed to undo commit: ${error.message}`);
+      }
+    });
+  };
 
   const handleClone = async (url: string, path: string) => {
     addLog('info', `Cloning repository from ${url}...`);
@@ -972,6 +991,7 @@ export function useGitOperations({
     handleResetCommits,
     handleConfirmReset,
     handleOpenRepo,
+    handleUndoCommit,
     handleCancelOperation
   };
 }
