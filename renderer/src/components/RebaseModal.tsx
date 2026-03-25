@@ -92,6 +92,12 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
         const escapedMessage = c.message.replace(/'/g, "'\\''");
         todoLines.push(`pick ${c.hash} ${c.message}`); // The message here doesn't matter for pick
         todoLines.push(`exec git commit --amend -m '${escapedMessage}'`);
+      } else if (c.action === 'squash') {
+        // For squash, we use fixup to silently merge the code, then explicitly rewrite the combined commit message
+        // to whatever the user typed in the input field, avoiding Git's messy default concatenated squash messages.
+        const escapedMessage = c.message.replace(/'/g, "'\\''");
+        todoLines.push(`fixup ${c.hash} ${c.message}`);
+        todoLines.push(`exec git commit --amend -m '${escapedMessage}'`);
       } else {
         todoLines.push(`${c.action} ${c.hash} ${c.message}`);
       }
@@ -160,13 +166,13 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
                 <Input
                   value={commit.message}
                   onChange={(e) => updateMessage(index, e.target.value)}
-                  disabled={commit.action !== 'reword'}
+                  disabled={commit.action !== 'reword' && commit.action !== 'squash'}
                   className={`h-8 text-sm transition-colors ${
-                    commit.action === 'reword' 
+                    (commit.action === 'reword' || commit.action === 'squash')
                       ? 'bg-card border-blue-500 ring-1 ring-blue-500/20' 
                       : 'bg-transparent border-transparent hover:border-border disabled:opacity-70'
                   } ${commit.action === 'drop' ? 'line-through text-muted-foreground' : ''}`}
-                  placeholder={commit.action === 'reword' ? "Enter new commit message..." : ""}
+                  placeholder={commit.action === 'reword' || commit.action === 'squash' ? "Enter new commit message..." : ""}
                 />
               </div>
             ))

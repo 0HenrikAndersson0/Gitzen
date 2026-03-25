@@ -397,6 +397,10 @@ ipcMain.handle('git:abortMerge', async () => {
   return await gitService.abortMerge();
 });
 
+ipcMain.handle('git:abortConflict', async () => {
+  return await gitService.abortConflict();
+});
+
 ipcMain.handle('git:openFileInMergeTool', async (_, filePath) => {
   return await gitService.openFileInMergeTool(filePath);
 });

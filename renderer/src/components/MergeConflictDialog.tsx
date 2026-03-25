@@ -15,7 +15,7 @@ interface MergeConflictDialogProps {
   open: boolean;
   conflictedFiles: ConflictedFile[];
   onOpenFile: (filePath: string) => void;
-  onAbortMerge: () => void;
+  onAbortConflict: () => void;
   onResolveFiles: (filePaths: string[]) => Promise<void>;
   onResolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<void>;
   onClose: () => void;
@@ -25,7 +25,7 @@ export function MergeConflictDialog({
   open, 
   conflictedFiles, 
   onOpenFile, 
-  onAbortMerge,
+  onAbortConflict,
   onResolveFiles,
   onResolveConflict,
   onClose 
@@ -239,12 +239,12 @@ export function MergeConflictDialog({
 
         <DialogFooter className="flex-row justify-between sm:justify-between">
           <Button
-            onClick={onAbortMerge}
+            onClick={onAbortConflict}
             className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             variant="destructive"
             disabled={resolving}
           >
-            Abort Merge
+            Abort Operation
           </Button>
           <Button
             onClick={onClose}

@@ -1845,6 +1845,34 @@ export async function abortMerge(): Promise<{ success: boolean; error?: string; 
   }
 }
 
+export async function abortConflict(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const rebaseMergePath = path.join(currentRepoPath, '.git', 'rebase-merge');
+    const rebaseApplyPath = path.join(currentRepoPath, '.git', 'rebase-apply');
+    const cherryPickHeadPath = path.join(currentRepoPath, '.git', 'CHERRY_PICK_HEAD');
+    const mergeHeadPath = path.join(currentRepoPath, '.git', 'MERGE_HEAD');
+
+    if (fs.existsSync(rebaseMergePath) || fs.existsSync(rebaseApplyPath)) {
+      await runGitExecFile(['rebase', '--abort'], { cwd: currentRepoPath, maxBuffer: 10 * 1024 * 1024 });
+    } else if (fs.existsSync(cherryPickHeadPath)) {
+      await runGitExecFile(['cherry-pick', '--abort'], { cwd: currentRepoPath, maxBuffer: 10 * 1024 * 1024 });
+    } else if (fs.existsSync(mergeHeadPath)) {
+      await runGitExecFile(['merge', '--abort'], { cwd: currentRepoPath, maxBuffer: 10 * 1024 * 1024 });
+    } else {
+      return { success: false, error: 'No active conflict operation found to abort' };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
 export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
@@ -2062,7 +2090,7 @@ export async function continueRebase(): Promise<{ success: boolean; error?: stri
   }
 }
 
-export async function getRebaseStatus(): Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string; errorType?: string }> {
+export async function getRebaseStatus(): Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; stoppedMessage?: string; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open', inProgress: false };
@@ -2075,28 +2103,46 @@ export async function getRebaseStatus(): Promise<{ success: boolean; inProgress:
       // Interactive or merge-based rebase
       let current = 0;
       let total = 0;
+      let stoppedMessage: string | undefined;
       try {
         const msgNum = fs.readFileSync(path.join(rebaseMergePath, 'msgnum'), 'utf8').trim();
         const end = fs.readFileSync(path.join(rebaseMergePath, 'end'), 'utf8').trim();
         current = parseInt(msgNum, 10);
         total = parseInt(end, 10);
+        
+        try {
+          const stoppedSha = fs.readFileSync(path.join(rebaseMergePath, 'stopped-sha'), 'utf8').trim();
+          if (stoppedSha) {
+            const { stdout } = await runGitExecFile(['log', '-1', '--pretty=%s', stoppedSha], { cwd: currentRepoPath! });
+            stoppedMessage = stdout.trim();
+          }
+        } catch (e) { /* ignore */ }
       } catch (e) {
         // ignore parsing errors
       }
-      return { success: true, inProgress: true, currentStep: current, totalSteps: total };
+      return { success: true, inProgress: true, currentStep: current, totalSteps: total, stoppedMessage };
     } else if (fs.existsSync(rebaseApplyPath)) {
       // Apply based rebase
       let current = 0;
       let total = 0;
+      let stoppedMessage: string | undefined;
       try {
         const next = fs.readFileSync(path.join(rebaseApplyPath, 'next'), 'utf8').trim();
         const last = fs.readFileSync(path.join(rebaseApplyPath, 'last'), 'utf8').trim();
         current = parseInt(next, 10);
         total = parseInt(last, 10);
+
+        try {
+          const originalCommit = fs.readFileSync(path.join(rebaseApplyPath, 'original-commit'), 'utf8').trim();
+          if (originalCommit) {
+            const { stdout } = await runGitExecFile(['log', '-1', '--pretty=%s', originalCommit], { cwd: currentRepoPath! });
+            stoppedMessage = stdout.trim();
+          }
+        } catch (e) { /* ignore */ }
       } catch (e) {
         // ignore
       }
-      return { success: true, inProgress: true, currentStep: current, totalSteps: total };
+      return { success: true, inProgress: true, currentStep: current, totalSteps: total, stoppedMessage };
     }
 
     return { success: true, inProgress: false };

@@ -61,7 +61,7 @@ export function useGitState({
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [conflictedFiles, setConflictedFiles] = useState<any[]>([]);
-  const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number }>({ inProgress: false });
+  const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number; stoppedMessage?: string }>({ inProgress: false });
   const [cherryPickStatus, setCherryPickStatus] = useState<{ inProgress: boolean }>({ inProgress: false });
   const [historyFilters, setHistoryFiltersState] = useState<HistoryFilters>({});
   

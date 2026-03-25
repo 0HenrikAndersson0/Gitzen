@@ -70,6 +70,7 @@ declare global {
       getConflictedFiles: () => Promise<{ success: boolean; files?: ConflictedFile[]; error?: string; errorType?: string }>;
       resolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<{ success: boolean; error?: string; errorType?: string }>;
       abortMerge: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      abortConflict: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitRevertCommit: (commitHash: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitResetCommits: (commitHash: string, mode: 'soft' | 'mixed' | 'hard') => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitGetRevertStatus: () => Promise<{ success: boolean; inProgress: boolean; error?: string; errorType?: string }>;
@@ -78,7 +79,7 @@ declare global {
       gitRebaseBranch: (branch: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitAbortRebase: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitContinueRebase: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
-      gitGetRebaseStatus: () => Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; error?: string; errorType?: string }>;
+      gitGetRebaseStatus: () => Promise<{ success: boolean; inProgress: boolean; currentStep?: number; totalSteps?: number; stoppedMessage?: string; error?: string; errorType?: string }>;
       gitCherryPick: (commitHash: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitAbortCherryPick: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitContinueCherryPick: () => Promise<{ success: boolean; error?: string; errorType?: string }>;

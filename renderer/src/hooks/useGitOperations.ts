@@ -634,13 +634,13 @@ export function useGitOperations({
     });
   };
 
-  const handleAbortMerge = async () => {
-    await withLoading('Aborting merge...', async () => {
+  const handleAbortConflict = async () => {
+    await withLoading('Aborting operation...', async () => {
       try {
-        const result = await (window as any).electronAPI.abortMerge();
+        const result = await (window as any).electronAPI.abortConflict();
         if (result.success) {
-          toast.success('Merge aborted successfully');
-          addLog('info', 'Merge aborted');
+          toast.success('Operation aborted successfully');
+          addLog('info', 'Operation aborted');
           setShowMergeConflictDialog(false);
           setConflictedFiles([]);
 
@@ -648,13 +648,13 @@ export function useGitOperations({
           await refreshBranchInternal();
           await refreshHistoryInternal();
         } else {
-          toast.error(result.error || 'Failed to abort merge');
-          addLog('error', `Failed to abort merge: ${result.error || 'Unknown error'}`);
+          toast.error(result.error || 'Failed to abort operation');
+          addLog('error', `Failed to abort operation: ${result.error || 'Unknown error'}`);
         }
       } catch (error: any) {
         const errorMessage = error.message || 'Unknown error';
-        toast.error(`Failed to abort merge: ${errorMessage}`);
-        addLog('error', `Failed to abort merge: ${errorMessage}`);
+        toast.error(`Failed to abort operation: ${errorMessage}`);
+        addLog('error', `Failed to abort operation: ${errorMessage}`);
       }
     });
   };
@@ -979,7 +979,7 @@ export function useGitOperations({
     handleSkipCherryPick,
     handleMergeBranch,
     handleOpenFileInMergeTool,
-    handleAbortMerge,
+    handleAbortConflict,
     handleResolveFiles,
     handleResolveConflict,
     handleSwitchRepo,

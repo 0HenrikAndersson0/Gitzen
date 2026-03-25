@@ -191,7 +191,7 @@ export default function App() {
     handleSkipCherryPick,
     handleMergeBranch,
     handleOpenFileInMergeTool,
-    handleAbortMerge,
+    handleAbortConflict,
     handleResolveFiles,
     handleResolveConflict,
     handleSwitchRepo,
@@ -367,9 +367,10 @@ export default function App() {
         <div className="flex-none bg-secondary border border-border rounded-lg p-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="size-2 rounded-full bg-primary animate-pulse" />
-            <span className="font-medium text-foreground">
+            <span className="font-medium text-foreground truncate max-w-[600px]" title={rebaseStatus.stoppedMessage ? `Conflicted on: ${rebaseStatus.stoppedMessage}` : ''}>
               Rebase in progress
               {rebaseStatus.totalSteps ? ` (Step ${rebaseStatus.currentStep} of ${rebaseStatus.totalSteps})` : ''}
+              {rebaseStatus.stoppedMessage ? ` - Conflicted on: ${rebaseStatus.stoppedMessage}` : ''}
             </span>
           </div>
           <div className="flex gap-2">
@@ -588,7 +589,7 @@ export default function App() {
         open={showMergeConflictDialog}
         conflictedFiles={conflictedFiles}
         onOpenFile={handleOpenFileInMergeTool}
-        onAbortMerge={handleAbortMerge}
+        onAbortConflict={handleAbortConflict}
         onResolveFiles={handleResolveFiles}
         onResolveConflict={handleResolveConflict}
         onClose={() => setShowMergeConflictDialog(false)}
