@@ -11,6 +11,7 @@ interface RebaseTodoItem {
   hash: string;
   message: string;
   originalMessage: string;
+  hasCustomEdit?: boolean;
 }
 
 interface RebaseModalProps {
@@ -74,30 +75,38 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
     const oldAction = newCommits[index].action;
     newCommits[index].action = action;
     
+    // Helper to rebuild chronological message for a base commit
+    const rebuildBaseMessage = (baseIndex: number) => {
+      let combined = newCommits[baseIndex].originalMessage;
+      for (let j = baseIndex + 1; j < newCommits.length; j++) {
+        if (newCommits[j].action === 'squash') {
+          combined += '\\n\\n' + newCommits[j].originalMessage;
+        } else if (newCommits[j].action !== 'fixup' && newCommits[j].action !== 'drop') {
+          break; // Stop at next base commit
+        }
+      }
+      return combined;
+    };
+
     if (action === 'squash' && oldAction !== 'squash') {
-      // Auto-combine message upwards to nearest base commit
+      // Find nearest base commit upwards
       for (let i = index - 1; i >= 0; i--) {
         if (newCommits[i].action !== 'squash' && newCommits[i].action !== 'fixup' && newCommits[i].action !== 'drop') {
           if (newCommits[i].action === 'pick') newCommits[i].action = 'reword';
-          if (!newCommits[i].message.includes(newCommits[index].originalMessage)) {
-             newCommits[i].message += '\\n\\n' + newCommits[index].originalMessage;
+          
+          if (!newCommits[i].hasCustomEdit) {
+            newCommits[i].message = rebuildBaseMessage(i);
+          } else {
+            // If they manually edited it, securely append just this new squash without wiping their edit
+            newCommits[i].message += '\\n\\n' + newCommits[index].originalMessage;
           }
           break;
         }
       }
     } else if (action === 'reword' && oldAction !== 'reword') {
-       // Pull messages from all subsequent squashes downwards
-       let extraMessages = '';
-       for(let i = index + 1; i < newCommits.length; i++) {
-         if (newCommits[i].action === 'squash') {
-            if (!newCommits[index].message.includes(newCommits[i].originalMessage)) {
-              extraMessages += '\\n\\n' + newCommits[i].originalMessage;
-            }
-         } else if (newCommits[i].action !== 'fixup' && newCommits[i].action !== 'drop') {
-            break; // Stop scanning at next base commit
-         }
+       if (!newCommits[index].hasCustomEdit) {
+         newCommits[index].message = rebuildBaseMessage(index);
        }
-       newCommits[index].message += extraMessages;
     }
     
     setCommits(newCommits);
@@ -106,6 +115,7 @@ export function RebaseModal({ isOpen, onClose, targetBranch, currentBranch, onSt
   const updateMessage = (index: number, message: string) => {
     const newCommits = [...commits];
     newCommits[index].message = message;
+    newCommits[index].hasCustomEdit = true;
     setCommits(newCommits);
   };
 
