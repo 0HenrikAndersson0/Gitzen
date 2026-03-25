@@ -1,5 +1,5 @@
 import React from 'react';
-import { DiffHunk, DiffLine } from '../lib/diffUtils';
+import { DiffHunk, DiffLine } from '../../lib/diffUtils';
 
 export interface DiffViewerProps {
     hunks: DiffHunk[];

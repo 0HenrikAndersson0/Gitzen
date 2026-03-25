@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { useAutoRefresh } from '../hooks/useAutoRefresh';
+
 import { CreateTagDialog } from './CreateTagDialog';
 
 interface TagItem {

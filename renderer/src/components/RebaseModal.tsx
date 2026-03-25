@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
-import { GitCommit, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface RebaseTodoItem {

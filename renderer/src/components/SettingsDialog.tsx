@@ -53,7 +53,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       if (gitUserResult.success) {
         setGitName(gitUserResult.name || '');
         setGitEmail(gitUserResult.email || '');
-        setIsGlobalConfig(gitUserResult.isGlobal !== false);
+        setIsGlobalConfig((gitUserResult as any).isGlobal !== false);
       }
       if (remoteResult.success) {
         setRemoteUrl(remoteResult.url || '');
@@ -96,7 +96,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       if (!mergeToolResult.success) errors.push(`Merge Tool: ${mergeToolResult.error}`);
       if (!maxCommitsResult.success) errors.push(`Max Commits: ${maxCommitsResult.error}`);
       if (!gitUserResult.success) errors.push(`Git User: ${gitUserResult.error}`);
-      if (!remoteResult.success) errors.push(`Remote URL: ${remoteResult.error}`);
+      if (!remoteResult.success) errors.push(`Remote URL: ${(remoteResult as any).error}`);
 
       if (errors.length === 0) {
         toast.success('Settings saved successfully');
