@@ -277,6 +277,10 @@ ipcMain.handle('git:getRepoPath', () => {
   return gitService.getRepoPath();
 });
 
+ipcMain.handle('git:getSuperprojectPath', async () => {
+  return await gitService.getSuperprojectPath();
+});
+
 ipcMain.handle('git:getRepoName', async () => {
   return await gitService.getRepoName();
 });
@@ -488,6 +492,23 @@ ipcMain.handle('git:startGitFlowBranch', async (_, type, name) => {
 
 ipcMain.handle('git:finishGitFlowBranch', async (_, type, name) => {
   return await gitService.finishGitFlowBranch(type, name);
+});
+
+// Git Submodules handlers
+ipcMain.handle('git:getSubmodules', async () => {
+  return await gitService.getSubmodules();
+});
+
+ipcMain.handle('git:addSubmodule', async (_, url, path, applyConfigs) => {
+  return await gitService.addSubmodule(url, path, applyConfigs);
+});
+
+ipcMain.handle('git:updateSubmodules', async () => {
+  return await gitService.updateSubmodules();
+});
+
+ipcMain.handle('git:removeSubmodule', async (_, path) => {
+  return await gitService.removeSubmodule(path);
 });
 
 // Update handlers

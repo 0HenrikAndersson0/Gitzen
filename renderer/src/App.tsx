@@ -21,6 +21,8 @@ import { ForcePushDialog } from './components/ForcePushDialog';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { InitGitFlowDialog } from './components/InitGitFlowDialog';
 import { StartGitFlowModal } from './components/StartGitFlowModal';
+import { AddSubmoduleModal } from './components/AddSubmoduleModal';
+import { SubmodulesPanel } from './components/SubmodulesPanel';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './components/ui/dialog';
 import { GripVertical } from 'lucide-react';
@@ -76,6 +78,7 @@ export default function App() {
     conflictedFiles,
     rebaseStatus,
     cherryPickStatus,
+    submodules,
     runQueued,
     refreshAllData,
     refreshStatusInternal,
@@ -96,6 +99,7 @@ export default function App() {
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   const [showInitGitFlowDialog, setShowInitGitFlowDialog] = useState(false);
   const [showStartGitFlowModal, setShowStartGitFlowModal] = useState(false);
+  const [showAddSubmoduleModal, setShowAddSubmoduleModal] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(250); // px
   const [rightPanelWidth, setRightPanelWidth] = useState(350); // px
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
@@ -356,6 +360,8 @@ export default function App() {
           canStash={files.length > 0}
           isShowingGraphs={showGraphs}
           isShowingFilters={showHistoryFilters}
+          superprojectPath={gitState.superprojectPath}
+          onOpenSuperproject={gitOps.handleOpenRepo}
           onSwitchRepo={handleSwitchRepo}
           onOpenNew={handleOpenNewRepo}
           onOpenSettings={() => setShowSettingsDialog(true)}
@@ -468,6 +474,18 @@ export default function App() {
                       onSetLoading={(loading, message) => {
                         setIsLoading(loading);
                         setLoadingMessage(message);
+                      }}
+                    />
+                    <SubmodulesPanel
+                      submodules={submodules}
+                      onAddSubmoduleClick={() => setShowAddSubmoduleModal(true)}
+                      onSyncAll={gitOps.handleSyncSubmodules}
+                      onRemoveSubmodule={gitOps.handleRemoveSubmodule}
+                      onOpenSubmodule={async (smPath: string) => {
+                        if (!repoPath) return;
+                        const separator = repoPath.endsWith('/') || repoPath.endsWith('\\') ? '' : '/';
+                        const absolutePath = `${repoPath}${separator}${smPath}`;
+                        await gitOps.handleOpenRepo(absolutePath);
                       }}
                     />
                   </div>
@@ -636,6 +654,13 @@ export default function App() {
         onOpenChange={setShowStartGitFlowModal}
         onStart={(type, name) => gitOps.handleStartGitFlow(type, name)}
       />
+
+      <AddSubmoduleModal
+        open={showAddSubmoduleModal}
+        onOpenChange={setShowAddSubmoduleModal}
+        onAdd={(url, path, applyConfigs) => gitOps.handleAddSubmodule(url, path, applyConfigs)}
+      />
+
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>

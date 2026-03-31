@@ -23,7 +23,8 @@ export function useGitOperations({
     refreshBranchStatusInternal,
     refreshHistoryInternal,
     refreshStashesInternal,
-    refreshRebaseStatusInternal
+    refreshRebaseStatusInternal,
+    refreshSubmodulesInternal
   } = gitState;
 
   const {
@@ -1023,6 +1024,62 @@ export function useGitOperations({
     });
   };
 
+  const handleSyncSubmodules = async () => {
+    await withLoading('Synchronizing submodules...', async () => {
+      try {
+        const result = await (window as any).electronAPI.updateSubmodules();
+        if (result.success) {
+          toast.success('Submodules synchronized successfully!');
+          addLog('success', 'Submodules synchronized');
+          await refreshSubmodulesInternal();
+        } else {
+          toast.error(result.error || 'Failed to sync submodules');
+          addLog('error', `Failed to sync submodules: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Failed to sync submodules: ${error.message}`);
+      }
+    });
+  };
+
+  const handleAddSubmodule = async (url: string, path: string, applyConfigs: boolean) => {
+    await withLoading('Adding submodule...', async () => {
+      try {
+        const result = await (window as any).electronAPI.addSubmodule(url, path, applyConfigs);
+        if (result.success) {
+          toast.success(`Submodule added at ${path}`);
+          addLog('success', `Added submodule from ${url} to ${path}`);
+          await refreshSubmodulesInternal();
+          await refreshStatusInternal();
+        } else {
+          toast.error(result.error || 'Failed to add submodule');
+          addLog('error', `Failed to add submodule: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Failed to add submodule: ${error.message}`);
+      }
+    });
+  };
+
+  const handleRemoveSubmodule = async (path: string) => {
+    await withLoading('Removing submodule...', async () => {
+      try {
+        const result = await (window as any).electronAPI.removeSubmodule(path);
+        if (result.success) {
+          toast.success(`Submodule removed: ${path}`);
+          addLog('success', `Removed submodule at ${path}`);
+          await refreshSubmodulesInternal();
+          await refreshStatusInternal();
+        } else {
+          toast.error(result.error || 'Failed to remove submodule');
+          addLog('error', `Failed to remove submodule: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Failed to remove submodule: ${error.message}`);
+      }
+    });
+  };
+
   return {
     handleCommit,
     handleClone,
@@ -1063,6 +1120,9 @@ export function useGitOperations({
     checkGitFlowInitialized,
     handleInitGitFlow,
     handleStartGitFlow,
-    handleFinishGitFlow
+    handleFinishGitFlow,
+    handleSyncSubmodules,
+    handleAddSubmodule,
+    handleRemoveSubmodule
   };
 }

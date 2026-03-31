@@ -63,6 +63,8 @@ export function useGitState({
   const [conflictedFiles, setConflictedFiles] = useState<any[]>([]);
   const [rebaseStatus, setRebaseStatus] = useState<{ inProgress: boolean; currentStep?: number; totalSteps?: number; stoppedMessage?: string }>({ inProgress: false });
   const [cherryPickStatus, setCherryPickStatus] = useState<{ inProgress: boolean }>({ inProgress: false });
+  const [submodules, setSubmodules] = useState<any[]>([]);
+  const [superprojectPath, setSuperprojectPath] = useState<string | null>(null);
   const [historyFilters, setHistoryFiltersState] = useState<HistoryFilters>({});
   
   const historyFiltersRef = useRef(historyFilters);
@@ -111,6 +113,50 @@ export function useGitState({
   const refreshStatus = useCallback((pathOverride?: string) => {
     return runQueued(() => refreshStatusInternal(pathOverride));
   }, [refreshStatusInternal, runQueued]);
+
+  const refreshSubmodulesInternal = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await (window as any).electronAPI.getSubmodules();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success && result.submodules) {
+        setSubmodules(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(result.submodules)) {
+            return result.submodules;
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh submodules:', error);
+    }
+  }, [repoPath]);
+
+  const refreshSubmodules = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshSubmodulesInternal(pathOverride));
+  }, [refreshSubmodulesInternal, runQueued]);
+
+  const refreshSuperprojectPathInternal = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.getSuperprojectPath();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success && result.path) {
+        setSuperprojectPath(result.path);
+      } else {
+        setSuperprojectPath(null);
+      }
+    } catch (error) {
+      console.error('Failed to get superproject:', error);
+      setSuperprojectPath(null);
+    }
+  }, [repoPath]);
+
+  const refreshSuperprojectPath = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshSuperprojectPathInternal(pathOverride));
+  }, [refreshSuperprojectPathInternal, runQueued]);
 
   const refreshBranchInternal = useCallback(async (pathOverride?: string) => {
     const targetPath = pathOverride || repoPath;
@@ -368,6 +414,8 @@ export function useGitState({
       refreshStashes();
       refreshRebaseStatus();
       refreshBranchStatus();
+      refreshSubmodules();
+      refreshSuperprojectPath();
       performFetchSilent();
     });
 
@@ -385,6 +433,8 @@ export function useGitState({
     refreshStashes,
     refreshRebaseStatus,
     refreshBranchStatus,
+    refreshSubmodules,
+    refreshSuperprojectPath,
     performFetchSilent
   ]);
 
@@ -413,7 +463,9 @@ export function useGitState({
       refreshHistoryInternal(path),
       refreshStashesInternal(path),
       refreshBranchStatusInternal(path),
-      refreshRebaseStatusInternal(path)
+      refreshRebaseStatusInternal(path),
+      refreshSubmodulesInternal(path),
+      refreshSuperprojectPathInternal(path)
     ]);
   }, [
     refreshStatusInternal,
@@ -422,7 +474,9 @@ export function useGitState({
     refreshHistoryInternal,
     refreshStashesInternal,
     refreshBranchStatusInternal,
-    refreshRebaseStatusInternal
+    refreshRebaseStatusInternal,
+    refreshSubmodulesInternal,
+    refreshSuperprojectPathInternal
   ]);
 
   return {
@@ -441,6 +495,8 @@ export function useGitState({
     conflictedFiles, setConflictedFiles,
     rebaseStatus, setRebaseStatus,
     cherryPickStatus, setCherryPickStatus,
+    submodules, setSubmodules,
+    superprojectPath, setSuperprojectPath,
 
     runQueued,
     refreshAllData,
@@ -460,6 +516,10 @@ export function useGitState({
     refreshStashes,
     refreshRebaseStatusInternal,
     refreshRebaseStatus,
+    refreshSubmodulesInternal,
+    refreshSubmodules,
+    refreshSuperprojectPathInternal,
+    refreshSuperprojectPath,
     refreshBranchesSilent,
     performFetchSilent,
     historyFilters,

@@ -16,6 +16,8 @@ interface RepoHeaderProps {
   canStash?: boolean;
   isShowingGraphs?: boolean;
   isShowingFilters?: boolean;
+  superprojectPath?: string | null;
+  onOpenSuperproject?: (path: string) => void;
   onSwitchRepo?: (repoName: string, path: string) => void;
   onOpenNew?: () => void;
   onOpenSettings?: () => void;
@@ -27,7 +29,7 @@ interface RepoHeaderProps {
   onStartGitFlow?: () => void;
 }
 
-export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash, onToggleGraphs, onToggleFilters, onStartGitFlow }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash, onToggleGraphs, onToggleFilters, onStartGitFlow }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -109,8 +111,8 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                   disabled={isDisabled}
                   className={`group flex items-center gap-2 text-left transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-foreground'}`}
                 >
-                  <h1 className="mb-1">{repoName}</h1>
-                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-hover:text-muted-foreground" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                  <h1 className="mb-0.5">{repoName}</h1>
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-hover:text-foreground" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                 </button>
 
                 {isOpen && (
@@ -161,21 +163,36 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 )}
 
                 {repoName && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <GitBranch className="size-4" />
-                    <span>{currentBranch}</span>
-                    {branchStatus && branchStatus.hasUpstream && (
-                      <div className="flex items-center gap-2 ml-2 text-xs">
-                        <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-foreground' : 'text-muted-foreground'}`} title={`${branchStatus.behind} commits behind`}>
-                          <ArrowDown className="size-3 mr-0.5" />
-                          {branchStatus.behind}
-                        </span>
-                        <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-foreground' : 'text-muted-foreground'}`} title={`${branchStatus.ahead} commits ahead`}>
-                          <ArrowUp className="size-3 mr-0.5" />
-                          {branchStatus.ahead}
-                        </span>
+                  <div className="flex flex-col gap-1.5 mt-1.5">
+                    {superprojectPath && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] h-4 px-1.5 font-medium leading-none">Submodule</Badge>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onOpenSuperproject?.(superprojectPath); }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors hover:underline"
+                          title="Return to Parent Repository"
+                        >
+                           <ArrowUp className="size-3" />
+                           Back to parent repo
+                        </button>
                       </div>
                     )}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <GitBranch className="size-4" />
+                      <span>{currentBranch}</span>
+                      {branchStatus && branchStatus.hasUpstream && (
+                        <div className="flex items-center gap-2 ml-2 text-xs">
+                          <span className={`flex items-center ${branchStatus.behind > 0 ? 'text-foreground' : 'text-muted-foreground'}`} title={`${branchStatus.behind} commits behind`}>
+                            <ArrowDown className="size-3 mr-0.5" />
+                            {branchStatus.behind}
+                          </span>
+                          <span className={`flex items-center ${branchStatus.ahead > 0 ? 'text-foreground' : 'text-muted-foreground'}`} title={`${branchStatus.ahead} commits ahead`}>
+                            <ArrowUp className="size-3 mr-0.5" />
+                            {branchStatus.ahead}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
