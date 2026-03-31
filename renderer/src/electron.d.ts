@@ -92,7 +92,12 @@ declare global {
       initializeGitFlow: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       startGitFlowBranch: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       finishGitFlowBranch: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getSubmodules: () => Promise<{ success: boolean; submodules?: Array<{ name: string; path: string; url: string; commitHash: string; status: 'synced'|'out-of-sync'|'uninitialized'|'conflict'|'unknown' }>; error?: string; errorType?: string }>;
+      addSubmodule: (url: string, path: string, applyConfigs: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      updateSubmodules: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      removeSubmodule: (path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
+      getSuperprojectPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string; errorType?: string }>;
       getFilesChurn: (limit?: number) => Promise<{ success: boolean; files?: Array<{ path: string; changes: number }>; error?: string; errorType?: string }>;
       getCommitActivity: () => Promise<{ success: boolean; activity?: Array<{ day: number; hour: number; count: number }>; error?: string; errorType?: string }>;

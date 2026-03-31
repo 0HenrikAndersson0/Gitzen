@@ -1255,6 +1255,20 @@ export async function getRepoName(): Promise<{ success: boolean; name?: string; 
   }
 }
 
+export async function getSuperprojectPath(): Promise<{ success: boolean; path?: string; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+    const { stdout } = await runGitCommand('rev-parse --show-superproject-working-tree');
+    const pathOutput = stdout.trim();
+    return { success: true, path: pathOutput || undefined };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
 export async function getRemoteUrl(remote: string = 'origin'): Promise<{ success: boolean; url?: string; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
@@ -2779,6 +2793,122 @@ export async function finishGitFlowBranch(type: GitFlowBranchType, name: string)
       await runGitCommand(`checkout ${developBranch}`, currentRepoPath, env);
       await runGitCommand(`merge --no-ff "${targetBranch}"`, currentRepoPath, env);
       await runGitCommand(`branch -d "${targetBranch}"`, currentRepoPath, env);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Git Submodules Integration
+// -----------------------------------------------------------------------------
+
+export interface SubmoduleStatus {
+  name: string;
+  path: string;
+  url: string;
+  commitHash: string;
+  status: 'synced' | 'out-of-sync' | 'uninitialized' | 'conflict' | 'unknown';
+}
+
+export async function getSubmodules(): Promise<{ success: boolean; submodules?: SubmoduleStatus[]; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    
+    const urlMap = new Map<string, string>();
+    try {
+      const { stdout: configOut } = await runGitCommand('config --file .gitmodules --get-regexp path');
+      const lines = configOut.split('\n').filter(Boolean);
+      for (const line of lines) {
+        const match = line.match(/^submodule\.(.+)\.path\s+(.+)$/);
+        if (match) {
+          const [, name, smPath] = match;
+          try {
+            const { stdout: urlOut } = await runGitCommand(`config --file .gitmodules --get submodule.${name}.url`);
+            urlMap.set(smPath.trim(), urlOut.trim());
+          } catch {}
+        }
+      }
+    } catch {
+      // Likely no .gitmodules file present
+      return { success: true, submodules: [] };
+    }
+
+    const { stdout: statusOut } = await runGitCommand('submodule status');
+    const smLines = statusOut.split('\n').filter(Boolean);
+    const submodules: SubmoduleStatus[] = smLines.map(line => {
+      const statusChar = line.charAt(0);
+      const parts = line.substring(1).trim().split(' ');
+      const commitHash = parts[0] ? parts[0].substring(0, 7) : '';
+      const smPath = parts[1] || '';
+      
+      let status: SubmoduleStatus['status'] = 'synced';
+      if (statusChar === '+') status = 'out-of-sync';
+      else if (statusChar === '-') status = 'uninitialized';
+      else if (statusChar === 'U') status = 'conflict';
+      else if (statusChar !== ' ') status = 'unknown';
+
+      return {
+        name: smPath.split('/').pop() || smPath,
+        path: smPath,
+        url: urlMap.get(smPath) || '',
+        commitHash,
+        status
+      };
+    });
+
+    return { success: true, submodules };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function addSubmodule(url: string, smPath: string, applyConfigs: boolean = false): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    await runGitCommand(`submodule add "${url}" "${smPath}"`);
+    
+    if (applyConfigs) {
+      await runGitCommand('config --local submodule.recurse true').catch(() => {});
+      await runGitCommand('config --local push.recurseSubmodules on-demand').catch(() => {});
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function updateSubmodules(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    await runGitCommand('submodule update --init --recursive');
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function removeSubmodule(smPath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    
+    // 1. Deinit
+    await runGitCommand(`submodule deinit -f -- "${smPath}"`).catch(() => {});
+    
+    // 2. Remove from index via git rm
+    await runGitCommand(`rm -f "${smPath}"`).catch(() => {});
+    
+    // 3. Purge cache physically native to Node
+    const absoluteDotGitModulesPath = path.join(currentRepoPath, '.git', 'modules', smPath);
+    if (fs.existsSync(absoluteDotGitModulesPath)) {
+      await fs.promises.rm(absoluteDotGitModulesPath, { recursive: true, force: true });
     }
 
     return { success: true };
