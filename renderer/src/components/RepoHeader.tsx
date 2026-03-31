@@ -24,9 +24,10 @@ interface RepoHeaderProps {
   onStash?: () => void;
   onToggleGraphs?: () => void;
   onToggleFilters?: () => void;
+  onStartGitFlow?: () => void;
 }
 
-export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash, onToggleGraphs, onToggleFilters }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash, onToggleGraphs, onToggleFilters, onStartGitFlow }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -187,6 +188,18 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
         <div className="flex gap-2 items-center">
           {repoName && (
             <>
+              {onStartGitFlow && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onStartGitFlow}
+                  className="gap-2 border-border bg-secondary/50 hover:bg-accent text-foreground transition-colors"
+                  title="Start Git Flow Branch"
+                >
+                  <GitBranch className="size-4" />
+                  <span className="hidden sm:inline">Flow</span>
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

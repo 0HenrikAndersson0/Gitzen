@@ -33,6 +33,7 @@ interface BranchesPanelProps {
   isCreateDialogOpen?: boolean;
   onCloseCreateDialog?: () => void;
   onOpenCreateDialog?: () => void;
+  onFinishGitFlow?: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => void;
 }
 
 export const BranchesPanel = memo(function BranchesPanel({
@@ -52,6 +53,7 @@ export const BranchesPanel = memo(function BranchesPanel({
   isCreateDialogOpen,
   onCloseCreateDialog,
   onOpenCreateDialog,
+  onFinishGitFlow
 }: BranchesPanelProps) {
   const [internalShowCreateDialog, setInternalShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
@@ -293,8 +295,35 @@ export const BranchesPanel = memo(function BranchesPanel({
     }
   }, [contextMenu]);
 
+  // Detect if current branch is a Git Flow branch
+  const flowMatch = currentBranch.match(/^(feature|bugfix|release|hotfix|support)\/(.+)$/);
+  const activeFlowType = flowMatch ? flowMatch[1] : null;
+  const activeFlowName = flowMatch ? flowMatch[2] : null;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Git Flow Active Action (Only shows when on a flow branch) */}
+      {activeFlowType && activeFlowName && onFinishGitFlow && (
+        <div className="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <h3 className="font-semibold text-xs text-foreground">
+              Active {activeFlowType.charAt(0).toUpperCase() + activeFlowType.slice(1)}
+            </h3>
+          </div>
+          <p className="text-[10px] text-muted-foreground font-mono truncate pl-3.5">{activeFlowName}</p>
+          <Button 
+            variant="secondary"
+            size="sm"
+            className="w-full mt-1 text-xs border border-border hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+            onClick={() => onFinishGitFlow(activeFlowType as any, activeFlowName)}
+          >
+            <CheckCircle2 className="size-3 mr-1.5" />
+            Finish {activeFlowType}
+          </Button>
+        </div>
+      )}
+
       {/* Local Branches Panel */}
       <div className="rounded-lg border border-border bg-card/50 flex flex-col">
         <div className="border-b border-border p-3 flex items-center justify-between cursor-pointer hover:bg-accent/30 transition-colors"
@@ -304,16 +333,18 @@ export const BranchesPanel = memo(function BranchesPanel({
             <GitBranch className="size-4" />
             <h3 className="font-semibold text-sm">Local Branches</h3>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCreateBranchClick();
-            }}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors bg-secondary text-foreground hover:bg-muted dark:bg-emerald-600/10 dark:text-emerald-400 dark:hover:bg-emerald-600/20"
-          >
-            <Plus className="size-3" />
-            New
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCreateBranchClick();
+              }}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors bg-secondary text-foreground hover:bg-muted dark:bg-emerald-600/10 dark:text-emerald-400 dark:hover:bg-emerald-600/20"
+            >
+              <Plus className="size-3" />
+              New
+            </button>
+          </div>
         </div>
         {localBranchesExpanded && (
           <div className="flex flex-col">

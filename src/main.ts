@@ -473,6 +473,23 @@ ipcMain.handle('git:cancelOperation', () => {
   return gitService.cancelCurrentOperation();
 });
 
+// Git Flow handlers
+ipcMain.handle('git:checkGitFlowInitialized', async () => {
+  return await gitService.checkGitFlowInitialized();
+});
+
+ipcMain.handle('git:initializeGitFlow', async () => {
+  return await gitService.initializeGitFlow();
+});
+
+ipcMain.handle('git:startGitFlowBranch', async (_, type, name) => {
+  return await gitService.startGitFlowBranch(type, name);
+});
+
+ipcMain.handle('git:finishGitFlowBranch', async (_, type, name) => {
+  return await gitService.finishGitFlowBranch(type, name);
+});
+
 // Update handlers
 ipcMain.handle('update:check', async () => {
   return await updateService.checkForUpdates();

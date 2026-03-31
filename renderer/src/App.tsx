@@ -19,6 +19,8 @@ import { LoadingOverlay } from './components/ui/spinner';
 import { SplashScreen } from './components/SplashScreen';
 import { ForcePushDialog } from './components/ForcePushDialog';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { InitGitFlowDialog } from './components/InitGitFlowDialog';
+import { StartGitFlowModal } from './components/StartGitFlowModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './components/ui/dialog';
 import { GripVertical } from 'lucide-react';
@@ -92,6 +94,8 @@ export default function App() {
 
   // Resize State
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
+  const [showInitGitFlowDialog, setShowInitGitFlowDialog] = useState(false);
+  const [showStartGitFlowModal, setShowStartGitFlowModal] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(250); // px
   const [rightPanelWidth, setRightPanelWidth] = useState(350); // px
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
@@ -360,6 +364,11 @@ export default function App() {
           onStash={handleStash}
           onToggleGraphs={() => setShowGraphs(!showGraphs)}
           onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
+          onStartGitFlow={async () => {
+            const isInit = await gitOps.checkGitFlowInitialized();
+            if (!isInit) setShowInitGitFlowDialog(true);
+            else setShowStartGitFlowModal(true);
+          }}
         />
       </div>
 
@@ -442,6 +451,7 @@ export default function App() {
                     onCreateBranch={handleCreateBranch}
                     onDeleteBranch={handleDeleteBranch}
                     onMergeBranch={handleMergeBranch}
+                    onFinishGitFlow={gitOps.handleFinishGitFlow}
                     onSetLoading={(loading, message) => {
                       setIsLoading(loading);
                       setLoadingMessage(message);
@@ -610,6 +620,21 @@ export default function App() {
       <ShortcutsModal
         open={showShortcutsModal}
         onClose={() => setShowShortcutsModal(false)}
+      />
+
+      <InitGitFlowDialog
+        open={showInitGitFlowDialog}
+        onOpenChange={setShowInitGitFlowDialog}
+        onInitialize={() => {
+          setShowInitGitFlowDialog(false);
+          gitOps.handleInitGitFlow();
+        }}
+      />
+
+      <StartGitFlowModal
+        open={showStartGitFlowModal}
+        onOpenChange={setShowStartGitFlowModal}
+        onStart={(type, name) => gitOps.handleStartGitFlow(type, name)}
       />
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <DialogContent className="bg-card border-border">

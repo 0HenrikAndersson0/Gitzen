@@ -956,6 +956,73 @@ export function useGitOperations({
     }
   };
 
+  const checkGitFlowInitialized = async () => {
+    try {
+      const result = await (window as any).electronAPI.checkGitFlowInitialized();
+      if (result.success) {
+        return result.initialized;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to check git flow initialization:', error);
+      return false;
+    }
+  };
+
+  const handleInitGitFlow = async () => {
+    await withLoading('Initializing Git Flow...', async () => {
+      try {
+        const result = await (window as any).electronAPI.initializeGitFlow();
+        if (result.success) {
+          toast.success('Git Flow initialized successfully!');
+          addLog('success', 'Initialized Git Flow');
+          await refreshAllData(repoPath);
+        } else {
+          toast.error(`Failed to initialize Git Flow: ${result.error}`);
+          addLog('error', `Git Flow init failed: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Git Flow error: ${error.message || 'Unknown error'}`);
+      }
+    });
+  };
+
+  const handleStartGitFlow = async (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => {
+    await withLoading(`Starting ${type} ${name}...`, async () => {
+      try {
+        const result = await (window as any).electronAPI.startGitFlowBranch(type, name);
+        if (result.success) {
+          toast.success(`Started ${type}: ${name}`);
+          addLog('success', `Started git flow ${type}: ${name}`);
+          await refreshAllData(repoPath);
+        } else {
+          toast.error(`Failed to start ${type}: ${result.error}`);
+          addLog('error', `Git Flow start failed: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Git Flow error: ${error.message || 'Unknown error'}`);
+      }
+    });
+  };
+
+  const handleFinishGitFlow = async (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => {
+    await withLoading(`Finishing ${type} ${name}...`, async () => {
+      try {
+        const result = await (window as any).electronAPI.finishGitFlowBranch(type, name);
+        if (result.success) {
+          toast.success(`Finished ${type}: ${name}`);
+          addLog('success', `Finished git flow ${type}: ${name}`);
+          await refreshAllData(repoPath);
+        } else {
+          toast.error(`Failed to finish ${type}: ${result.error}`);
+          addLog('error', `Git Flow finish failed: ${result.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Git Flow error: ${error.message || 'Unknown error'}`);
+      }
+    });
+  };
+
   return {
     handleCommit,
     handleClone,
@@ -992,6 +1059,10 @@ export function useGitOperations({
     handleConfirmReset,
     handleOpenRepo,
     handleUndoCommit,
-    handleCancelOperation
+    handleCancelOperation,
+    checkGitFlowInitialized,
+    handleInitGitFlow,
+    handleStartGitFlow,
+    handleFinishGitFlow
   };
 }

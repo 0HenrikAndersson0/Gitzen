@@ -40,6 +40,13 @@ export function parseGitError(error: any): { message: string; type?: string } {
     return { message, type: 'DetachedHeadError' };
   }
 
+  if (message.includes("'flow' is not a git command")) {
+    return { 
+      message: "Git Flow is not installed on your system. Please install it to use this feature. (e.g. 'brew install git-flow' on macOS or 'apt-get install git-flow' on Linux)", 
+      type: 'CommandNotFoundError' 
+    };
+  }
+
   return { message };
 }
 
@@ -2637,6 +2644,144 @@ export async function getFileBlame(filePath: string, commitHash?: string): Promi
     }
 
     return { success: true, blame: result };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Git Flow Integration
+// -----------------------------------------------------------------------------
+
+export async function checkGitFlowInitialized(): Promise<{ success: boolean; initialized?: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    
+    try {
+      // Check if gitflow prefixes are defined in the config
+      const { stdout } = await runGitCommand('config --get-regexp ^gitflow\\.prefix');
+      return { success: true, initialized: stdout.trim().length > 0 };
+    } catch {
+      return { success: true, initialized: false }; // Non-zero exit code means no config found
+    }
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function initializeGitFlow(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    
+    // Find the primary branch (main or master)
+    let masterBranch = 'main';
+    try {
+      await runGitCommand('show-ref --verify refs/heads/main');
+    } catch {
+      try {
+        await runGitCommand('show-ref --verify refs/heads/master');
+        masterBranch = 'master';
+      } catch {
+        // Neither exists, maybe it's completely empty or another name. Default to main.
+      }
+    }
+
+    // Set standard gitflow config variables
+    await runGitCommand(`config gitflow.branch.master ${masterBranch}`);
+    await runGitCommand('config gitflow.branch.develop develop');
+    await runGitCommand('config gitflow.prefix.feature feature/');
+    await runGitCommand('config gitflow.prefix.bugfix bugfix/');
+    await runGitCommand('config gitflow.prefix.release release/');
+    await runGitCommand('config gitflow.prefix.hotfix hotfix/');
+    await runGitCommand('config gitflow.prefix.support support/');
+    await runGitCommand('config gitflow.prefix.versiontag ""');
+
+    // Create develop branch from master if it doesn't exist
+    try {
+      await runGitCommand('show-ref --verify refs/heads/develop');
+    } catch {
+      await runGitCommand(`branch develop ${masterBranch}`);
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export type GitFlowBranchType = 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support';
+
+export async function startGitFlowBranch(type: GitFlowBranchType, name: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    
+    let baseBranchCmd = "config --get gitflow.branch.develop";
+    if (type === 'hotfix') {
+      baseBranchCmd = "config --get gitflow.branch.master";
+    }
+
+    let baseBranch = 'develop';
+    if (type === 'hotfix') baseBranch = 'main';
+
+    try {
+      const { stdout } = await runGitCommand(baseBranchCmd);
+      if (stdout.trim()) baseBranch = stdout.trim();
+    } catch {
+      // Config not found, fallback to defaults
+    }
+    
+    await runGitCommand(`checkout -b ${type}/${name} ${baseBranch}`);
+    
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function finishGitFlowBranch(type: GitFlowBranchType, name: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    
+    let developBranch = 'develop';
+    let masterBranch = 'main';
+    
+    try {
+      const { stdout: devOut } = await runGitCommand("config --get gitflow.branch.develop");
+      if (devOut.trim()) developBranch = devOut.trim();
+      const { stdout: masterOut } = await runGitCommand("config --get gitflow.branch.master");
+      if (masterOut.trim()) masterBranch = masterOut.trim();
+    } catch {}
+
+    const env = { 
+      ...process.env, 
+      GIT_MERGE_AUTOEDIT: 'no',
+      GIT_EDITOR: 'node -e "process.exit(0)"' 
+    };
+    
+    const targetBranch = `${type}/${name}`;
+
+    if (type === 'feature' || type === 'bugfix' || type === 'support') {
+      await runGitCommand(`checkout ${developBranch}`, currentRepoPath, env);
+      await runGitCommand(`merge --no-ff "${targetBranch}"`, currentRepoPath, env);
+      await runGitCommand(`branch -d "${targetBranch}"`, currentRepoPath, env);
+    } else if (type === 'release' || type === 'hotfix') {
+      await runGitCommand(`checkout ${masterBranch}`, currentRepoPath, env);
+      await runGitCommand(`merge --no-ff "${targetBranch}"`, currentRepoPath, env);
+      
+      try {
+        await runGitCommand(`tag -a "${name}" -m "Finish ${type} ${name}"`, currentRepoPath, env);
+      } catch {}
+
+      await runGitCommand(`checkout ${developBranch}`, currentRepoPath, env);
+      await runGitCommand(`merge --no-ff "${targetBranch}"`, currentRepoPath, env);
+      await runGitCommand(`branch -d "${targetBranch}"`, currentRepoPath, env);
+    }
+
+    return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
