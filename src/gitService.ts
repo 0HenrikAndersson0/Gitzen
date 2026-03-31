@@ -1900,6 +1900,7 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
         });
         return { success: true };
       } catch (customToolError: any) {
+        if (signal.aborted) throw new Error('Operation aborted');
         // If custom tool fails, fall through to other options
         console.warn('Custom merge tool failed, trying alternatives:', customToolError.message);
       }
@@ -1932,6 +1933,7 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
       });
       return { success: true };
     } catch (mergetoolError: any) {
+      if (signal.aborted) throw new Error('Operation aborted');
       // If mergetool fails (e.g., not configured), try to open the file with the system default application
       try {
         const error = await shell.openPath(fullPath);
