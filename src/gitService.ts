@@ -1874,6 +1874,7 @@ export async function abortConflict(): Promise<{ success: boolean; error?: strin
 }
 
 export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  const signal = startOperation();
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -1895,6 +1896,7 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
         await execFileAsync(customMergeToolPath, [fullPath], {
           cwd: currentRepoPath!,
           maxBuffer: 10 * 1024 * 1024,
+          signal
         });
         return { success: true };
       } catch (customToolError: any) {
@@ -1926,6 +1928,7 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
       await runGitExecFile(['mergetool', '--no-prompt', '--', filePath], {
         cwd: currentRepoPath!,
         maxBuffer: 10 * 1024 * 1024,
+        signal
       });
       return { success: true };
     } catch (mergetoolError: any) {
@@ -1950,6 +1953,7 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
 
         await execAsync(command, {
           maxBuffer: 10 * 1024 * 1024,
+          signal
         });
 
         return { success: true };
