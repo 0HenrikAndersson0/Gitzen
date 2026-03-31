@@ -88,6 +88,10 @@ declare global {
       gitGetCommitsForInteractiveRebase: (targetBranch: string) => Promise<{ success: boolean; commits?: any[]; error?: string; errorType?: string }>;
       gitInteractiveRebase: (targetBranch: string, todoLines: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      checkGitFlowInitialized: () => Promise<{ success: boolean; initialized?: boolean; error?: string; errorType?: string }>;
+      initializeGitFlow: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      startGitFlowBranch: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      finishGitFlowBranch: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string; errorType?: string }>;
       getFilesChurn: (limit?: number) => Promise<{ success: boolean; files?: Array<{ path: string; changes: number }>; error?: string; errorType?: string }>;
