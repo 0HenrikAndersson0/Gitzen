@@ -1885,81 +1885,50 @@ export async function openFileInMergeTool(filePath: string): Promise<{ success: 
       return { success: false, error: 'File does not exist' };
     }
 
-    // First, check if user has configured a custom merge tool path
+    // First, check if user has configured a custom merge tool
     const customMergeToolPath = settingsService.getMergeToolPath();
-    let hasTool = false;
+    let handled = false;
 
     if (customMergeToolPath && fs.existsSync(customMergeToolPath)) {
-      hasTool = true;
       try {
-        // Execute the custom merge tool with the file path
-        await execFileAsync(customMergeToolPath, [fullPath], {
-          cwd: currentRepoPath!,
-          maxBuffer: 10 * 1024 * 1024,
-          signal
-        });
+        if (process.platform === 'darwin' && customMergeToolPath.endsWith('.app')) {
+          await execAsync(`open -a "${customMergeToolPath}" "${fullPath}"`, { signal });
+        } else {
+          await execFileAsync(customMergeToolPath, [fullPath], { cwd: currentRepoPath!, maxBuffer: 10*1024*1024, signal });
+        }
         return { success: true };
       } catch (customToolError: any) {
-        if (signal.aborted) throw new Error('Operation aborted');
-        // If custom tool fails, fall through to other options
+        if (signal?.aborted) throw new Error('Operation aborted');
         console.warn('Custom merge tool failed, trying alternatives:', customToolError.message);
       }
     }
 
-    // Check if git has a merge tool configured
-    if (!hasTool) {
-      try {
-        const { stdout } = await runGitExecFile(['config', 'merge.tool'], {
-          cwd: currentRepoPath!,
-        });
-        if (stdout.trim()) {
-          hasTool = true;
-        }
-      } catch (error) {
-        // Not configured in git
-      }
-    }
-
-    if (!hasTool) {
-      return { success: false, error: 'NO_MERGE_TOOL_CONFIGURED' };
-    }
-
-    // Try to use git mergetool, which respects user's merge.tool configuration
+    // Second, if no custom tool worked, check if a formal git merge.tool is configured
     try {
-      await runGitExecFile(['mergetool', '--no-prompt', '--', filePath], {
-        cwd: currentRepoPath!,
-        maxBuffer: 10 * 1024 * 1024,
-        signal
-      });
-      return { success: true };
-    } catch (mergetoolError: any) {
-      if (signal.aborted) throw new Error('Operation aborted');
-      // If mergetool fails (e.g., not configured), try to open the file with the system default application
-      try {
-        const error = await shell.openPath(fullPath);
-        if (error) {
-          throw new Error(error);
+      const { stdout } = await runGitExecFile(['config', 'merge.tool'], { cwd: currentRepoPath! });
+      if (stdout.trim()) {
+        try {
+          await runGitExecFile(['mergetool', '--no-prompt', '--', filePath], { cwd: currentRepoPath!, maxBuffer: 10*1024*1024, signal });
+          return { success: true };
+        } catch (mergetoolError: any) {
+          if (signal?.aborted) throw new Error('Operation aborted');
+          console.warn('git mergetool failed:', mergetoolError.message);
         }
-        return { success: true };
-      } catch (openError: any) {
-        // Final fallback: try to use system commands
-        const platform = process.platform;
-        let command: string;
-        if (platform === 'win32') {
-          command = `start "" "${fullPath}"`;
-        } else if (platform === 'darwin') {
-          command = `open "${fullPath}"`;
-        } else {
-          command = `xdg-open "${fullPath}"`;
-        }
-
-        await execAsync(command, {
-          maxBuffer: 10 * 1024 * 1024,
-          signal
-        });
-
-        return { success: true };
       }
+    } catch (e) {
+      // Configuration not found, skip git mergetool completely so node doesn't hang on vimdiff
+    }
+
+    // Final Fallback: just open the file normally in the OS!
+    try {
+      const error = await shell.openPath(fullPath);
+      if (error) throw new Error(error);
+      return { success: true };
+    } catch (openError: any) {
+      const platform = process.platform;
+      const command = platform === 'win32' ? `start "" "${fullPath}"` : platform === 'darwin' ? `open "${fullPath}"` : `xdg-open "${fullPath}"`;
+      await execAsync(command, { maxBuffer: 10 * 1024 * 1024, signal });
+      return { success: true };
     }
   } catch (error: any) {
     const parsed = parseGitError(error);
