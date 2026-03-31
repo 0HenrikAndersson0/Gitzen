@@ -28,7 +28,7 @@ export function Spinner({ className, size = 'md', ...props }: SpinnerProps) {
 
 export function LoadingOverlay({ message, onCancel }: { message?: string, onCancel?: () => void }) {
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
+    <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center flex-col gap-4 pointer-events-auto select-none">
       <Spinner size="lg" className="border-blue-500 border-t-transparent" />
       {message && <div className="text-foreground font-medium animate-pulse">{message}</div>}
       {onCancel && (
