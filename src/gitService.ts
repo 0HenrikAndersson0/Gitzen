@@ -509,11 +509,10 @@ export async function commit(message: string, amend: boolean = false): Promise<{
       return { success: false, error: 'No repository open' };
     }
 
-    const escapedMessage = message.replace(/"/g, '\\"');
     if (amend) {
-      await runGitCommand(`commit --amend -m "${escapedMessage}"`);
+      await runGitExecFile(['commit', '--amend', '-m', message], { cwd: currentRepoPath! });
     } else {
-      await runGitCommand(`commit -m "${escapedMessage}"`);
+      await runGitExecFile(['commit', '-m', message], { cwd: currentRepoPath! });
     }
     return { success: true };
   } catch (error: any) {
@@ -2061,7 +2060,7 @@ export async function rebaseBranch(branch: string): Promise<{ success: boolean; 
       return { success: false, error: 'No repository open' };
     }
 
-    await runGitCommand(`rebase ${branch}`);
+    await runGitExecFile(['rebase', branch], { cwd: currentRepoPath! });
     return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
