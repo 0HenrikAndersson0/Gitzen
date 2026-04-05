@@ -417,7 +417,6 @@ export function useGitState({
       refreshBranchStatus();
       refreshSubmodules();
       refreshSuperprojectPath();
-      performFetchSilent();
     });
 
     return () => {
@@ -435,8 +434,7 @@ export function useGitState({
     refreshRebaseStatus,
     refreshBranchStatus,
     refreshSubmodules,
-    refreshSuperprojectPath,
-    performFetchSilent
+    refreshSuperprojectPath
   ]);
 
   // Fetch remote changes when the application regains focus
