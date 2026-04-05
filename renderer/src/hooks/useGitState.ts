@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HistoryFilters } from '../electron';
+import { isEqualArray } from '../lib/utils';
 
 export interface BranchStatus {
   ahead: number;
@@ -40,18 +41,6 @@ interface UseGitStateProps {
   checkAuthError: (errorMsg: string, silent?: boolean, errorType?: string) => boolean;
   setHasCredentials: (has: boolean) => void;
   setShowMergeConflictDialog: (show: boolean) => void;
-}
-
-function isEqualArray(prev: any[], next: any[]): boolean {
-  if (prev === next) return true;
-  if (!prev || !next) return false;
-  if (prev.length !== next.length) return false;
-  if (prev.length === 0) return true;
-  
-  if (JSON.stringify(prev[0]) !== JSON.stringify(next[0])) return false;
-  if (JSON.stringify(prev[prev.length - 1]) !== JSON.stringify(next[next.length - 1])) return false;
-  
-  return true;
 }
 
 export function useGitState({
