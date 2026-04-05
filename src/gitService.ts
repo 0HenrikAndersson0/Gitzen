@@ -2930,6 +2930,3 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
-rrorType: parsed.type };
-  }
-}
