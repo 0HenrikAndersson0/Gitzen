@@ -1,10 +1,21 @@
 import { useCallback } from 'react';
+import { useGitState, FileChange } from './useGitState';
+import { useUIState } from './useUIState';
+
+export interface UseGitOperationsProps {
+  gitState: ReturnType<typeof useGitState>;
+  uiState: ReturnType<typeof useUIState> & { withLoading: (msg: string, fn: () => Promise<void>) => Promise<void> };
+  refs: {
+    filesRef: React.MutableRefObject<FileChange[]>;
+    setCommitMessage: (msg: string) => void;
+  };
+}
 
 export function useGitOperations({
   gitState,
   uiState,
   refs
-}: any) {
+}: UseGitOperationsProps) {
   const {
     repoPath, setRepoPath,
     setRepoName,
@@ -48,12 +59,12 @@ export function useGitOperations({
 
   const handleCommit = useCallback(async (message: string, amend: boolean = false) => {
     const currentFiles = filesRef.current;
-    const stagedFiles = currentFiles.filter((f: any) => f.staged);
+    const stagedFiles = currentFiles.filter((f: FileChange) => f.staged);
     addLog('info', amend ? `Amending commit...` : `Committing ${stagedFiles.length} file(s)...`);
 
     await withLoading(amend ? 'Amending commit...' : 'Committing changes...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitCommit(message, amend);
+        const result = await window.electronAPI.gitCommit(message, amend);
         if (result.success) {
           addLog('success', amend ? `Amended commit: "${message}"` : `Committed: "${message}"`);
           toast.success('Changes committed successfully!');
@@ -77,7 +88,7 @@ export function useGitOperations({
   const handleUndoCommit = async () => {
     await withLoading('Undoing last commit...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitUndoCommit();
+        const result = await window.electronAPI.gitUndoCommit();
         if (result.success) {
           toast.success('Last commit undone successfully');
           addLog('success', 'Undid last commit');
@@ -89,7 +100,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to undo commit');
           addLog('error', `Failed to undo commit: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to undo commit: ${error.message}`);
         addLog('error', `Failed to undo commit: ${error.message}`);
       }
@@ -102,7 +113,7 @@ export function useGitOperations({
 
     await withLoading(`Cloning repository...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitClone(url, path);
+        const result = await window.electronAPI.gitClone(url, path);
         if (result.success) {
           setRepoPath(path);
           setRepoName(url.split('/').pop()?.replace('.git', '') || 'repository');
@@ -130,7 +141,7 @@ export function useGitOperations({
   const handleStageAll = async () => {
     await withLoading('Staging all files...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitStageAll();
+        const result = await window.electronAPI.gitStageAll();
         if (result.success) {
           await refreshStatusInternal();
         } else {
@@ -145,7 +156,7 @@ export function useGitOperations({
   const handleUnstageAll = async () => {
     await withLoading('Unstaging all files...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitUnstageAll();
+        const result = await window.electronAPI.gitUnstageAll();
         if (result.success) {
           await refreshStatusInternal();
         } else {
@@ -158,20 +169,20 @@ export function useGitOperations({
   };
 
   const handleToggleStage = async (path: string) => {
-    const file = files.find((f: any) => f.path === path);
+    const file = files.find((f: FileChange) => f.path === path);
     if (!file) return;
 
     await withLoading(file.staged ? 'Unstaging file...' : 'Staging file...', async () => {
       try {
         if (file.staged) {
-          const result = await (window as any).electronAPI.gitUnstage([path]);
+          const result = await window.electronAPI.gitUnstage([path]);
           if (result.success) {
             await refreshStatusInternal();
           } else {
             addLog('error', result.error || 'Failed to unstage file');
           }
         } else {
-          const result = await (window as any).electronAPI.gitStage([path]);
+          const result = await window.electronAPI.gitStage([path]);
           if (result.success) {
             await refreshStatusInternal();
           } else {
@@ -187,7 +198,7 @@ export function useGitOperations({
   const handleRevertFile = async (path: string) => {
     await withLoading(`Reverting changes to ${path}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.revertFileChanges(path);
+        const result = await window.electronAPI.revertFileChanges(path);
         if (result.success) {
           addLog('success', `Reverted changes to ${path}`);
           toast.success(`Reverted changes to ${path}`);
@@ -206,7 +217,7 @@ export function useGitOperations({
   const handleDeleteFile = async (path: string) => {
     await withLoading(`Deleting file ${path}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.deleteFile(path);
+        const result = await window.electronAPI.deleteFile(path);
         if (result.success) {
           addLog('success', `Deleted file ${path}`);
           toast.success(`Deleted file ${path}`);
@@ -226,7 +237,7 @@ export function useGitOperations({
     addLog('info', 'Stashing changes...');
     await withLoading('Stashing changes...', async () => {
       try {
-        const result = await (window as any).electronAPI.createStash();
+        const result = await window.electronAPI.createStash();
         if (result.success) {
           addLog('success', 'Changes stashed successfully');
           toast.success('Changes stashed successfully!');
@@ -248,7 +259,7 @@ export function useGitOperations({
     addLog('info', `Applying stash ${name}...`);
     await withLoading(`Applying stash ${name}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.applyStash(name);
+        const result = await window.electronAPI.applyStash(name);
         if (result.success) {
           addLog('success', `Stash ${name} applied successfully`);
           toast.success(`Stash ${name} applied successfully!`);
@@ -270,7 +281,7 @@ export function useGitOperations({
     addLog('info', `Deleting stash ${name}...`);
     await withLoading(`Deleting stash ${name}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.deleteStash(name);
+        const result = await window.electronAPI.deleteStash(name);
         if (result.success) {
           addLog('success', `Stash ${name} deleted successfully`);
           toast.success(`Stash ${name} deleted successfully!`);
@@ -290,7 +301,7 @@ export function useGitOperations({
   const handleAddRemote = async (name: string, url: string) => {
     await withLoading(`Adding remote ${name}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitAddRemote(name, url);
+        const result = await window.electronAPI.gitAddRemote(name, url);
         if (result.success) {
           addLog('success', `Remote ${name} added successfully`);
           toast.success(`Remote ${name} added successfully`);
@@ -310,7 +321,7 @@ export function useGitOperations({
     addLog('info', `Pulling from origin/${currentBranch}...`);
     await withLoading(`Pulling from origin/${currentBranch}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitPull('origin', currentBranch);
+        const result = await window.electronAPI.gitPull('origin', currentBranch);
         if (result.success) {
           setHasCredentials(true);
           addLog('success', `Successfully pulled from origin/${currentBranch}`);
@@ -345,7 +356,7 @@ export function useGitOperations({
   const handlePush = async () => {
     if (!remoteUrl) {
       try {
-        const remoteResult = await (window as any).electronAPI.getRemoteUrl('origin');
+        const remoteResult = await window.electronAPI.getRemoteUrl('origin');
         if (!remoteResult.success || !remoteResult.url) {
           setShowAddRemoteDialog(true);
           return;
@@ -361,7 +372,7 @@ export function useGitOperations({
 
     await withLoading(`Pushing to origin/${currentBranch}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitPush('origin', currentBranch);
+        const result = await window.electronAPI.gitPush('origin', currentBranch);
         if (result.success) {
           setHasCredentials(true);
           addLog('success', `Successfully pushed to origin/${currentBranch}`);
@@ -404,7 +415,7 @@ export function useGitOperations({
     addLog('warning', `${overwrite ? 'Force' : 'Force-with-lease'} pushing to origin/${currentBranch}...`);
     await withLoading(`${overwrite ? 'Force' : 'Force-with-lease'} pushing to origin/${currentBranch}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitPush('origin', currentBranch, true, overwrite);
+        const result = await window.electronAPI.gitPush('origin', currentBranch, true, overwrite);
         if (result.success) {
           setHasCredentials(true);
           addLog('success', `Successfully ${overwrite ? 'force' : 'force-with-lease'} pushed to origin/${currentBranch}`);
@@ -430,7 +441,7 @@ export function useGitOperations({
   const handleAbortRebase = async () => {
     await withLoading('Aborting rebase...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitAbortRebase();
+        const result = await window.electronAPI.gitAbortRebase();
         if (result.success) {
           toast.success('Rebase aborted');
           addLog('info', 'Rebase aborted');
@@ -441,14 +452,14 @@ export function useGitOperations({
         } else {
           toast.error(result.error || 'Failed to abort rebase');
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to abort rebase: ${error.message}`);
       }
     });
   };
 
   const handleContinueRebase = async () => {
-    const conflictResult = await (window as any).electronAPI.getConflictedFiles();
+    const conflictResult = await window.electronAPI.getConflictedFiles();
     if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
       setConflictedFiles(conflictResult.files);
       setShowMergeConflictDialog(true);
@@ -458,7 +469,7 @@ export function useGitOperations({
 
     await withLoading('Continuing rebase...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitContinueRebase();
+        const result = await window.electronAPI.gitContinueRebase();
         if (result.success) {
           toast.success('Rebase continued');
           addLog('info', 'Rebase continued');
@@ -475,7 +486,7 @@ export function useGitOperations({
             toast.error(result.error || 'Failed to continue rebase');
           }
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to continue rebase: ${error.message}`);
       }
     });
@@ -485,7 +496,7 @@ export function useGitOperations({
     addLog('info', `Cherry-picking commit ${commitHash.substring(0, 7)}...`);
     await withLoading(`Cherry-picking ${commitHash.substring(0, 7)}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitCherryPick(commitHash);
+        const result = await window.electronAPI.gitCherryPick(commitHash);
         if (result.success) {
           toast.success(`Successfully cherry-picked ${commitHash.substring(0, 7)}`);
           addLog('success', `Cherry-picked ${commitHash.substring(0, 7)}`);
@@ -502,7 +513,7 @@ export function useGitOperations({
             addLog('error', errorMsg);
           }
         }
-      } catch (error: any) {
+} catch (error) {
         const msg = error.message || 'Unknown error';
         toast.error(`Cherry-pick failed: ${msg}`);
         addLog('error', `Cherry-pick failed: ${msg}`);
@@ -513,7 +524,7 @@ export function useGitOperations({
   const handleAbortCherryPick = async () => {
     await withLoading('Aborting cherry-pick...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitAbortCherryPick();
+        const result = await window.electronAPI.gitAbortCherryPick();
         if (result.success) {
           toast.success('Cherry-pick aborted');
           addLog('info', 'Cherry-pick aborted');
@@ -521,14 +532,14 @@ export function useGitOperations({
         } else {
           toast.error(result.error || 'Failed to abort cherry-pick');
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to abort cherry-pick: ${error.message}`);
       }
     });
   };
 
   const handleContinueCherryPick = async () => {
-    const conflictResult = await (window as any).electronAPI.getConflictedFiles();
+    const conflictResult = await window.electronAPI.getConflictedFiles();
     if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
       setConflictedFiles(conflictResult.files);
       setShowMergeConflictDialog(true);
@@ -538,7 +549,7 @@ export function useGitOperations({
 
     await withLoading('Continuing cherry-pick...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitContinueCherryPick();
+        const result = await window.electronAPI.gitContinueCherryPick();
         if (result.success) {
           toast.success('Cherry-pick continued');
           addLog('info', 'Cherry-pick continued');
@@ -552,7 +563,7 @@ export function useGitOperations({
             toast.error(result.error || 'Failed to continue cherry-pick');
           }
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to continue cherry-pick: ${error.message}`);
       }
     });
@@ -561,7 +572,7 @@ export function useGitOperations({
   const handleSkipCherryPick = async () => {
     await withLoading('Skipping cherry-pick step...', async () => {
       try {
-        const result = await (window as any).electronAPI.gitSkipCherryPick();
+        const result = await window.electronAPI.gitSkipCherryPick();
         if (result.success) {
           toast.success('Cherry-pick step skipped');
           addLog('info', 'Cherry-pick step skipped');
@@ -569,7 +580,7 @@ export function useGitOperations({
         } else {
           toast.error(result.error || 'Failed to skip cherry-pick step');
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to skip cherry-pick step: ${error.message}`);
       }
     });
@@ -580,7 +591,7 @@ export function useGitOperations({
 
     await withLoading(`Merging ${branch}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitMergeBranchToCurrent(branch);
+        const result = await window.electronAPI.gitMergeBranchToCurrent(branch);
 
         if (result.success) {
           toast.success(`Successfully merged ${branch} into ${currentBranch}`);
@@ -606,7 +617,7 @@ export function useGitOperations({
             toast.error(result.error || 'Merge failed');
           }
         }
-      } catch (error: any) {
+} catch (error) {
         const errorMessage = error.message || 'Unknown error';
         toast.error(`Failed to merge: ${errorMessage}`);
         addLog('error', `Merge error: ${errorMessage}`);
@@ -617,7 +628,7 @@ export function useGitOperations({
   const handleOpenFileInMergeTool = async (filePath: string) => {
     await withLoading('Opening merge tool...', async () => {
       try {
-        const result = await (window as any).electronAPI.openFileInMergeTool(filePath);
+        const result = await window.electronAPI.openFileInMergeTool(filePath);
         if (result.success) {
           addLog('info', `Opened ${filePath} in merge tool`);
         } else if (result.error === 'NO_MERGE_TOOL_CONFIGURED') {
@@ -627,7 +638,7 @@ export function useGitOperations({
           toast.error(`Failed to open file: ${result.error}`);
           addLog('error', `Failed to open ${filePath}: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         const errorMessage = error.message || 'Unknown error';
         toast.error(`Failed to open file: ${errorMessage}`);
         addLog('error', `Failed to open ${filePath}: ${errorMessage}`);
@@ -638,7 +649,7 @@ export function useGitOperations({
   const handleAbortConflict = async () => {
     await withLoading('Aborting operation...', async () => {
       try {
-        const result = await (window as any).electronAPI.abortConflict();
+        const result = await window.electronAPI.abortConflict();
         if (result.success) {
           toast.success('Operation aborted successfully');
           addLog('info', 'Operation aborted');
@@ -652,7 +663,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to abort operation');
           addLog('error', `Failed to abort operation: ${result.error || 'Unknown error'}`);
         }
-      } catch (error: any) {
+} catch (error) {
         const errorMessage = error.message || 'Unknown error';
         toast.error(`Failed to abort operation: ${errorMessage}`);
         addLog('error', `Failed to abort operation: ${errorMessage}`);
@@ -663,12 +674,12 @@ export function useGitOperations({
   const handleResolveFiles = async (filePaths: string[]) => {
     await withLoading(`Marking ${filePaths.length} file(s) as resolved...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitStage(filePaths);
+        const result = await window.electronAPI.gitStage(filePaths);
         if (result.success) {
           toast.success(`Marked ${filePaths.length} file(s) as resolved`);
           addLog('success', `Resolved ${filePaths.length} conflicted file(s)`);
 
-          const conflictedResult = await (window as any).electronAPI.getConflictedFiles();
+          const conflictedResult = await window.electronAPI.getConflictedFiles();
           if (conflictedResult.success && conflictedResult.files) {
             setConflictedFiles(conflictedResult.files);
 
@@ -683,7 +694,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to mark files as resolved');
           addLog('error', `Failed to resolve files: ${result.error || 'Unknown error'}`);
         }
-      } catch (error: any) {
+} catch (error) {
         const errorMessage = error.message || 'Unknown error';
         toast.error(`Failed to resolve files: ${errorMessage}`);
         addLog('error', `Failed to resolve files: ${errorMessage}`);
@@ -694,12 +705,12 @@ export function useGitOperations({
   const handleResolveConflict = async (filePath: string, decision: 'keep' | 'delete') => {
     await withLoading(`Resolving conflict for ${filePath}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.resolveConflict(filePath, decision);
+        const result = await window.electronAPI.resolveConflict(filePath, decision);
         if (result.success) {
           toast.success(`Resolved conflict for ${filePath}`);
           addLog('success', `Resolved conflict: ${decision} ${filePath}`);
 
-          const conflictedResult = await (window as any).electronAPI.getConflictedFiles();
+          const conflictedResult = await window.electronAPI.getConflictedFiles();
           if (conflictedResult.success && conflictedResult.files) {
             setConflictedFiles(conflictedResult.files);
 
@@ -713,7 +724,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to resolve conflict');
           addLog('error', `Failed to resolve conflict: ${result.error || 'Unknown error'}`);
         }
-      } catch (error: any) {
+} catch (error) {
         const errorMessage = error.message || 'Unknown error';
         toast.error(`Failed to resolve conflict: ${errorMessage}`);
         addLog('error', `Failed to resolve conflict: ${errorMessage}`);
@@ -728,7 +739,7 @@ export function useGitOperations({
     setCommits([]);
 
     try {
-      const result = await (window as any).electronAPI.getMaxCommits();
+      const result = await window.electronAPI.getMaxCommits();
       setHistoryLimit(result.success && result.maxCommits ? result.maxCommits : 50);
     } catch (e) {
       setHistoryLimit(50);
@@ -743,10 +754,10 @@ export function useGitOperations({
 
     await withLoading(`Opening repository...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitOpen(path);
+        const result = await window.electronAPI.gitOpen(path);
         if (result.success) {
           setRepoPath(path);
-          const nameResult = await (window as any).electronAPI.getRepoName();
+          const nameResult = await window.electronAPI.getRepoName();
           if (nameResult.success && nameResult.name) {
             setRepoName(nameResult.name);
           } else {
@@ -757,7 +768,7 @@ export function useGitOperations({
           toast.success('Repository opened successfully!');
 
           try {
-            const remoteResult = await (window as any).electronAPI.getRemoteUrl('origin');
+            const remoteResult = await window.electronAPI.getRemoteUrl('origin');
             if (remoteResult.success && remoteResult.url) {
               setRemoteUrl(remoteResult.url);
             }
@@ -802,7 +813,7 @@ export function useGitOperations({
     setCommits([]);
     await withLoading(`Switching to branch ${branch}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitCheckoutBranch(branch);
+        const result = await window.electronAPI.gitCheckoutBranch(branch);
         if (result.success) {
           addLog('success', `Switched to branch ${branch}`);
           setCurrentBranch(branch);
@@ -832,7 +843,7 @@ export function useGitOperations({
   const handleCreateBranch = async (name: string) => {
     await withLoading(`Creating branch ${name}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitCreateBranch(name, true);
+        const result = await window.electronAPI.gitCreateBranch(name, true);
         if (result.success) {
           addLog('success', `Created and checked out branch: ${name}`);
           setCurrentBranch(name);
@@ -858,7 +869,7 @@ export function useGitOperations({
   const handleDeleteBranch = async (branch: string) => {
     await withLoading(`Deleting branch ${branch}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.deleteBranch(branch);
+        const result = await window.electronAPI.deleteBranch(branch);
         if (result.success) {
           addLog('success', `Deleted branch ${branch}`);
           toast.success(`Deleted branch ${branch}`);
@@ -877,7 +888,7 @@ export function useGitOperations({
     addLog('info', `Reverting commit ${commitHash.substring(0, 7)}...`);
     await withLoading(`Reverting commit ${commitHash.substring(0, 7)}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitRevertCommit(commitHash);
+        const result = await window.electronAPI.gitRevertCommit(commitHash);
         if (result.success) {
           toast.success(`Successfully reverted commit ${commitHash.substring(0, 7)}`);
           addLog('success', `Reverted commit ${commitHash.substring(0, 7)}`);
@@ -889,7 +900,7 @@ export function useGitOperations({
             toast.warning('Revert conflict detected');
             addLog('warning', 'Revert conflict detected. Please resolve conflicts.');
 
-            const conflictResult = await (window as any).electronAPI.getConflictedFiles();
+            const conflictResult = await window.electronAPI.getConflictedFiles();
             if (conflictResult.success && conflictResult.files && conflictResult.files.length > 0) {
               setConflictedFiles(conflictResult.files);
               setShowMergeConflictDialog(true);
@@ -901,7 +912,7 @@ export function useGitOperations({
             addLog('error', errorMsg);
           }
         }
-      } catch (error: any) {
+} catch (error) {
         const msg = error.message || 'Unknown error';
         toast.error(`Revert failed: ${msg}`);
         addLog('error', `Revert failed: ${msg}`);
@@ -924,7 +935,7 @@ export function useGitOperations({
 
     await withLoading(`${modeLabel} resetting branch...`, async () => {
       try {
-        const result = await (window as any).electronAPI.gitResetCommits(resetTargetCommit, mode);
+        const result = await window.electronAPI.gitResetCommits(resetTargetCommit, mode);
         if (result.success) {
           toast.success(`Successfully reset branch to ${resetTargetCommit.substring(0, 7)}`);
           addLog('success', `Reset branch (${mode}) to ${resetTargetCommit.substring(0, 7)}`);
@@ -937,7 +948,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to reset branch');
           addLog('error', result.error || 'Failed to reset branch');
         }
-      } catch (error: any) {
+} catch (error) {
         const msg = error.message || 'Unknown error';
         toast.error(`Reset failed: ${msg}`);
         addLog('error', `Reset failed: ${msg}`);
@@ -947,7 +958,7 @@ export function useGitOperations({
 
   const handleCancelOperation = async () => {
     try {
-      const result = await (window as any).electronAPI.gitCancelOperation();
+      const result = await window.electronAPI.gitCancelOperation();
       if (result.success) {
         toast.info('Operation cancellation requested');
         addLog('info', 'Operation cancellation requested by user');
@@ -959,7 +970,7 @@ export function useGitOperations({
 
   const checkGitFlowInitialized = async () => {
     try {
-      const result = await (window as any).electronAPI.checkGitFlowInitialized();
+      const result = await window.electronAPI.checkGitFlowInitialized();
       if (result.success) {
         return result.initialized;
       }
@@ -973,7 +984,7 @@ export function useGitOperations({
   const handleInitGitFlow = async () => {
     await withLoading('Initializing Git Flow...', async () => {
       try {
-        const result = await (window as any).electronAPI.initializeGitFlow();
+        const result = await window.electronAPI.initializeGitFlow();
         if (result.success) {
           toast.success('Git Flow initialized successfully!');
           addLog('success', 'Initialized Git Flow');
@@ -982,7 +993,7 @@ export function useGitOperations({
           toast.error(`Failed to initialize Git Flow: ${result.error}`);
           addLog('error', `Git Flow init failed: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Git Flow error: ${error.message || 'Unknown error'}`);
       }
     });
@@ -991,7 +1002,7 @@ export function useGitOperations({
   const handleStartGitFlow = async (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => {
     await withLoading(`Starting ${type} ${name}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.startGitFlowBranch(type, name);
+        const result = await window.electronAPI.startGitFlowBranch(type, name);
         if (result.success) {
           toast.success(`Started ${type}: ${name}`);
           addLog('success', `Started git flow ${type}: ${name}`);
@@ -1000,7 +1011,7 @@ export function useGitOperations({
           toast.error(`Failed to start ${type}: ${result.error}`);
           addLog('error', `Git Flow start failed: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Git Flow error: ${error.message || 'Unknown error'}`);
       }
     });
@@ -1009,7 +1020,7 @@ export function useGitOperations({
   const handleFinishGitFlow = async (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => {
     await withLoading(`Finishing ${type} ${name}...`, async () => {
       try {
-        const result = await (window as any).electronAPI.finishGitFlowBranch(type, name);
+        const result = await window.electronAPI.finishGitFlowBranch(type, name);
         if (result.success) {
           toast.success(`Finished ${type}: ${name}`);
           addLog('success', `Finished git flow ${type}: ${name}`);
@@ -1018,7 +1029,7 @@ export function useGitOperations({
           toast.error(`Failed to finish ${type}: ${result.error}`);
           addLog('error', `Git Flow finish failed: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Git Flow error: ${error.message || 'Unknown error'}`);
       }
     });
@@ -1027,7 +1038,7 @@ export function useGitOperations({
   const handleSyncSubmodules = async () => {
     await withLoading('Synchronizing submodules...', async () => {
       try {
-        const result = await (window as any).electronAPI.updateSubmodules();
+        const result = await window.electronAPI.updateSubmodules();
         if (result.success) {
           toast.success('Submodules synchronized successfully!');
           addLog('success', 'Submodules synchronized');
@@ -1036,7 +1047,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to sync submodules');
           addLog('error', `Failed to sync submodules: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to sync submodules: ${error.message}`);
       }
     });
@@ -1045,7 +1056,7 @@ export function useGitOperations({
   const handleAddSubmodule = async (url: string, path: string, applyConfigs: boolean) => {
     await withLoading('Adding submodule...', async () => {
       try {
-        const result = await (window as any).electronAPI.addSubmodule(url, path, applyConfigs);
+        const result = await window.electronAPI.addSubmodule(url, path, applyConfigs);
         if (result.success) {
           toast.success(`Submodule added at ${path}`);
           addLog('success', `Added submodule from ${url} to ${path}`);
@@ -1055,7 +1066,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to add submodule');
           addLog('error', `Failed to add submodule: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to add submodule: ${error.message}`);
       }
     });
@@ -1064,7 +1075,7 @@ export function useGitOperations({
   const handleRemoveSubmodule = async (path: string) => {
     await withLoading('Removing submodule...', async () => {
       try {
-        const result = await (window as any).electronAPI.removeSubmodule(path);
+        const result = await window.electronAPI.removeSubmodule(path);
         if (result.success) {
           toast.success(`Submodule removed: ${path}`);
           addLog('success', `Removed submodule at ${path}`);
@@ -1074,7 +1085,7 @@ export function useGitOperations({
           toast.error(result.error || 'Failed to remove submodule');
           addLog('error', `Failed to remove submodule: ${result.error}`);
         }
-      } catch (error: any) {
+} catch (error) {
         toast.error(`Failed to remove submodule: ${error.message}`);
       }
     });
