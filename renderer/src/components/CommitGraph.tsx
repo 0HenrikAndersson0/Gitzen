@@ -37,6 +37,7 @@ interface GraphNode {
   y: number;
   color: string;
   commit: Commit;
+  parentLanes: number[];
 }
 
 interface GraphEdge {
@@ -83,17 +84,12 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
       }
 
       const color = COLORS[laneIndex % COLORS.length];
-      nodes.push({
-        id: commit.id,
-        x: laneIndex * spacingX + 10,
-        y: index * spacingY + spacingY / 2,
-        color,
-        commit
-      });
-
+      
       const parents = commit.parents || [];
+      const pLanes: number[] = [];
       if (parents.length > 0) {
         activeLanes[laneIndex] = parents[0];
+        pLanes.push(laneIndex);
         for (let i = 1; i < parents.length; i++) {
           let pLane = activeLanes.findIndex(l => l === null);
           if (pLane === -1) {
@@ -101,19 +97,33 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
             activeLanes.push(null);
           }
           activeLanes[pLane] = parents[i];
+          pLanes.push(pLane);
         }
       }
+
+      nodes.push({
+        id: commit.id,
+        x: laneIndex * spacingX + 10,
+        y: index * spacingY + spacingY / 2,
+        color,
+        commit,
+        parentLanes: pLanes
+      });
     });
 
     commits.forEach((commit, index) => {
       const sourceNode = nodes[index];
       const parents = commit.parents || [];
-      parents.forEach(parentId => {
+      parents.forEach((parentId, pIdx) => {
         const targetNode = nodes.find(n => n.id === parentId);
+        const pLane = sourceNode.parentLanes[pIdx];
+        const edgeColor = COLORS[pLane % COLORS.length];
+        const targetX = pLane * spacingX + 10;
+        
         if (targetNode) {
-          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: targetNode.x, toY: targetNode.y, color: sourceNode.color });
+          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: targetNode.x, toY: targetNode.y, color: edgeColor });
         } else {
-          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: sourceNode.x, toY: (commits.length + 1) * spacingY, color: sourceNode.color });
+          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: targetX, toY: (commits.length + 1) * spacingY, color: edgeColor });
         }
       });
     });
