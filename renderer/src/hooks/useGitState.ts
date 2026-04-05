@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HistoryFilters } from '../electron';
+import { isEqualArray } from '../lib/utils';
 
 export interface BranchStatus {
   ahead: number;
@@ -319,7 +320,7 @@ export function useGitState({
       if (result.success) {
         if (result.stashes) {
           setStashes(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(result.stashes)) {
+            if (!isEqualArray(prev, result.stashes!)) {
               return result.stashes!;
             }
             return prev;
