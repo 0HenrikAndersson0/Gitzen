@@ -57,8 +57,9 @@ export const BranchesPanel = memo(function BranchesPanel({
 }: BranchesPanelProps) {
   const [internalShowCreateDialog, setInternalShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string; isRemote: boolean } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string; isRemote: boolean; isCurrent: boolean } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch'; name: string } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ isOpen: boolean; oldName: string; newName: string }>({ isOpen: false, oldName: '', newName: '' });
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
   const [localBranchesExpanded, setLocalBranchesExpanded] = useState(true);
@@ -148,20 +149,19 @@ export const BranchesPanel = memo(function BranchesPanel({
   };
 
   const handleContextMenu = (e: React.MouseEvent, branch: Branch) => {
-    if (!branch.isCurrent) {
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        branch: branch.name,
-        upstream: branch.upstream,
-        isRemote: branch.isRemote
-      });
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      branch: branch.name,
+      upstream: branch.upstream,
+      isRemote: branch.isRemote,
+      isCurrent: !!branch.isCurrent
+    });
   };
 
-  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull') => {
+  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull' | 'rename') => {
     if (!contextMenu) return;
 
     const branch = contextMenu.branch;
@@ -169,6 +169,9 @@ export const BranchesPanel = memo(function BranchesPanel({
     const isRemote = contextMenu.isRemote;
 
     switch (action) {
+      case 'rename':
+        setRenameDialog({ isOpen: true, oldName: branch, newName: branch });
+        break;
       case 'merge':
         onMergeBranch?.(branch);
         break;
@@ -259,6 +262,40 @@ export const BranchesPanel = memo(function BranchesPanel({
     }
 
     setContextMenu(null);
+  };
+
+  const submitRename = async () => {
+    const { oldName, newName } = renameDialog;
+    const finalNewName = newName.trim();
+    
+    if (!finalNewName) {
+      toast.error('Branch name cannot be empty');
+      return;
+    }
+    if (finalNewName === oldName) {
+      setRenameDialog({ isOpen: false, oldName: '', newName: '' });
+      return;
+    }
+    if (!/^[a-zA-Z0-9/._-]+$/.test(finalNewName)) {
+      toast.error('Branch name contains invalid characters');
+      return;
+    }
+
+    onSetLoading?.(true, `Renaming ${oldName} to ${finalNewName}...`);
+    try {
+      const result = await window.electronAPI.renameBranch(oldName, finalNewName);
+      if (result.success) {
+        toast.success(`Renamed branch to ${finalNewName}`);
+        onRefresh?.();
+      } else {
+        toast.error(result.error || 'Failed to rename branch');
+      }
+    } catch (error) {
+      toast.error('Failed to rename branch');
+    } finally {
+      onSetLoading?.(false);
+      setRenameDialog({ isOpen: false, oldName: '', newName: '' });
+    }
   };
 
   const handleStartInteractiveRebase = async (targetBranch: string, todoLines: string[]) => {
@@ -590,6 +627,51 @@ export const BranchesPanel = memo(function BranchesPanel({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={renameDialog.isOpen} onOpenChange={(open) => {
+        if (!open) {
+          setRenameDialog({ isOpen: false, oldName: '', newName: '' });
+        }
+      }}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Rename Branch</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Enter a new name for branch <span className="font-semibold text-foreground">{renameDialog.oldName}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={renameDialog.newName}
+              onChange={(e) => setRenameDialog({ ...renameDialog, newName: e.target.value })}
+              placeholder="new-branch-name"
+              className="bg-secondary border-border text-foreground"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  submitRename();
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setRenameDialog({ isOpen: false, oldName: '', newName: '' })}
+                className="bg-secondary border-border text-foreground hover:bg-muted"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={submitRename}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!renameDialog.newName.trim()}
+              >
+                Rename
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Context Menu */}
       {contextMenu && (
         <div
@@ -597,36 +679,54 @@ export const BranchesPanel = memo(function BranchesPanel({
           className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('pull')}
-          >
-            Pull latest changes
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('fetch')}
-          >
-            Fetch latest changes
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors border-t border-border"
-            onClick={() => handleMenuAction('merge')}
-          >
-            Merge to current
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('rebase')}
-          >
-            Rebase current onto {contextMenu.branch}
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('interactive-rebase')}
-          >
-            Interactive Rebase...
-          </div>
+          {contextMenu.isRemote && (
+            <>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('pull')}
+              >
+                Pull latest changes
+              </div>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('fetch')}
+              >
+                Fetch latest changes
+              </div>
+            </>
+          )}
+
+          {!contextMenu.isRemote && (
+            <div
+              className={`px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors ${contextMenu.isRemote ? 'border-t border-border' : ''}`}
+              onClick={() => handleMenuAction('rename')}
+            >
+              Rename branch
+            </div>
+          )}
+
+          {!contextMenu.isCurrent && (
+            <>
+              <div
+                className={`px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors ${!contextMenu.isRemote ? 'border-t border-border' : ''}`}
+                onClick={() => handleMenuAction('merge')}
+              >
+                Merge to current
+              </div>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('rebase')}
+              >
+                Rebase current onto {contextMenu.branch}
+              </div>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('interactive-rebase')}
+              >
+                Interactive Rebase...
+              </div>
+            </>
+          )}
         </div>
       )}
 

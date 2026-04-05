@@ -115,6 +115,7 @@ declare global {
       revertFileChanges: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteBranch: (branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      renameBranch: (oldName: string, newName: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteRemoteBranch: (branchName: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       createTag: (name: string, commitHash?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

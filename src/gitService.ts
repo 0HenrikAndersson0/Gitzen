@@ -1579,6 +1579,20 @@ export async function deleteBranch(branchName: string, force: boolean = false): 
   }
 }
 
+export async function renameBranch(oldName: string, newName: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await runGitCommand(`branch -m "${oldName}" "${newName}"`);
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
 export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
