@@ -423,24 +423,29 @@ export async function stageFiles(filePaths: string[]): Promise<{ success: boolea
 
     // Use execFile with argument array to avoid shell quoting issues with special characters
     // The -- separator tells git that everything after is a file path
-    for (const filePath of filePaths) {
-      const fileStatus = fileStatusMap.get(filePath);
+    const toAdd: string[] = [];
+    const toRm: string[] = [];
 
-      // For deleted files that were previously tracked, use git rm to stage the deletion
-      // For new files or modified files, use git add
-      if (fileStatus === 'deleted') {
-        // Use git rm for deleted files - this stages the deletion
-        await runGitExecFile(['rm', '--', filePath], {
-          cwd: currentRepoPath!,
-          maxBuffer: 10 * 1024 * 1024,
-        });
+    for (const filePath of filePaths) {
+      if (fileStatusMap.get(filePath) === 'deleted') {
+        toRm.push(filePath);
       } else {
-        // Use git add for new or modified files
-        await runGitExecFile(['add', '--', filePath], {
-          cwd: currentRepoPath!,
-          maxBuffer: 10 * 1024 * 1024,
-        });
+        toAdd.push(filePath);
       }
+    }
+
+    if (toRm.length > 0) {
+      await runGitExecFile(['rm', '--', ...toRm], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    }
+
+    if (toAdd.length > 0) {
+      await runGitExecFile(['add', '--', ...toAdd], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
     }
     return { success: true };
   } catch (error: any) {
@@ -2928,6 +2933,10 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
     return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+itError(error);
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
