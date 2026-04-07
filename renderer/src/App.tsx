@@ -207,6 +207,7 @@ export default function App() {
     handleCheckout,
     handleCreateBranch,
     handleDeleteBranch,
+    handleDeleteRemoteBranch,
     handleRevertCommit,
     handleResetCommits,
     handleConfirmReset,
@@ -456,6 +457,7 @@ export default function App() {
                     onCheckout={handleCheckout}
                     onCreateBranch={handleCreateBranch}
                     onDeleteBranch={handleDeleteBranch}
+                    onDeleteRemoteBranch={handleDeleteRemoteBranch}
                     onMergeBranch={handleMergeBranch}
                     onFinishGitFlow={gitOps.handleFinishGitFlow}
                     onSetLoading={(loading, message) => {

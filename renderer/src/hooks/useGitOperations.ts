@@ -884,6 +884,24 @@ export function useGitOperations({
     });
   };
 
+  const handleDeleteRemoteBranch = async (branch: string) => {
+    await withLoading(`Deleting remote branch ${branch}...`, async () => {
+      try {
+        const result = await window.electronAPI.deleteRemoteBranch(branch);
+        if (result.success) {
+          addLog('success', `Deleted remote branch ${branch}`);
+          toast.success(`Deleted remote branch ${branch}`);
+          await refreshBranchesInternal();
+        } else {
+          addLog('error', result.error || 'Failed to delete remote branch');
+          toast.error(result.error || 'Failed to delete remote branch');
+        }
+      } catch (error) {
+        addLog('error', `Failed to delete remote branch: ${error}`);
+      }
+    });
+  };
+
   const handleRevertCommit = async (commitHash: string) => {
     addLog('info', `Reverting commit ${commitHash.substring(0, 7)}...`);
     await withLoading(`Reverting commit ${commitHash.substring(0, 7)}...`, async () => {
@@ -1122,6 +1140,7 @@ export function useGitOperations({
     handleCheckout,
     handleCreateBranch,
     handleDeleteBranch,
+    handleDeleteRemoteBranch,
     handleRevertCommit,
     handleResetCommits,
     handleConfirmReset,

@@ -25,6 +25,7 @@ interface BranchesPanelProps {
   onCheckout?: (branch: string) => void;
   onCreateBranch?: (name: string) => void;
   onDeleteBranch?: (branch: string) => void;
+  onDeleteRemoteBranch?: (branch: string) => void;
   onMergeBranch?: (branch: string) => void;
   onSetLoading?: (loading: boolean, message?: string) => void;
   onApplyStash: (name: string) => void;
@@ -92,6 +93,7 @@ export const BranchesPanel = memo(function BranchesPanel({
   onCheckout,
   onCreateBranch,
   onDeleteBranch,
+  onDeleteRemoteBranch,
   onMergeBranch,
   onSetLoading,
   onApplyStash,
@@ -167,6 +169,17 @@ export const BranchesPanel = memo(function BranchesPanel({
 
     const dialogToDelete = deleteDialog;
     setDeleteDialog(null);
+
+    if (dialogToDelete.type === 'branch' && onDeleteBranch) {
+      onDeleteBranch(dialogToDelete.name);
+      return;
+    }
+
+    if (dialogToDelete.type === 'remoteBranch' && onDeleteRemoteBranch) {
+      onDeleteRemoteBranch(dialogToDelete.name);
+      return;
+    }
+
     onSetLoading?.(true, `Deleting ${dialogToDelete.name}...`);
 
     try {
@@ -175,7 +188,7 @@ export const BranchesPanel = memo(function BranchesPanel({
         result = await window.electronAPI.deleteBranch(dialogToDelete.name, false);
         if (result.success) {
           toast.success(`Deleted branch ${dialogToDelete.name}`);
-          onDeleteBranch?.(dialogToDelete.name);
+          onRefresh?.();
         } else {
           toast.error(result.error || 'Failed to delete branch');
         }
@@ -183,7 +196,7 @@ export const BranchesPanel = memo(function BranchesPanel({
         result = await window.electronAPI.deleteRemoteBranch(dialogToDelete.name);
         if (result.success) {
           toast.success(`Deleted remote branch ${dialogToDelete.name}`);
-          // Parent App.tsx should refresh branches
+          onRefresh?.();
         } else {
           toast.error(result.error || 'Failed to delete remote branch');
         }
