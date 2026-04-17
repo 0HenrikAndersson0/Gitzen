@@ -554,6 +554,7 @@ export default function App() {
                     onCherryPick={handleCherryPick}
                     onRevertCommit={handleRevertCommit}
                     onResetCommits={handleResetCommits}
+                    onBranchDropAction={gitOps.handleBranchDropAction}
                   />
                 </div>
               )}

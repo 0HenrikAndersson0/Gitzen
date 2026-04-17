@@ -902,6 +902,50 @@ export function useGitOperations({
     });
   };
 
+  const handleBranchDropAction = useCallback(async (source: string, target: string, action: 'merge' | 'rebase') => {
+    if (action === 'merge') {
+      if (currentBranch !== target) {
+        await handleCheckout(target);
+      }
+      await handleMergeBranch(source);
+    } else {
+      if (currentBranch !== source) {
+        await handleCheckout(source);
+      }
+      
+      addLog('info', `Rebasing ${source} onto ${target}...`);
+      await withLoading(`Rebasing ${source} onto ${target}...`, async () => {
+        try {
+          const result = await window.electronAPI.gitRebaseBranch(target);
+          if (result.success) {
+            toast.success(`Successfully rebased ${source} onto ${target}`);
+            addLog('success', `Rebased ${source} onto ${target}`);
+            await Promise.all([
+              refreshStatusInternal(),
+              refreshHistoryInternal(),
+              refreshBranchStatusInternal(),
+              refreshBranchesInternal(),
+              refreshBranchInternal()
+            ]);
+          } else {
+            if (result.error && result.error.includes('conflict')) {
+              toast.warning('Rebase started but encountered conflicts. Please resolve them.');
+              addLog('warning', 'Rebase encountered conflicts. Please resolve them.');
+              await refreshRebaseStatusInternal();
+              await refreshStatusInternal();
+            } else {
+              toast.error(`Rebase failed: ${result.error}`);
+              addLog('error', `Rebase failed: ${result.error}`);
+            }
+          }
+        } catch (err: any) {
+          toast.error(`Rebase failed: ${err.message}`);
+          addLog('error', `Rebase failed: ${err.message}`);
+        }
+      });
+    }
+  }, [currentBranch, handleCheckout, handleMergeBranch, withLoading, addLog, toast, refreshRebaseStatusInternal, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal, refreshBranchInternal]);
+
   const handleRevertCommit = async (commitHash: string) => {
     addLog('info', `Reverting commit ${commitHash.substring(0, 7)}...`);
     await withLoading(`Reverting commit ${commitHash.substring(0, 7)}...`, async () => {
@@ -1141,6 +1185,7 @@ export function useGitOperations({
     handleCreateBranch,
     handleDeleteBranch,
     handleDeleteRemoteBranch,
+    handleBranchDropAction,
     handleRevertCommit,
     handleResetCommits,
     handleConfirmReset,
