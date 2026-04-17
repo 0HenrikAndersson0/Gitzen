@@ -1,4 +1,4 @@
-import { GitBranch, Tag, ArrowRight } from 'lucide-react';
+import { GitBranch, Tag, ArrowRight, GitMerge } from 'lucide-react';
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, memo, useCallback, forwardRef } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
@@ -28,6 +28,7 @@ interface CommitGraphProps {
   onCherryPick?: (commitHash: string) => void;
   onRevertCommit?: (commitHash: string) => void;
   onResetCommits?: (commitHash: string) => void;
+  onBranchDropAction?: (source: string, target: string, action: 'merge' | 'rebase') => void;
 }
 
 // Layout Engine
@@ -163,6 +164,7 @@ export const CommitGraph = memo(function CommitGraph({
   onCherryPick,
   onRevertCommit,
   onResetCommits,
+  onBranchDropAction,
   currentBranch,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
@@ -174,7 +176,9 @@ export const CommitGraph = memo(function CommitGraph({
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 });
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commitHash: string } | null>(null);
+  const [dropMenu, setDropMenu] = useState<{ x: number; y: number; source: string; target: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const dropMenuRef = useRef<HTMLDivElement>(null);
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [tagTargetCommit, setTagTargetCommit] = useState<string | undefined>(undefined);
 
@@ -253,12 +257,15 @@ export const CommitGraph = memo(function CommitGraph({
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as globalThis.Node)) setContextMenu(null); };
-    if (contextMenu) {
+    const handleClickOutside = (event: MouseEvent) => { 
+      if (menuRef.current && !menuRef.current.contains(event.target as globalThis.Node)) setContextMenu(null); 
+      if (dropMenuRef.current && !dropMenuRef.current.contains(event.target as globalThis.Node)) setDropMenu(null);
+    };
+    if (contextMenu || dropMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [contextMenu]);
+  }, [contextMenu, dropMenu]);
 
   const formatTime = useCallback((date: Date) => {
     const now = new Date();
@@ -300,7 +307,34 @@ export const CommitGraph = memo(function CommitGraph({
         <div className="flex items-center gap-3">
           <p className="font-medium text-foreground text-sm truncate flex-1 flex items-center gap-2">{commit.message}</p>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {commit.branch && <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border ${getBranchBadgeStyle(commit.branch)}`}>{commit.branch}</span>}
+            {commit.branch && (
+              <span 
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border cursor-move transition-transform active:scale-95 ${getBranchBadgeStyle(commit.branch)}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/gitzen-branch', commit.branch!);
+                  e.dataTransfer.effectAllowed = 'copyMove';
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  e.currentTarget.classList.add('ring-2', 'ring-primary');
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove('ring-2', 'ring-primary');
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove('ring-2', 'ring-primary');
+                  const draggedBranch = e.dataTransfer.getData('application/gitzen-branch');
+                  if (draggedBranch && draggedBranch !== commit.branch) {
+                    setDropMenu({ x: e.clientX, y: e.clientY, source: draggedBranch, target: commit.branch! });
+                  }
+                }}
+              >
+                {commit.branch}
+              </span>
+            )}
             {commit.tags && commit.tags.map(tag => (
               <span key={tag} className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20"><Tag className="h-2 w-2" />{tag}</span>
             ))}
@@ -371,6 +405,32 @@ export const CommitGraph = memo(function CommitGraph({
           {onCherryPick && (<div className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" onClick={() => { onCherryPick(contextMenu.commitHash); setContextMenu(null); }}><ArrowRight className="size-3.5 text-blue-400" /> Cherry Pick Commit</div>)}
           {onRevertCommit && (<div className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" onClick={() => { onRevertCommit(contextMenu.commitHash); setContextMenu(null); }}><div className="size-3.5 flex items-center justify-center font-bold text-red-400 text-xs">R</div> Revert Commit</div>)}
           {onResetCommits && (<div className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2 border-t border-border mt-1 pt-1" onClick={() => { onResetCommits(contextMenu.commitHash); setContextMenu(null); }}><div className="size-3.5 flex items-center justify-center font-bold text-orange-400 text-xs">X</div> Reset Branch to Here...</div>)}
+        </div>
+      )}
+
+      {dropMenu && (
+        <div ref={dropMenuRef} className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden py-1 min-w-[200px]" style={{ left: dropMenu.x, top: dropMenu.y }}>
+          <div className="px-4 py-2 text-xs font-semibold text-muted-foreground border-b border-border mb-1 bg-muted/30">
+            Action: {dropMenu.source} → {dropMenu.target}
+          </div>
+          <div 
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" 
+            onClick={() => { 
+              onBranchDropAction?.(dropMenu.source, dropMenu.target, 'merge'); 
+              setDropMenu(null); 
+            }}
+          >
+            <GitMerge className="size-3.5 text-emerald-500" /> Merge {dropMenu.source} into {dropMenu.target}
+          </div>
+          <div 
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" 
+            onClick={() => { 
+              onBranchDropAction?.(dropMenu.source, dropMenu.target, 'rebase'); 
+              setDropMenu(null); 
+            }}
+          >
+            <ArrowRight className="size-3.5 text-blue-400" /> Rebase {dropMenu.source} onto {dropMenu.target}
+          </div>
         </div>
       )}
 
