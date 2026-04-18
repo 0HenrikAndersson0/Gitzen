@@ -100,8 +100,12 @@ export function useGitState({
       if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success && result.files) {
         setFiles(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(result.files)) {
-            return result.files!;
+          if (prev.length !== result.files!.length) return result.files!;
+          for (let i = 0; i < prev.length; i++) {
+            const p = prev[i], n = result.files![i];
+            if (p.path !== n.path || p.status !== n.status || p.staged !== n.staged) {
+              return result.files!;
+            }
           }
           return prev;
         });
@@ -123,8 +127,12 @@ export function useGitState({
       if (!pathOverride && targetPath !== repoPathRef.current) return;
       if (result.success && result.submodules) {
         setSubmodules(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(result.submodules)) {
-            return result.submodules;
+          if (prev.length !== result.submodules!.length) return result.submodules!;
+          for (let i = 0; i < prev.length; i++) {
+            const p = prev[i], n = result.submodules![i];
+            if (p.path !== n.path || p.commitHash !== n.commitHash || p.status !== n.status) {
+              return result.submodules!;
+            }
           }
           return prev;
         });
@@ -202,8 +210,12 @@ export function useGitState({
           upstream: b.upstream
         }));
         setLocalBranches(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(newLocalBranches)) {
-            return newLocalBranches;
+          if (prev.length !== newLocalBranches.length) return newLocalBranches;
+          for (let i = 0; i < prev.length; i++) {
+            const p = prev[i], n = newLocalBranches[i];
+            if (p.name !== n.name || p.isCurrent !== n.isCurrent || p.ahead !== n.ahead || p.behind !== n.behind || p.upstream !== n.upstream) {
+              return newLocalBranches;
+            }
           }
           return prev;
         });
@@ -213,8 +225,11 @@ export function useGitState({
           name: `${b.remote}/${b.name}`, isRemote: true, isCurrent: false
         }));
         setRemoteBranches(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(newRemoteBranches)) {
-            return newRemoteBranches;
+          if (prev.length !== newRemoteBranches.length) return newRemoteBranches;
+          for (let i = 0; i < prev.length; i++) {
+            if (prev[i].name !== newRemoteBranches[i].name) {
+              return newRemoteBranches;
+            }
           }
           return prev;
         });
@@ -246,7 +261,11 @@ export function useGitState({
             hasUpstream: !!result.hasUpstream,
             upstream: result.upstream
           };
-          if (JSON.stringify(prev) !== JSON.stringify(newState)) {
+          if (!prev || 
+              prev.ahead !== newState.ahead || 
+              prev.behind !== newState.behind || 
+              prev.hasUpstream !== newState.hasUpstream || 
+              prev.upstream !== newState.upstream) {
             return newState;
           }
           return prev;
@@ -294,8 +313,12 @@ export function useGitState({
       if (result.success) {
         if (result.commits) {
           setCommits(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(result.commits)) {
-              return result.commits!;
+            if (prev.length !== result.commits!.length) return result.commits!;
+            // Fast loop: only compare id and refs, as message/author/timestamp won't change for the same hash
+            for (let i = 0; i < prev.length; i++) {
+              if (prev[i].id !== result.commits![i].id || prev[i].refs !== result.commits![i].refs) {
+                return result.commits!;
+              }
             }
             return prev;
           });
