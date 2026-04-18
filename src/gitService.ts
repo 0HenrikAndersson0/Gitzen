@@ -1912,6 +1912,27 @@ export async function abortConflict(): Promise<{ success: boolean; error?: strin
   }
 }
 
+export async function openFileInDefaultEditor(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    const fullPath = path.join(currentRepoPath, filePath);
+    const error = await shell.openPath(fullPath);
+    if (error) throw new Error(error);
+    return { success: true };
+  } catch (openError: any) {
+    try {
+      if (!currentRepoPath) return { success: false, error: 'No repository open' };
+      const fullPath = path.join(currentRepoPath, filePath);
+      const platform = process.platform;
+      const command = platform === 'win32' ? `start "" "${fullPath}"` : platform === 'darwin' ? `open "${fullPath}"` : `xdg-open "${fullPath}"`;
+      await execAsync(command, { maxBuffer: 10 * 1024 * 1024 });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to open file' };
+    }
+  }
+}
+
 export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {

@@ -413,6 +413,10 @@ ipcMain.handle('git:openFileInMergeTool', async (_, filePath) => {
   return await gitService.openFileInMergeTool(filePath);
 });
 
+ipcMain.handle('git:openFileInDefaultEditor', async (_, filePath) => {
+  return await gitService.openFileInDefaultEditor(filePath);
+});
+
 ipcMain.handle('git:rebaseBranch', async (_, branch) => {
   return await gitService.rebaseBranch(branch);
 });

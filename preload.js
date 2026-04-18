@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   abortMerge: () => ipcRenderer.invoke('git:abortMerge'),
   abortConflict: () => ipcRenderer.invoke('git:abortConflict'),
   openFileInMergeTool: (filePath) => ipcRenderer.invoke('git:openFileInMergeTool', filePath),
+  openFileInDefaultEditor: (filePath) => ipcRenderer.invoke('git:openFileInDefaultEditor', filePath),
   gitRebaseBranch: (branch) => ipcRenderer.invoke('git:rebaseBranch', branch),
   gitAbortRebase: () => ipcRenderer.invoke('git:abortRebase'),
   gitContinueRebase: () => ipcRenderer.invoke('git:continueRebase'),
