@@ -19,21 +19,22 @@ export function watchRepo(repoPath: string, window: BrowserWindow) {
   currentWatchedPath = repoPath;
 
   // Watch the entire repository, including .git, but ignore noisy/large directories
+  // Using a function for 'ignored' is often more reliable in chokidar v4 for preventing EMFILE errors
   watcher = chokidar.watch(repoPath, {
-    ignored: [
-      '**/.git/objects/**',
-      '**/.git/index.lock',
-      '**/.git/COMMIT_EDITMSG',
-      '**/.git/FETCH_HEAD',
-      '**/.git/ORIG_HEAD',
-      '**/.git/logs/**', // Avoid noise from detailed logs
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/.DS_Store',
-    ],
+    ignored: (p) => {
+      // Ignore git objects and logs which can contain thousands of files
+      if (p.includes(path.join('.git', 'objects')) || p.includes(path.join('.git', 'logs'))) return true;
+      // Ignore lock files and temp files
+      if (p.endsWith('.lock') || p.endsWith('COMMIT_EDITMSG') || p.endsWith('FETCH_HEAD') || p.endsWith('ORIG_HEAD')) return true;
+      // Ignore large dependency and build folders
+      if (p.includes('node_modules') || p.includes('dist') || p.includes('build') || p.includes('release')) return true;
+      // Ignore system files
+      if (p.includes('.DS_Store')) return true;
+      return false;
+    },
     persistent: true,
     ignoreInitial: true,
+    depth: 99, // Limit depth if necessary, but 99 is usually fine if ignored works
   });
 
   // Debounce notification to avoid spamming refreshes during rapid changes (like rebase or heavy staging)
