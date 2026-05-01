@@ -121,7 +121,7 @@ async function runGitSpawn(args: string[], options: GitOptions = {}): Promise<Gi
     const child = spawn('git', args, {
       cwd: repoPath || undefined,
       env: {
-        ...process.env,
+        ...fixPath(),
         GIT_TERMINAL_PROMPT: '0',
         LC_ALL: 'C',
         ...options.env
@@ -2957,6 +2957,35 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
   }
 }
 
+function fixPath() {
+  if (os.platform() === 'win32') return process.env;
+
+  const extraPaths = [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin'
+  ];
+
+  const currentPath = process.env.PATH || '';
+  const pathSeparator = ':';
+  const existingPaths = new Set(currentPath.split(pathSeparator));
+  
+  const newPaths = [...existingPaths];
+  for (const p of extraPaths) {
+    if (!existingPaths.has(p) && fs.existsSync(p)) {
+      newPaths.push(p);
+    }
+  }
+
+  return {
+    ...process.env,
+    PATH: newPaths.join(pathSeparator)
+  };
+}
+
 export async function generateCommitMessage(): Promise<{ success: boolean; message?: string; error?: string }> {
   let tempDiffFile: string | null = null;
   try {
@@ -2976,6 +3005,8 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     const platform = os.platform();
     
     let command = '';
+    const env = fixPath();
+
     if (platform === 'win32') {
       // PowerShell script reading from temp file
       const escapedTempPath = tempDiffFile.replace(/'/g, "''");
@@ -2999,7 +3030,7 @@ fi
     // Execute the constructed script with the prompt in an environment variable
     const { stdout: aiOutput } = await execAsync(command, { 
       cwd: currentRepoPath,
-      env: { ...process.env, GITZEN_PROMPT: prompt }
+      env: { ...env, GITZEN_PROMPT: prompt }
     });
     
     // Clean up the output (remove extra whitespace, markdown blocks, etc.)
