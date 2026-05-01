@@ -2958,6 +2958,7 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
 }
 
 export async function generateCommitMessage(): Promise<{ success: boolean; message?: string; error?: string }> {
+  let tempDiffFile: string | null = null;
   try {
     if (!currentRepoPath) return { success: false, error: 'No repository open' };
 
@@ -2967,29 +2968,27 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
       return { success: false, error: 'No staged changes found. Please stage changes before generating a commit message.' };
     }
 
+    // 2. Write diff to a temporary file to avoid shell escaping issues
+    tempDiffFile = path.join(os.tmpdir(), `gitzen-diff-${Date.now()}.txt`);
+    fs.writeFileSync(tempDiffFile, diff);
+
     const prompt = "Write a concise commit message for these changes. Output ONLY the raw commit message without any markdown formatting, prefixes like 'Subject:', or explanations.";
     const platform = os.platform();
     
     let command = '';
     if (platform === 'win32') {
-      // PowerShell script
-      // We escape single quotes for the here-string
-      const escapedDiff = diff.replace(/'/g, "''");
-      command = `powershell.exe -Command "$diff = @'\n${escapedDiff}\n'@; $prompt = '${prompt}'; if (Get-Command gemini -ErrorAction SilentlyContinue) { $diff | gemini ask $prompt } elseif (Get-Command claude -ErrorAction SilentlyContinue) { $diff | claude $prompt } elseif (Get-Command gh -ErrorAction SilentlyContinue) { $diff | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+      // PowerShell script reading from temp file
+      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
     } else {
-      // Bash script
+      // Bash script reading from temp file
       command = `
-STAGED_DIFF=$(cat <<'EOF'
-${diff}
-EOF
-)
-PROMPT="${prompt}"
 if command -v gemini &> /dev/null; then
-  echo "$STAGED_DIFF" | gemini ask "$PROMPT"
+  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT"
 elif command -v claude &> /dev/null; then
-  echo "$STAGED_DIFF" | claude "$PROMPT"
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
 elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
-  echo "$STAGED_DIFF" | gh copilot suggest -t "git commit message"
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
 else
   echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
   exit 1
@@ -2997,8 +2996,11 @@ fi
 `.trim();
     }
 
-    // Execute the constructed script
-    const { stdout: aiOutput } = await execAsync(command, { cwd: currentRepoPath });
+    // Execute the constructed script with the prompt in an environment variable
+    const { stdout: aiOutput } = await execAsync(command, { 
+      cwd: currentRepoPath,
+      env: { ...process.env, GITZEN_PROMPT: prompt }
+    });
     
     // Clean up the output (remove extra whitespace, markdown blocks, etc.)
     let finalMessage = aiOutput.trim();
@@ -3014,5 +3016,14 @@ fi
     return { success: true, message: finalMessage };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    // Clean up temporary file
+    if (tempDiffFile && fs.existsSync(tempDiffFile)) {
+      try {
+        fs.unlinkSync(tempDiffFile);
+      } catch (e) {
+        console.error('Failed to delete temporary diff file:', e);
+      }
+    }
   }
 }
