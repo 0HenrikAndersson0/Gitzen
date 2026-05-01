@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitStageAll: () => ipcRenderer.invoke('git:stageAll'),
   gitUnstageAll: () => ipcRenderer.invoke('git:unstageAll'),
   gitCommit: (message, amend) => ipcRenderer.invoke('git:commit', message, amend),
+  gitGenerateCommitMessage: () => ipcRenderer.invoke('git:generateCommitMessage'),
   gitUndoCommit: () => ipcRenderer.invoke('git:undoCommit'),
   gitPush: (remote, branch, force, overwrite) => ipcRenderer.invoke('git:push', remote, branch, force, overwrite),
   gitPull: (remote, branch, targetBranch) => ipcRenderer.invoke('git:pull', remote, branch, targetBranch),

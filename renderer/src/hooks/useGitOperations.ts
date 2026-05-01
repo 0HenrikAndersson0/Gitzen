@@ -85,6 +85,28 @@ export function useGitOperations({
     });
   }, [withLoading, refreshStatusInternal, refreshHistoryInternal, refreshBranchStatusInternal, refreshBranchesInternal, addLog, filesRef, setCommitMessage, toast]);
 
+  const handleGenerateCommitMessage = useCallback(async () => {
+    addLog('info', 'Generating commit message using AI...');
+    await withLoading('Generating commit message...', async () => {
+      try {
+        const result = await window.electronAPI.gitGenerateCommitMessage();
+        if (result.success && result.message) {
+          setCommitMessage(result.message);
+          addLog('success', 'Commit message generated successfully');
+          toast.success('Commit message generated!');
+        } else {
+          const errorMsg = result.error || 'Failed to generate commit message';
+          addLog('error', errorMsg);
+          toast.error(errorMsg);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Generation failed: ${errorMsg}`);
+        toast.error(`Generation failed: ${errorMsg}`);
+      }
+    });
+  }, [withLoading, addLog, setCommitMessage, toast]);
+
   const handleUndoCommit = async () => {
     await withLoading('Undoing last commit...', async () => {
       try {
@@ -1155,6 +1177,7 @@ export function useGitOperations({
 
   return {
     handleCommit,
+    handleGenerateCommitMessage,
     handleClone,
     handleStageAll,
     handleUnstageAll,

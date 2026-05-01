@@ -194,8 +194,13 @@ ipcMain.handle('git:unstageAll', async () => {
 });
 
 ipcMain.handle('git:commit', async (_, message, amend) => {
-  return await gitService.commit(message, amend);
+  return gitService.commit(message, amend);
 });
+
+ipcMain.handle('git:generateCommitMessage', async () => {
+  return gitService.generateCommitMessage();
+});
+
 
 ipcMain.handle('git:undoCommit', async () => {
   return await gitService.undoLastCommit();

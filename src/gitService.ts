@@ -2956,3 +2956,63 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
+
+export async function generateCommitMessage(): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+
+    // 1. Get staged changes
+    const { stdout: diff } = await runGitCommand('diff --cached');
+    if (!diff.trim()) {
+      return { success: false, error: 'No staged changes found. Please stage changes before generating a commit message.' };
+    }
+
+    const prompt = "Write a concise commit message for these changes. Output ONLY the raw commit message without any markdown formatting, prefixes like 'Subject:', or explanations.";
+    const platform = os.platform();
+    
+    let command = '';
+    if (platform === 'win32') {
+      // PowerShell script
+      // We escape single quotes for the here-string
+      const escapedDiff = diff.replace(/'/g, "''");
+      command = `powershell.exe -Command "$diff = @'\n${escapedDiff}\n'@; $prompt = '${prompt}'; if (Get-Command gemini -ErrorAction SilentlyContinue) { $diff | gemini ask $prompt } elseif (Get-Command claude -ErrorAction SilentlyContinue) { $diff | claude $prompt } elseif (Get-Command gh -ErrorAction SilentlyContinue) { $diff | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+    } else {
+      // Bash script
+      command = `
+STAGED_DIFF=$(cat <<'EOF'
+${diff}
+EOF
+)
+PROMPT="${prompt}"
+if command -v gemini &> /dev/null; then
+  echo "$STAGED_DIFF" | gemini ask "$PROMPT"
+elif command -v claude &> /dev/null; then
+  echo "$STAGED_DIFF" | claude "$PROMPT"
+elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  echo "$STAGED_DIFF" | gh copilot suggest -t "git commit message"
+else
+  echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
+  exit 1
+fi
+`.trim();
+    }
+
+    // Execute the constructed script
+    const { stdout: aiOutput } = await execAsync(command, { cwd: currentRepoPath });
+    
+    // Clean up the output (remove extra whitespace, markdown blocks, etc.)
+    let finalMessage = aiOutput.trim();
+    // Remove markdown code blocks if present
+    finalMessage = finalMessage.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    // Remove leading "Commit message:" or similar common prefixes if AI is talkative
+    finalMessage = finalMessage.replace(/^(commit message|message|subject|title):\s*/i, '').trim();
+
+    if (!finalMessage) {
+      return { success: false, error: 'AI failed to generate a message.' };
+    }
+
+    return { success: true, message: finalMessage };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}

@@ -178,6 +178,7 @@ export default function App() {
 
   const {
     handleCommit,
+    handleGenerateCommitMessage,
     handleClone,
     handleStageAll,
     handleUnstageAll,
@@ -582,7 +583,9 @@ export default function App() {
                       onStageAll={handleStageAll}
                       onUnstageAll={handleUnstageAll}
                       onCommit={handleCommit}
+                      onGenerateCommitMessage={handleGenerateCommitMessage}
                       onRevertFile={handleRevertFile}
+
                       onDeleteFile={handleDeleteFile}
                       onRefresh={() => refreshStatus()}
                       commitMessage={commitMessage}

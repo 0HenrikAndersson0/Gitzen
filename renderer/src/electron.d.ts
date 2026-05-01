@@ -48,6 +48,7 @@ declare global {
       gitStageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitUnstageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCommit: (message: string, amend?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGenerateCommitMessage: () => Promise<{ success: boolean; message?: string; error?: string }>;
       gitUndoCommit: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPush: (remote?: string, branch?: string, force?: boolean, overwrite?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPull: (remote?: string, branch?: string, targetBranch?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -87,6 +88,7 @@ declare global {
       gitGetCherryPickStatus: () => Promise<{ success: boolean; inProgress: boolean; error?: string; errorType?: string }>;
       gitGetCommitsForInteractiveRebase: (targetBranch: string) => Promise<{ success: boolean; commits?: any[]; error?: string; errorType?: string }>;
       gitInteractiveRebase: (targetBranch: string, todoLines: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitCancelOperation: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       openFileInDefaultEditor: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       checkGitFlowInitialized: () => Promise<{ success: boolean; initialized?: boolean; error?: string; errorType?: string }>;
