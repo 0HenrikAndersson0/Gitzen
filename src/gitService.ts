@@ -3010,12 +3010,16 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     if (platform === 'win32') {
       // PowerShell script reading from temp file
       const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { if (gemini --help | Select-String -Pattern '--skip-trust' -Quiet) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } else { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT } } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
     } else {
       // Bash script reading from temp file
       command = `
 if command -v gemini &> /dev/null; then
-  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+  if gemini --help | grep -q -- "--skip-trust"; then
+    cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+  else
+    cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT"
+  fi
 elif command -v claude &> /dev/null; then
   cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
 elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
@@ -3096,11 +3100,15 @@ CODE:
 
     if (platform === 'win32') {
       const escapedTempPath = tempConflictFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (gemini or claude).' }"`;
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { if (gemini --help | Select-String -Pattern '--skip-trust' -Quiet) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } else { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT } } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (gemini or claude).' }"`;
     } else {
       command = `
 if command -v gemini &> /dev/null; then
-  cat "${tempConflictFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+  if gemini --help | grep -q -- "--skip-trust"; then
+    cat "${tempConflictFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+  else
+    cat "${tempConflictFile}" | gemini ask "$GITZEN_PROMPT"
+  fi
 elif command -v claude &> /dev/null; then
   cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
 else
