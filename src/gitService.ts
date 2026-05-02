@@ -3010,12 +3010,12 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     if (platform === 'win32') {
       // PowerShell script reading from temp file
       const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
     } else {
       // Bash script reading from temp file
       command = `
 if command -v gemini &> /dev/null; then
-  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT"
+  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
 elif command -v claude &> /dev/null; then
   cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
 elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
@@ -3056,5 +3056,112 @@ fi
         console.error('Failed to delete temporary diff file:', e);
       }
     }
+  }
+}
+
+export async function generateConflictResolution(filePath: string): Promise<{ success: boolean; explanation?: string; resolvedCode?: string; error?: string }> {
+  let tempConflictFile: string | null = null;
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+
+    const absolutePath = path.join(currentRepoPath, filePath);
+    if (!fs.existsSync(absolutePath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    const content = fs.readFileSync(absolutePath, 'utf8');
+    if (!content.includes('<<<<<<<')) {
+      return { success: false, error: 'No merge conflict markers found in file.' };
+    }
+
+    // Write content to a temporary file
+    tempConflictFile = path.join(os.tmpdir(), `gitzen-conflict-${Date.now()}.txt`);
+    fs.writeFileSync(tempConflictFile, content);
+
+    const prompt = `
+You are a git merge conflict resolver. Analyze the provided file content containing git merge conflict markers (<<<<<<< HEAD, =======, >>>>>>>).
+Perform a logical merge of the changes.
+
+Output your response EXACTLY in the following format:
+EXPLANATION:
+<A brief one or two sentence explanation of what you changed and why.>
+---
+CODE:
+<The full resolved file content without any conflict markers and without any markdown code blocks.>
+`.trim();
+
+    const platform = os.platform();
+    let command = '';
+    const env = fixPath();
+
+    if (platform === 'win32') {
+      const escapedTempPath = tempConflictFile.replace(/'/g, "''");
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (gemini or claude).' }"`;
+    } else {
+      command = `
+if command -v gemini &> /dev/null; then
+  cat "${tempConflictFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+elif command -v claude &> /dev/null; then
+  cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: No supported AI CLI found (gemini or claude)." >&2
+  exit 1
+fi
+`.trim();
+    }
+
+    const { stdout: aiOutput } = await execAsync(command, { 
+      cwd: currentRepoPath,
+      env: { ...env, GITZEN_PROMPT: prompt }
+    });
+
+    const explanationMarker = 'EXPLANATION:';
+    const codeMarker = 'CODE:';
+    const separator = '---';
+
+    let explanation = '';
+    let resolvedCode = '';
+
+    const expIndex = aiOutput.indexOf(explanationMarker);
+    const codeIndex = aiOutput.indexOf(codeMarker);
+
+    if (expIndex !== -1 && codeIndex !== -1) {
+      explanation = aiOutput.substring(expIndex + explanationMarker.length, aiOutput.indexOf(separator, expIndex)).trim();
+      resolvedCode = aiOutput.substring(codeIndex + codeMarker.length).trim();
+      
+      // Remove potential markdown code blocks if the AI ignored the instruction
+      resolvedCode = resolvedCode.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    } else {
+      // Fallback if AI didn't follow the format strictly
+      explanation = "AI could not provide a formatted explanation.";
+      resolvedCode = aiOutput.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    }
+
+    if (!resolvedCode) {
+      return { success: false, error: 'AI failed to generate resolved code.' };
+    }
+
+    return { success: true, explanation, resolvedCode };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (tempConflictFile && fs.existsSync(tempConflictFile)) {
+      try {
+        fs.unlinkSync(tempConflictFile);
+      } catch (e) {
+        console.error('Failed to delete temporary conflict file:', e);
+      }
+    }
+  }
+}
+
+export async function applyConflictResolution(filePath: string, resolvedCode: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    const absolutePath = path.join(currentRepoPath, filePath);
+    fs.writeFileSync(absolutePath, resolvedCode, 'utf8');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
   }
 }

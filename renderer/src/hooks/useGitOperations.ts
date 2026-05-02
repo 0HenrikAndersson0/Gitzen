@@ -1175,6 +1175,47 @@ export function useGitOperations({
     });
   };
 
+  const handleGenerateConflictResolution = useCallback(async (filePath: string) => {
+    try {
+      addLog('info', `AI is analyzing conflict in ${filePath}...`);
+      const result = await window.electronAPI.gitGenerateConflictResolution(filePath);
+      if (result.success && result.explanation !== undefined && result.resolvedCode !== undefined) {
+        addLog('success', `AI proposed a resolution for ${filePath}`);
+        return { explanation: result.explanation, resolvedCode: result.resolvedCode };
+      } else {
+        const errorMsg = result.error || 'AI failed to generate conflict resolution';
+        toast.error(errorMsg);
+        addLog('error', `AI conflict resolution failed: ${errorMsg}`);
+        return null;
+      }
+    } catch (error: any) {
+      const msg = error.message || 'Unknown error';
+      toast.error(`AI Error: ${msg}`);
+      addLog('error', `AI Error: ${msg}`);
+      return null;
+    }
+  }, [addLog]);
+
+  const handleApplyConflictResolution = useCallback(async (filePath: string, resolvedCode: string) => {
+    await withLoading('Applying AI resolution...', async () => {
+      try {
+        const result = await window.electronAPI.gitApplyConflictResolution(filePath, resolvedCode);
+        if (result.success) {
+          toast.success(`Applied AI resolution to ${filePath}`);
+          addLog('success', `Applied AI resolution to ${filePath}`);
+          await refreshStatusInternal();
+        } else {
+          toast.error(result.error || 'Failed to apply resolution');
+          addLog('error', `Failed to apply resolution: ${result.error}`);
+        }
+      } catch (error: any) {
+        const msg = error.message || 'Unknown error';
+        toast.error(`Error applying resolution: ${msg}`);
+        addLog('error', `Error applying resolution: ${msg}`);
+      }
+    });
+  }, [addLog, refreshStatusInternal, withLoading]);
+
   return {
     handleCommit,
     handleGenerateCommitMessage,
@@ -1221,6 +1262,8 @@ export function useGitOperations({
     handleFinishGitFlow,
     handleSyncSubmodules,
     handleAddSubmodule,
-    handleRemoveSubmodule
+    handleRemoveSubmodule,
+    handleGenerateConflictResolution,
+    handleApplyConflictResolution
   };
 }

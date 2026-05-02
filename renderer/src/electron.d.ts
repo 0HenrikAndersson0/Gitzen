@@ -49,6 +49,8 @@ declare global {
       gitUnstageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCommit: (message: string, amend?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitGenerateCommitMessage: () => Promise<{ success: boolean; message?: string; error?: string }>;
+      gitGenerateConflictResolution: (filePath: string) => Promise<{ success: boolean; explanation?: string; resolvedCode?: string; error?: string }>;
+      gitApplyConflictResolution: (filePath: string, resolvedCode: string) => Promise<{ success: boolean; error?: string }>;
       gitUndoCommit: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPush: (remote?: string, branch?: string, force?: boolean, overwrite?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPull: (remote?: string, branch?: string, targetBranch?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

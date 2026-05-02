@@ -201,6 +201,14 @@ ipcMain.handle('git:generateCommitMessage', async () => {
   return gitService.generateCommitMessage();
 });
 
+ipcMain.handle('git:generateConflictResolution', async (_, filePath) => {
+  return gitService.generateConflictResolution(filePath);
+});
+
+ipcMain.handle('git:applyConflictResolution', async (_, filePath, resolvedCode) => {
+  return gitService.applyConflictResolution(filePath, resolvedCode);
+});
+
 
 ipcMain.handle('git:undoCommit', async () => {
   return await gitService.undoLastCommit();

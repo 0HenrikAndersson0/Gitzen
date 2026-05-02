@@ -214,7 +214,9 @@ export default function App() {
     handleConfirmReset,
     handleOpenRepo,
     handleUndoCommit,
-    handleCancelOperation
+    handleCancelOperation,
+    handleGenerateConflictResolution,
+    handleApplyConflictResolution
   } = gitOps;
 
   useEffect(() => {
@@ -626,6 +628,8 @@ export default function App() {
         onAbortConflict={handleAbortConflict}
         onResolveFiles={handleResolveFiles}
         onResolveConflict={handleResolveConflict}
+        onResolveWithAI={handleGenerateConflictResolution}
+        onApplyAIResolution={handleApplyConflictResolution}
         onClose={() => setShowMergeConflictDialog(false)}
       />
 
