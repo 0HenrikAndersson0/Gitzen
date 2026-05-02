@@ -122,6 +122,36 @@ export const BranchesPanel = memo(function BranchesPanel({
   const localGrouped = useMemo(() => groupBranches(localBranches, localFilter), [localBranches, localFilter]);
   const remoteGrouped = useMemo(() => groupRemoteBranches(remoteBranches, remoteFilter), [remoteBranches, remoteFilter, localBranches]);
 
+  useEffect(() => {
+    if (localFilter.trim()) {
+      const groups = Object.keys(localGrouped.groups);
+      if (groups.length > 0) {
+        setExpandedLocalGroups(prev => {
+          const next = { ...prev };
+          groups.forEach(g => { next[g] = true; });
+          return next;
+        });
+      }
+    } else {
+      setExpandedLocalGroups({});
+    }
+  }, [localFilter, localGrouped.groups]);
+
+  useEffect(() => {
+    if (remoteFilter.trim()) {
+      const groups = Object.keys(remoteGrouped.groups);
+      if (groups.length > 0) {
+        setExpandedRemoteGroups(prev => {
+          const next = { ...prev };
+          groups.forEach(g => { next[g] = true; });
+          return next;
+        });
+      }
+    } else {
+      setExpandedRemoteGroups({});
+    }
+  }, [remoteFilter, remoteGrouped.groups]);
+
   const toggleLocalGroup = (group: string) => {
     setExpandedLocalGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
