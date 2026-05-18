@@ -375,6 +375,35 @@ export function useGitOperations({
     });
   };
 
+  const handleFetch = async () => {
+    addLog('info', 'Fetching from all remotes...');
+    await withLoading('Fetching from all remotes...', async () => {
+      try {
+        const result = await window.electronAPI.gitFetchAll();
+        if (result.success) {
+          setHasCredentials(true);
+          addLog('success', 'Successfully fetched from all remotes');
+          toast.success('Fetched successfully!');
+          await refreshStatusInternal();
+          await refreshHistoryInternal();
+          await refreshBranchStatusInternal();
+        } else {
+          const errorMsg = result.error || 'Failed to fetch';
+          addLog('error', errorMsg);
+          if (!checkAuthError(errorMsg, false, result.errorType)) {
+            toast.error(errorMsg);
+          }
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Fetch failed: ${errorMsg}`);
+        if (!checkAuthError(errorMsg)) {
+          toast.error(`Fetch failed: ${errorMsg}`);
+        }
+      }
+    });
+  };
+
   const handlePush = async () => {
     if (!remoteUrl) {
       try {
@@ -1230,6 +1259,7 @@ export function useGitOperations({
     handleDeleteStash,
     handleAddRemote,
     handlePull,
+    handleFetch,
     handlePush,
     handleForcePush,
     handleAbortRebase,

@@ -190,6 +190,7 @@ export default function App() {
     handleDeleteStash,
     handleAddRemote,
     handlePull,
+    handleFetch,
     handlePush,
     handleForcePush,
     handleAbortRebase,
@@ -371,6 +372,7 @@ export default function App() {
           onOpenSettings={() => setShowSettingsDialog(true)}
           onPush={handlePush}
           onPull={handlePull}
+          onFetch={handleFetch}
           onStash={handleStash}
           onToggleGraphs={() => setShowGraphs(!showGraphs)}
           onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}

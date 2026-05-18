@@ -1,4 +1,4 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, Trash2, Archive, BarChart2, Filter } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from './ui/button';
@@ -23,13 +23,14 @@ interface RepoHeaderProps {
   onOpenSettings?: () => void;
   onPush?: () => void;
   onPull?: () => void;
+  onFetch?: () => void;
   onStash?: () => void;
   onToggleGraphs?: () => void;
   onToggleFilters?: () => void;
   onStartGitFlow?: () => void;
 }
 
-export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onStash, onToggleGraphs, onToggleFilters, onStartGitFlow }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onFetch, onStash, onToggleGraphs, onToggleFilters, onStartGitFlow }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -253,6 +254,16 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
               >
                 <Archive className="size-4" />
                 <span className="hidden sm:inline">Stash</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onFetch}
+                className="gap-2 border-border bg-secondary/50 hover:bg-accent text-foreground"
+                title="Fetch from all remotes"
+              >
+                <RefreshCw className="size-4" />
+                <span className="hidden sm:inline">Fetch</span>
               </Button>
               <Button
                 variant="outline"
