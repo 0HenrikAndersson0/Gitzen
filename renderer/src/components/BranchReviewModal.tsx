@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -30,6 +30,195 @@ interface BranchReviewModalProps {
   onClose: () => void;
   branchName: string;
 }
+
+// 1. Memoized File Accordion Item to prevent other files from re-rendering on toggle
+interface FileAccordionItemProps {
+  file: FileDiffItem;
+  isExpanded: boolean;
+  onToggle: () => void;
+  viewMode: 'unified' | 'split';
+  hunks: any[];
+}
+
+const FileAccordionItem = React.memo(function FileAccordionItem({
+  file,
+  isExpanded,
+  onToggle,
+  viewMode,
+  hunks
+}: FileAccordionItemProps) {
+  const getFileIcon = (status: FileDiffItem['status']) => {
+    switch (status) {
+      case 'added':
+        return <FilePlus className="size-4 text-emerald-500" />;
+      case 'deleted':
+        return <FileX className="size-4 text-red-500" />;
+      default:
+        return <FileText className="size-4 text-zinc-400" />;
+    }
+  };
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden bg-card/60">
+      {/* File Accordion Header */}
+      <div 
+        onClick={onToggle}
+        className="flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/40 cursor-pointer select-none transition-colors border-b border-transparent data-[expanded=true]:border-border"
+        data-expanded={isExpanded}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {getFileIcon(file.status)}
+          <span className="font-mono text-xs font-semibold truncate text-foreground/90">{file.path}</span>
+          <span className={`text-[10px] rounded px-1.5 py-0.5 capitalize border ${
+            file.status === 'added' 
+              ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/25' 
+              : file.status === 'deleted' 
+                ? 'bg-red-500/5 text-red-400 border-red-500/25' 
+                : 'bg-zinc-500/5 text-zinc-400 border-zinc-500/25'
+          }`}>
+            {file.status}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 ml-2 flex-shrink-0">
+          <span className="font-mono text-[10px] font-medium flex items-center gap-1.5">
+            <span className="text-emerald-500">+{file.additions}</span>
+            <span className="text-red-500">-{file.deletions}</span>
+          </span>
+          {isExpanded ? (
+            <ChevronDown className="size-4 text-zinc-500" />
+          ) : (
+            <ChevronRight className="size-4 text-zinc-500" />
+          )}
+        </div>
+      </div>
+
+      {/* File Accordion Diff Viewer */}
+      {isExpanded && (
+        <div className="bg-zinc-950/20 border-t border-border flex flex-col p-2.5">
+          {hunks && hunks.length > 0 ? (
+            <DiffViewer 
+              hunks={hunks} 
+              viewMode={viewMode} 
+              readOnly={true} 
+            />
+          ) : (
+            <div className="text-center py-4 text-[11px] text-muted-foreground italic">No diff details available</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+// Inline markdown parser helpers
+const parseInlineMarkdown = (text: string): React.ReactNode[] => {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={idx} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={idx} className="px-1.5 py-0.5 rounded bg-zinc-950 font-mono text-[10px] text-emerald-400 select-all border border-border/30">{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
+};
+
+const renderMarkdown = (text: string) => {
+  if (!text) return null;
+  
+  const lines = text.split('\n');
+  let insideCodeBlock = false;
+  let codeLines: string[] = [];
+
+  const parsedElements: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      if (insideCodeBlock) {
+        parsedElements.push(
+          <pre key={`code-${index}`} className="my-3 p-3 rounded bg-zinc-950 font-mono text-xs text-zinc-300 overflow-x-auto border border-border/40 select-text">
+            <code>{codeLines.join('\n')}</code>
+          </pre>
+        );
+        codeLines = [];
+        insideCodeBlock = false;
+      } else {
+        insideCodeBlock = true;
+      }
+      return;
+    }
+
+    if (insideCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    if (trimmed.startsWith('### ')) {
+      parsedElements.push(
+        <h4 key={index} className="text-xs font-semibold text-foreground tracking-wide uppercase mt-4 mb-2">
+          {parseInlineMarkdown(trimmed.substring(4))}
+        </h4>
+      );
+      return;
+    }
+    if (trimmed.startsWith('## ')) {
+      parsedElements.push(
+        <h3 key={index} className="text-sm font-bold text-foreground border-b border-border/40 pb-1 mt-5 mb-2.5">
+          {parseInlineMarkdown(trimmed.substring(3))}
+        </h3>
+      );
+      return;
+    }
+    if (trimmed.startsWith('# ')) {
+      parsedElements.push(
+        <h2 key={index} className="text-base font-extrabold text-foreground border-b border-border pb-1.5 mt-6 mb-3">
+          {parseInlineMarkdown(trimmed.substring(2))}
+        </h2>
+      );
+      return;
+    }
+
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      parsedElements.push(
+        <li key={index} className="list-disc ml-5 mb-1.5 text-xs text-foreground/80 leading-relaxed">
+          {parseInlineMarkdown(trimmed.substring(2))}
+        </li>
+      );
+      return;
+    }
+
+    const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+    if (numMatch) {
+      parsedElements.push(
+        <li key={index} className="list-decimal ml-5 mb-1.5 text-xs text-foreground/80 leading-relaxed">
+          {parseInlineMarkdown(numMatch[2])}
+        </li>
+      );
+      return;
+    }
+
+    if (trimmed === '---') {
+      parsedElements.push(<hr key={index} className="my-4 border-border/40" />);
+      return;
+    }
+
+    if (!trimmed) {
+      parsedElements.push(<div key={index} className="h-2" />);
+      return;
+    }
+
+    parsedElements.push(
+      <p key={index} className="text-xs text-foreground/80 leading-relaxed mb-2">
+        {parseInlineMarkdown(line)}
+      </p>
+    );
+  });
+
+  return parsedElements;
+};
 
 export function BranchReviewModal({ isOpen, onClose, branchName }: BranchReviewModalProps) {
   const [baseBranch, setBaseBranch] = useState('main');
@@ -95,143 +284,34 @@ export function BranchReviewModal({ isOpen, onClose, branchName }: BranchReviewM
     }
   }, [isOpen, branchName, loadDiff, loadAIReview]);
 
-  const toggleFileExpanded = (path: string) => {
+  const toggleFileExpanded = useCallback((path: string) => {
     setExpandedFiles(prev => ({
       ...prev,
       [path]: !prev[path]
     }));
-  };
+  }, []);
 
-  const getFileIcon = (status: FileDiffItem['status']) => {
-    switch (status) {
-      case 'added':
-        return <FilePlus className="size-4 text-emerald-500" />;
-      case 'deleted':
-        return <FileX className="size-4 text-red-500" />;
-      default:
-        return <FileText className="size-4 text-zinc-400" />;
-    }
-  };
-
-  // Inline markdown rendering helper
-  const renderMarkdown = (text: string) => {
-    if (!text) return null;
-    
-    // Simple state-less block parser
-    const lines = text.split('\n');
-    let insideCodeBlock = false;
-    let codeLines: string[] = [];
-
-    const parsedElements: React.ReactNode[] = [];
-
-    lines.forEach((line, index) => {
-      const trimmed = line.trim();
-
-      // Code Block boundaries
-      if (trimmed.startsWith('```')) {
-        if (insideCodeBlock) {
-          // Close block
-          parsedElements.push(
-            <pre key={`code-${index}`} className="my-3 p-3 rounded bg-zinc-950 font-mono text-xs text-zinc-300 overflow-x-auto border border-border/40 select-text">
-              <code>{codeLines.join('\n')}</code>
-            </pre>
-          );
-          codeLines = [];
-          insideCodeBlock = false;
-        } else {
-          insideCodeBlock = true;
+  // 2. Pre-parse and memoize diff hunks once files are loaded
+  const parsedHunksMap = useMemo(() => {
+    const cache: Record<string, any[]> = {};
+    files.forEach(file => {
+      if (file.diff) {
+        try {
+          cache[file.path] = parseDiff(file.diff).hunks;
+        } catch (e) {
+          console.error('Failed to parse diff for ' + file.path, e);
+          cache[file.path] = [];
         }
-        return;
+      } else {
+        cache[file.path] = [];
       }
-
-      if (insideCodeBlock) {
-        codeLines.push(line);
-        return;
-      }
-
-      // Headers
-      if (trimmed.startsWith('### ')) {
-        parsedElements.push(
-          <h4 key={index} className="text-xs font-semibold text-foreground tracking-wide uppercase mt-4 mb-2">
-            {parseInlineMarkdown(trimmed.substring(4))}
-          </h4>
-        );
-        return;
-      }
-      if (trimmed.startsWith('## ')) {
-        parsedElements.push(
-          <h3 key={index} className="text-sm font-bold text-foreground border-b border-border/40 pb-1 mt-5 mb-2.5">
-            {parseInlineMarkdown(trimmed.substring(3))}
-          </h3>
-        );
-        return;
-      }
-      if (trimmed.startsWith('# ')) {
-        parsedElements.push(
-          <h2 key={index} className="text-base font-extrabold text-foreground border-b border-border pb-1.5 mt-6 mb-3">
-            {parseInlineMarkdown(trimmed.substring(2))}
-          </h2>
-        );
-        return;
-      }
-
-      // Bullet Lists
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        parsedElements.push(
-          <li key={index} className="list-disc ml-5 mb-1.5 text-xs text-foreground/80 leading-relaxed">
-            {parseInlineMarkdown(trimmed.substring(2))}
-          </li>
-        );
-        return;
-      }
-
-      // Numbered Lists
-      const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
-      if (numMatch) {
-        parsedElements.push(
-          <li key={index} className="list-decimal ml-5 mb-1.5 text-xs text-foreground/80 leading-relaxed">
-            {parseInlineMarkdown(numMatch[2])}
-          </li>
-        );
-        return;
-      }
-
-      // Horizontal rules
-      if (trimmed === '---') {
-        parsedElements.push(<hr key={index} className="my-4 border-border/40" />);
-        return;
-      }
-
-      // Blank line
-      if (!trimmed) {
-        parsedElements.push(<div key={index} className="h-2" />);
-        return;
-      }
-
-      // Paragraph
-      parsedElements.push(
-        <p key={index} className="text-xs text-foreground/80 leading-relaxed mb-2">
-          {parseInlineMarkdown(line)}
-        </p>
-      );
     });
+    return cache;
+  }, [files]);
 
-    return parsedElements;
-  };
-
-  const parseInlineMarkdown = (text: string): React.ReactNode[] => {
-    // Splits text into bold (**), code (`), and regular text
-    const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
-    return parts.map((part, idx) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={idx} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
-      }
-      if (part.startsWith('`') && part.endsWith('`')) {
-        return <code key={idx} className="px-1.5 py-0.5 rounded bg-zinc-950 font-mono text-[10px] text-emerald-400 select-all border border-border/30">{part.slice(1, -1)}</code>;
-      }
-      return part;
-    });
-  };
+  // 3. Memoize Markdown renders to prevent redundant string parsing on re-renders
+  const renderedSummary = useMemo(() => renderMarkdown(summary), [summary]);
+  const renderedExplanation = useMemo(() => renderMarkdown(explanation), [explanation]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -294,7 +374,7 @@ export function BranchReviewModal({ isOpen, onClose, branchName }: BranchReviewM
               </div>
             ) : summary ? (
               <div className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed text-foreground/90 font-medium">
-                {renderMarkdown(summary)}
+                {renderedSummary}
               </div>
             ) : (
               <div className="text-xs text-muted-foreground py-2 italic">Generating summary...</div>
@@ -325,7 +405,7 @@ export function BranchReviewModal({ isOpen, onClose, branchName }: BranchReviewM
                   </div>
                 ) : explanation ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed text-foreground/80">
-                    {renderMarkdown(explanation)}
+                    {renderedExplanation}
                   </div>
                 ) : errorAI ? (
                   <div className="text-xs text-muted-foreground italic py-4">AI analysis was not successful. Please refer to the error notice above.</div>
@@ -384,54 +464,14 @@ export function BranchReviewModal({ isOpen, onClose, branchName }: BranchReviewM
                     files.map((file) => {
                       const isExpanded = !!expandedFiles[file.path];
                       return (
-                        <div key={file.path} className="border border-border rounded-lg overflow-hidden bg-card/60">
-                          {/* File Accordion Header */}
-                          <div 
-                            onClick={() => toggleFileExpanded(file.path)}
-                            className="flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/40 cursor-pointer select-none transition-colors border-b border-transparent data-[expanded=true]:border-border"
-                            data-expanded={isExpanded}
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {getFileIcon(file.status)}
-                              <span className="font-mono text-xs font-semibold truncate text-foreground/90">{file.path}</span>
-                              <span className={`text-[10px] rounded px-1.5 py-0.5 capitalize border ${
-                                file.status === 'added' 
-                                  ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/25' 
-                                  : file.status === 'deleted' 
-                                    ? 'bg-red-500/5 text-red-400 border-red-500/25' 
-                                    : 'bg-zinc-500/5 text-zinc-400 border-zinc-500/25'
-                              }`}>
-                                {file.status}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 ml-2 flex-shrink-0">
-                              <span className="font-mono text-[10px] font-medium flex items-center gap-1.5">
-                                <span className="text-emerald-500">+{file.additions}</span>
-                                <span className="text-red-500">-{file.deletions}</span>
-                              </span>
-                              {isExpanded ? (
-                                <ChevronDown className="size-4 text-zinc-500" />
-                              ) : (
-                                <ChevronRight className="size-4 text-zinc-500" />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* File Accordion Diff Viewer */}
-                          {isExpanded && (
-                            <div className="bg-zinc-950/20 border-t border-border flex flex-col p-2.5">
-                              {file.diff ? (
-                                <DiffViewer 
-                                  hunks={parseDiff(file.diff).hunks} 
-                                  viewMode={viewMode} 
-                                  readOnly={true} 
-                                />
-                              ) : (
-                                <div className="text-center py-4 text-[11px] text-muted-foreground italic">No diff details available</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <FileAccordionItem
+                          key={file.path}
+                          file={file}
+                          isExpanded={isExpanded}
+                          onToggle={() => toggleFileExpanded(file.path)}
+                          viewMode={viewMode}
+                          hunks={parsedHunksMap[file.path] || []}
+                        />
                       );
                     })
                   )}

@@ -3166,6 +3166,23 @@ export async function applyConflictResolution(filePath: string, resolvedCode: st
   }
 }
 
+const EXCLUDE_LOCK_FILES = [
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb',
+  'composer.lock',
+  'Cargo.lock',
+  'Gemfile.lock',
+  'poetry.lock',
+  'mix.lock',
+  '*.lock'
+];
+
+function getExcludePathspecs(): string {
+  return EXCLUDE_LOCK_FILES.map(pattern => `":(exclude)*${pattern}"`).join(' ');
+}
+
 export async function getBaseBranch(): Promise<string> {
   try {
     await runGitCommand('show-ref --verify refs/heads/main');
@@ -3187,9 +3204,10 @@ export async function getBranchDiffFiles(branchName: string): Promise<{ success:
     }
 
     const baseBranch = await getBaseBranch();
+    const excludeArgs = getExcludePathspecs();
 
-    // Use triple-dot diff to get changes in target branch since it diverged from base
-    const { stdout: diffText } = await runGitCommand(`diff ${baseBranch}...${branchName}`);
+    // Use triple-dot diff to get changes in target branch since it diverged from base, excluding lockfiles
+    const { stdout: diffText } = await runGitCommand(`diff ${baseBranch}...${branchName} -- . ${excludeArgs}`);
     if (!diffText.trim()) {
       return { success: true, baseBranch, files: [] };
     }
@@ -3272,13 +3290,21 @@ export async function getAIBranchReview(branchName: string): Promise<{ success: 
     }
 
     const baseBranch = await getBaseBranch();
-    const { stdout: diffText } = await runGitCommand(`diff ${baseBranch}...${branchName}`);
-    if (!diffText.trim()) {
+    const excludeArgs = getExcludePathspecs();
+    const { stdout: rawDiffText } = await runGitCommand(`diff ${baseBranch}...${branchName} -- . ${excludeArgs}`);
+    if (!rawDiffText.trim()) {
       return {
         success: true,
         summary: 'No changes found compared to the ' + baseBranch + ' branch.',
         explanation: 'No files were changed.'
       };
+    }
+
+    // Limit diff text size for AI review to prevent command/arguments overflow and save tokens
+    const MAX_AI_DIFF_CHARACTERS = 200000; // ~200KB limit
+    let diffText = rawDiffText;
+    if (rawDiffText.length > MAX_AI_DIFF_CHARACTERS) {
+      diffText = rawDiffText.substring(0, MAX_AI_DIFF_CHARACTERS) + '\n\n[Diff truncated for AI review because it exceeds size limits...]';
     }
 
     tempDiffFile = path.join(os.tmpdir(), `gitzen-review-${Date.now()}.txt`);
