@@ -3165,3 +3165,198 @@ export async function applyConflictResolution(filePath: string, resolvedCode: st
     return { success: false, error: error.message || 'Unknown error' };
   }
 }
+
+export async function getBaseBranch(): Promise<string> {
+  try {
+    await runGitCommand('show-ref --verify refs/heads/main');
+    return 'main';
+  } catch {
+    try {
+      await runGitCommand('show-ref --verify refs/heads/master');
+      return 'master';
+    } catch {
+      return 'main';
+    }
+  }
+}
+
+export async function getBranchDiffFiles(branchName: string): Promise<{ success: boolean; baseBranch?: string; files?: any[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const baseBranch = await getBaseBranch();
+
+    // Use triple-dot diff to get changes in target branch since it diverged from base
+    const { stdout: diffText } = await runGitCommand(`diff ${baseBranch}...${branchName}`);
+    if (!diffText.trim()) {
+      return { success: true, baseBranch, files: [] };
+    }
+
+    const diffLines = diffText.split('\n');
+    const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
+
+    let currentFile: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string } | null = null;
+    let fileDiffStart = 0;
+
+    for (let i = 0; i < diffLines.length; i++) {
+      const line = diffLines[i];
+      if (line.startsWith('diff --git')) {
+        if (currentFile) {
+          currentFile.diff = diffLines.slice(fileDiffStart, i).join('\n');
+          if (currentFile.path) {
+            files.push(currentFile);
+          }
+        }
+        fileDiffStart = i;
+        currentFile = null;
+
+        const match = line.match(/^diff --git (?:a\/|"?a\/)(.+) (?:b\/|"?b\/)(.+?)(?:"?)$/);
+        if (match) {
+          const path = match[2] || match[1];
+          currentFile = {
+            path: path.replace(/^"|"$/g, ''),
+            status: 'modified',
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        } else {
+          currentFile = {
+            path: '',
+            status: 'modified',
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        }
+      }
+
+      if (currentFile) {
+        if (line.startsWith('new file mode')) {
+          currentFile.status = 'added';
+        } else if (line.startsWith('deleted file mode')) {
+          currentFile.status = 'deleted';
+        } else if (line.startsWith('+++ b/')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('--- a/') && (!currentFile.path || currentFile.status === 'deleted')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentFile.additions++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentFile.deletions++;
+        }
+      }
+    }
+
+    if (currentFile) {
+      currentFile.diff = diffLines.slice(fileDiffStart).join('\n');
+      if (currentFile.path) {
+        files.push(currentFile);
+      }
+    }
+
+    return { success: true, baseBranch, files };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error' };
+  }
+}
+
+export async function getAIBranchReview(branchName: string): Promise<{ success: boolean; summary?: string; explanation?: string; error?: string }> {
+  let tempDiffFile: string | null = null;
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const baseBranch = await getBaseBranch();
+    const { stdout: diffText } = await runGitCommand(`diff ${baseBranch}...${branchName}`);
+    if (!diffText.trim()) {
+      return {
+        success: true,
+        summary: 'No changes found compared to the ' + baseBranch + ' branch.',
+        explanation: 'No files were changed.'
+      };
+    }
+
+    tempDiffFile = path.join(os.tmpdir(), `gitzen-review-${Date.now()}.txt`);
+    fs.writeFileSync(tempDiffFile, diffText);
+
+    const prompt = `You are a Senior Software Architect reviewing a Git branch.
+Below is the git diff of the branch:
+[DIFF]
+
+Please analyze the diff and provide a review.
+Your output must be formatted exactly as follows:
+
+=== SUMMARY ===
+[Provide a high-level summary of the overall changes in this branch and their intended purpose. Keep it clear, concise, and structured in Markdown.]
+
+=== EXPLANATION ===
+[Provide a detailed explanation of the changes, what they do, and how they work. Write it in clear Markdown.]`;
+
+    const platform = os.platform();
+    let command = '';
+    const env = fixPath();
+
+    if (platform === 'win32') {
+      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+    } else {
+      command = `
+if command -v gemini &> /dev/null; then
+  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+elif command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
+else
+  echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
+  exit 1
+fi
+`.trim();
+    }
+
+    const { stdout: aiOutput } = await execAsync(command, { 
+      cwd: currentRepoPath,
+      env: { ...env, GITZEN_PROMPT: prompt }
+    });
+
+    const summaryMarker = '=== SUMMARY ===';
+    const explanationMarker = '=== EXPLANATION ===';
+
+    const sumIndex = aiOutput.indexOf(summaryMarker);
+    const expIndex = aiOutput.indexOf(explanationMarker);
+
+    let summary = '';
+    let explanation = '';
+
+    if (sumIndex !== -1 && expIndex !== -1) {
+      summary = aiOutput.substring(sumIndex + summaryMarker.length, expIndex).trim();
+      explanation = aiOutput.substring(expIndex + explanationMarker.length).trim();
+    } else {
+      // Fallback
+      summary = aiOutput.trim();
+      explanation = "Detailed explanation could not be separated automatically.";
+    }
+
+    // Clean up markdown block formats if AI wrapped them
+    summary = summary.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    explanation = explanation.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+
+    return { success: true, summary, explanation };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error during AI generation' };
+  } finally {
+    if (tempDiffFile && fs.existsSync(tempDiffFile)) {
+      try {
+        fs.unlinkSync(tempDiffFile);
+      } catch (e) {
+        console.error('Failed to delete temporary diff file:', e);
+      }
+    }
+  }
+}
+

@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRemoteBranches: () => ipcRenderer.invoke('git:getRemoteBranches'),
   getTags: () => ipcRenderer.invoke('git:getTags'),
   getCommitDiff: (commitHash) => ipcRenderer.invoke('git:getCommitDiff', commitHash),
+  gitGetBranchDiff: (branchName) => ipcRenderer.invoke('git:getBranchDiff', branchName),
+  gitGetAIBranchReview: (branchName) => ipcRenderer.invoke('git:getAIBranchReview', branchName),
   getFileDiff: (filePath, staged) => ipcRenderer.invoke('git:getFileDiff', filePath, staged),
   getFileBlame: (filePath, commitHash) => ipcRenderer.invoke('git:getFileBlame', filePath, commitHash),
   deleteBranch: (branchName, force) => ipcRenderer.invoke('git:deleteBranch', branchName, force),

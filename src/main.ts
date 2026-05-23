@@ -338,6 +338,14 @@ ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
   return await gitService.getCommitDiff(commitHash);
 });
 
+ipcMain.handle('git:getBranchDiff', async (_, branchName) => {
+  return await gitService.getBranchDiffFiles(branchName);
+});
+
+ipcMain.handle('git:getAIBranchReview', async (_, branchName) => {
+  return await gitService.getAIBranchReview(branchName);
+});
+
 ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
   return await gitService.getFileDiff(filePath, staged);
 });

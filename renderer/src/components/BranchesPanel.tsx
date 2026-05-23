@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Search, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { RebaseModal } from './RebaseModal';
+import { BranchReviewModal } from './BranchReviewModal';
 
 export interface Branch {
   name: string;
@@ -111,6 +112,7 @@ export const BranchesPanel = memo(function BranchesPanel({
   const [renameDialog, setRenameDialog] = useState<{ isOpen: boolean; oldName: string; newName: string }>({ isOpen: false, oldName: '', newName: '' });
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
+  const [reviewBranchName, setReviewBranchName] = useState<string | null>(null);
   const [localBranchesExpanded, setLocalBranchesExpanded] = useState(true);
   const [remoteBranchesExpanded, setRemoteBranchesExpanded] = useState(true);
   const [expandedLocalGroups, setExpandedLocalGroups] = useState<Record<string, boolean>>({});
@@ -256,7 +258,7 @@ export const BranchesPanel = memo(function BranchesPanel({
     });
   };
 
-  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull' | 'rename') => {
+  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull' | 'rename' | 'review-changes') => {
     if (!contextMenu) return;
 
     const branch = contextMenu.branch;
@@ -264,6 +266,9 @@ export const BranchesPanel = memo(function BranchesPanel({
     const isRemote = contextMenu.isRemote;
 
     switch (action) {
+      case 'review-changes':
+        setReviewBranchName(branch);
+        break;
       case 'rename':
         setRenameDialog({ isOpen: true, oldName: branch, newName: branch });
         break;
@@ -904,6 +909,14 @@ export const BranchesPanel = memo(function BranchesPanel({
           className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
+          <div
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2 border-b border-border/50 text-emerald-500 font-semibold"
+            onClick={() => handleMenuAction('review-changes')}
+          >
+            <Sparkles className="size-3.5" />
+            Review changes (AI)...
+          </div>
+
           {contextMenu.isRemote && (
             <>
               <div
@@ -962,6 +975,14 @@ export const BranchesPanel = memo(function BranchesPanel({
           targetBranch={rebaseTargetBranch}
           currentBranch={currentBranch}
           onStartRebase={handleStartInteractiveRebase}
+        />
+      )}
+
+      {reviewBranchName && (
+        <BranchReviewModal
+          isOpen={!!reviewBranchName}
+          onClose={() => setReviewBranchName(null)}
+          branchName={reviewBranchName}
         />
       )}
     </div>
