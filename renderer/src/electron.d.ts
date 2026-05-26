@@ -114,6 +114,8 @@ declare global {
       getRemoteBranches: () => Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string; errorType?: string }>;
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string; errorType?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string; errorType?: string }>;
+      gitGetBranchDiff: (branchName: string) => Promise<{ success: boolean; baseBranch?: string; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }>;
+      gitGetAIBranchReview: (branchName: string) => Promise<{ success: boolean; summary?: string; explanation?: string; error?: string }>;
       getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string; errorType?: string }>;
       getFileBlame: (filePath: string, commitHash?: string) => Promise<{ success: boolean; blame?: Array<{ commitHash: string; author: string; date: string; lineNo: number; content: string; }>; error?: string; errorType?: string }>;
       applyPatch: (patch: string, options?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean; error?: string; errorType?: string }>;
