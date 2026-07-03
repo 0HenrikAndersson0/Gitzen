@@ -6,7 +6,7 @@ export interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export function Spinner({ className, size = 'md', ...props }: SpinnerProps) {
+export function Spinner({ className, size = 'md', style, ...props }: SpinnerProps) {
   const sizeClasses = {
     sm: 'h-4 w-4 border-2',
     md: 'h-8 w-8 border-3',
@@ -17,10 +17,11 @@ export function Spinner({ className, size = 'md', ...props }: SpinnerProps) {
   return (
     <div
       className={cn(
-        "animate-spin rounded-full border-border border-t-transparent",
+        "animate-spin rounded-full border-border",
         sizeClasses[size],
         className
       )}
+      style={{ borderTopColor: 'transparent', ...style }}
       {...props}
     />
   )
