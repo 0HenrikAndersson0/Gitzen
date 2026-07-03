@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, memo } from 'react';
-import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Search, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { RebaseModal } from './RebaseModal';
+import { BranchReviewModal } from './BranchReviewModal';
 
 export interface Branch {
   name: string;
@@ -25,6 +26,7 @@ interface BranchesPanelProps {
   onCheckout?: (branch: string) => void;
   onCreateBranch?: (name: string) => void;
   onDeleteBranch?: (branch: string) => void;
+  onDeleteRemoteBranch?: (branch: string) => void;
   onMergeBranch?: (branch: string) => void;
   onSetLoading?: (loading: boolean, message?: string) => void;
   onApplyStash: (name: string) => void;
@@ -36,6 +38,53 @@ interface BranchesPanelProps {
   onFinishGitFlow?: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => void;
 }
 
+const extractBranchNameFromRemote = (remoteBranchName: string): string => {
+  const firstSlashIndex = remoteBranchName.indexOf('/');
+  if (firstSlashIndex === -1) {
+    return remoteBranchName;
+  }
+  return remoteBranchName.substring(firstSlashIndex + 1);
+};
+
+const groupBranches = (branches: Branch[], filter: string) => {
+  const filtered = branches.filter(b => b.name.toLowerCase().includes(filter.toLowerCase()));
+  const groups: Record<string, Branch[]> = {};
+  const root: Branch[] = [];
+
+  filtered.forEach(branch => {
+    const parts = branch.name.split('/');
+    if (parts.length > 1) {
+      const groupName = parts[0];
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(branch);
+    } else {
+      root.push(branch);
+    }
+  });
+
+  return { groups, root };
+};
+
+const groupRemoteBranches = (branches: Branch[], filter: string) => {
+  const filtered = branches.filter(b => b.name.toLowerCase().includes(filter.toLowerCase()));
+  const groups: Record<string, Branch[]> = {};
+  const root: Branch[] = [];
+
+  filtered.forEach(branch => {
+    const logicalName = extractBranchNameFromRemote(branch.name);
+    const parts = logicalName.split('/');
+    if (parts.length > 1) {
+      const groupName = parts[0];
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(branch);
+    } else {
+      root.push(branch);
+    }
+  });
+
+  return { groups, root };
+};
+
 export const BranchesPanel = memo(function BranchesPanel({
   currentBranch,
   localBranches,
@@ -45,6 +94,7 @@ export const BranchesPanel = memo(function BranchesPanel({
   onCheckout,
   onCreateBranch,
   onDeleteBranch,
+  onDeleteRemoteBranch,
   onMergeBranch,
   onSetLoading,
   onApplyStash,
@@ -57,15 +107,60 @@ export const BranchesPanel = memo(function BranchesPanel({
 }: BranchesPanelProps) {
   const [internalShowCreateDialog, setInternalShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string; isRemote: boolean } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; branch: string; upstream?: string; isRemote: boolean; isCurrent: boolean } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ type: 'branch' | 'remoteBranch'; name: string } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ isOpen: boolean; oldName: string; newName: string }>({ isOpen: false, oldName: '', newName: '' });
   const [rebaseModalOpen, setRebaseModalOpen] = useState(false);
   const [rebaseTargetBranch, setRebaseTargetBranch] = useState<string | null>(null);
+  const [reviewBranchName, setReviewBranchName] = useState<string | null>(null);
   const [localBranchesExpanded, setLocalBranchesExpanded] = useState(true);
   const [remoteBranchesExpanded, setRemoteBranchesExpanded] = useState(true);
+  const [expandedLocalGroups, setExpandedLocalGroups] = useState<Record<string, boolean>>({});
+  const [expandedRemoteGroups, setExpandedRemoteGroups] = useState<Record<string, boolean>>({});
   const [localFilter, setLocalFilter] = useState('');
   const [remoteFilter, setRemoteFilter] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const localGrouped = useMemo(() => groupBranches(localBranches, localFilter), [localBranches, localFilter]);
+  const remoteGrouped = useMemo(() => groupRemoteBranches(remoteBranches, remoteFilter), [remoteBranches, remoteFilter, localBranches]);
+
+  useEffect(() => {
+    if (localFilter.trim()) {
+      const groups = Object.keys(localGrouped.groups);
+      if (groups.length > 0) {
+        setExpandedLocalGroups(prev => {
+          const next = { ...prev };
+          groups.forEach(g => { next[g] = true; });
+          return next;
+        });
+      }
+    } else {
+      setExpandedLocalGroups({});
+    }
+  }, [localFilter, localGrouped.groups]);
+
+  useEffect(() => {
+    if (remoteFilter.trim()) {
+      const groups = Object.keys(remoteGrouped.groups);
+      if (groups.length > 0) {
+        setExpandedRemoteGroups(prev => {
+          const next = { ...prev };
+          groups.forEach(g => { next[g] = true; });
+          return next;
+        });
+      }
+    } else {
+      setExpandedRemoteGroups({});
+    }
+  }, [remoteFilter, remoteGrouped.groups]);
+
+  const toggleLocalGroup = (group: string) => {
+    setExpandedLocalGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
+
+  const toggleRemoteGroup = (group: string) => {
+    setExpandedRemoteGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
 
   const isDialogOpen = isCreateDialogOpen !== undefined ? isCreateDialogOpen : internalShowCreateDialog;
   const closeDialog = onCloseCreateDialog || (() => setInternalShowCreateDialog(false));
@@ -106,6 +201,17 @@ export const BranchesPanel = memo(function BranchesPanel({
 
     const dialogToDelete = deleteDialog;
     setDeleteDialog(null);
+
+    if (dialogToDelete.type === 'branch' && onDeleteBranch) {
+      onDeleteBranch(dialogToDelete.name);
+      return;
+    }
+
+    if (dialogToDelete.type === 'remoteBranch' && onDeleteRemoteBranch) {
+      onDeleteRemoteBranch(dialogToDelete.name);
+      return;
+    }
+
     onSetLoading?.(true, `Deleting ${dialogToDelete.name}...`);
 
     try {
@@ -114,7 +220,7 @@ export const BranchesPanel = memo(function BranchesPanel({
         result = await window.electronAPI.deleteBranch(dialogToDelete.name, false);
         if (result.success) {
           toast.success(`Deleted branch ${dialogToDelete.name}`);
-          onDeleteBranch?.(dialogToDelete.name);
+          onRefresh?.();
         } else {
           toast.error(result.error || 'Failed to delete branch');
         }
@@ -122,7 +228,7 @@ export const BranchesPanel = memo(function BranchesPanel({
         result = await window.electronAPI.deleteRemoteBranch(dialogToDelete.name);
         if (result.success) {
           toast.success(`Deleted remote branch ${dialogToDelete.name}`);
-          // Parent App.tsx should refresh branches
+          onRefresh?.();
         } else {
           toast.error(result.error || 'Failed to delete remote branch');
         }
@@ -135,33 +241,24 @@ export const BranchesPanel = memo(function BranchesPanel({
     }
   };
 
-  const extractBranchNameFromRemote = (remoteBranchName: string): string => {
-    const firstSlashIndex = remoteBranchName.indexOf('/');
-    if (firstSlashIndex === -1) {
-      return remoteBranchName;
-    }
-    return remoteBranchName.substring(firstSlashIndex + 1);
-  };
-
   const handleCheckout = async (branchName: string) => {
     onCheckout?.(branchName);
   };
 
   const handleContextMenu = (e: React.MouseEvent, branch: Branch) => {
-    if (!branch.isCurrent) {
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        branch: branch.name,
-        upstream: branch.upstream,
-        isRemote: branch.isRemote
-      });
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      branch: branch.name,
+      upstream: branch.upstream,
+      isRemote: branch.isRemote,
+      isCurrent: !!branch.isCurrent
+    });
   };
 
-  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull') => {
+  const handleMenuAction = async (action: 'merge' | 'rebase' | 'interactive-rebase' | 'fetch' | 'pull' | 'rename' | 'review-changes') => {
     if (!contextMenu) return;
 
     const branch = contextMenu.branch;
@@ -169,6 +266,12 @@ export const BranchesPanel = memo(function BranchesPanel({
     const isRemote = contextMenu.isRemote;
 
     switch (action) {
+      case 'review-changes':
+        setReviewBranchName(branch);
+        break;
+      case 'rename':
+        setRenameDialog({ isOpen: true, oldName: branch, newName: branch });
+        break;
       case 'merge':
         onMergeBranch?.(branch);
         break;
@@ -259,6 +362,40 @@ export const BranchesPanel = memo(function BranchesPanel({
     }
 
     setContextMenu(null);
+  };
+
+  const submitRename = async () => {
+    const { oldName, newName } = renameDialog;
+    const finalNewName = newName.trim();
+    
+    if (!finalNewName) {
+      toast.error('Branch name cannot be empty');
+      return;
+    }
+    if (finalNewName === oldName) {
+      setRenameDialog({ isOpen: false, oldName: '', newName: '' });
+      return;
+    }
+    if (!/^[a-zA-Z0-9/._-]+$/.test(finalNewName)) {
+      toast.error('Branch name contains invalid characters');
+      return;
+    }
+
+    onSetLoading?.(true, `Renaming ${oldName} to ${finalNewName}...`);
+    try {
+      const result = await window.electronAPI.renameBranch(oldName, finalNewName);
+      if (result.success) {
+        toast.success(`Renamed branch to ${finalNewName}`);
+        onRefresh?.();
+      } else {
+        toast.error(result.error || 'Failed to rename branch');
+      }
+    } catch (error) {
+      toast.error('Failed to rename branch');
+    } finally {
+      onSetLoading?.(false);
+      setRenameDialog({ isOpen: false, oldName: '', newName: '' });
+    }
   };
 
   const handleStartInteractiveRebase = async (targetBranch: string, todoLines: string[]) => {
@@ -363,57 +500,128 @@ export const BranchesPanel = memo(function BranchesPanel({
               <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
             ) : (
               <div className="divide-y divide-border">
-                {localBranches
-                  .filter(b => b.name.toLowerCase().includes(localFilter.toLowerCase()))
-                  .map((branch) => (
-                    <div
-                      key={branch.name}
-                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
-                      onContextMenu={(e) => handleContextMenu(e, branch)}
-                    >
-                      <button
-                        onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
-                        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                        disabled={branch.isCurrent}
+                {/* Branch Groups */}
+                {Object.entries(localGrouped.groups).sort(([a], [b]) => a.localeCompare(b)).map(([groupName, branches]) => {
+                  const isExpanded = !!expandedLocalGroups[groupName];
+                  return (
+                    <div key={`group-${groupName}`} className="flex flex-col">
+                      <div 
+                        className="flex items-center gap-2 p-2 hover:bg-accent/30 cursor-pointer text-muted-foreground transition-colors group"
+                        onClick={() => toggleLocalGroup(groupName)}
                       >
-                        <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-info' : 'text-muted-foreground'}`} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`truncate text-sm ${branch.isCurrent ? 'text-info font-medium' : 'text-foreground'}`}>
-                              {branch.name}
-                            </span>
-                            {branch.isCurrent && (
-                              <CheckCircle2 className="size-3 flex-shrink-0 text-info" />
-                            )}
-                            {/* Ahead/Behind Indicators */}
-                            {(branch.ahead || 0) > 0 && (
-                              <div className="flex items-center gap-0.5 text-[10px] text-foreground bg-secondary px-1 rounded">
-                                <ArrowUp className="size-2.5" />
-                                {branch.ahead}
-                              </div>
-                            )}
-                            {(branch.behind || 0) > 0 && (
-                              <div className="flex items-center gap-0.5 text-[10px] text-amber-400 bg-amber-950/30 px-1 rounded">
-                                <ArrowDown className="size-2.5" />
-                                {branch.behind}
-                              </div>
-                            )}
-                          </div>
+                        {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                        <span className="text-xs font-medium uppercase tracking-wider">{groupName}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary/50 group-hover:bg-secondary transition-colors">
+                          {branches.length}
+                        </span>
+                      </div>
+                      {isExpanded && (
+                        <div className="flex flex-col bg-accent/10 border-l border-border ml-3">
+                          {branches.map((branch) => (
+                            <div
+                              key={branch.name}
+                              className="group/item flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                              onContextMenu={(e) => handleContextMenu(e, branch)}
+                            >
+                              <button
+                                onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
+                                className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                                disabled={branch.isCurrent}
+                              >
+                                <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-info' : 'text-muted-foreground'}`} />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`truncate text-sm ${branch.isCurrent ? 'text-info font-medium' : 'text-foreground'}`}>
+                                      {branch.name}
+                                    </span>
+                                    {branch.isCurrent && (
+                                      <CheckCircle2 className="size-3 flex-shrink-0 text-info" />
+                                    )}
+                                    {/* Ahead/Behind Indicators */}
+                                    {(branch.ahead || 0) > 0 && (
+                                      <div className="flex items-center gap-0.5 text-[10px] text-foreground bg-secondary px-1 rounded">
+                                        <ArrowUp className="size-2.5" />
+                                        {branch.ahead}
+                                      </div>
+                                    )}
+                                    {(branch.behind || 0) > 0 && (
+                                      <div className="flex items-center gap-0.5 text-[10px] text-amber-400 bg-amber-950/30 px-1 rounded">
+                                        <ArrowDown className="size-2.5" />
+                                        {branch.behind}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                              {!branch.isCurrent && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteBranch(branch.name);
+                                  }}
+                                  className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"
+                                >
+                                  <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      </button>
-                      {!branch.isCurrent && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteBranch(branch.name);
-                          }}
-                          className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
-                        </button>
                       )}
                     </div>
-                  ))}
+                  );
+                })}
+
+                {/* Root Level Local Branches */}
+                {localGrouped.root.map((branch) => (
+                  <div
+                    key={branch.name}
+                    className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                    onContextMenu={(e) => handleContextMenu(e, branch)}
+                  >
+                    <button
+                      onClick={() => !branch.isCurrent && handleCheckout(branch.name)}
+                      className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                      disabled={branch.isCurrent}
+                    >
+                      <GitBranch className={`size-3.5 flex-shrink-0 mt-0.5 ${branch.isCurrent ? 'text-info' : 'text-muted-foreground'}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`truncate text-sm ${branch.isCurrent ? 'text-info font-medium' : 'text-foreground'}`}>
+                            {branch.name}
+                          </span>
+                          {branch.isCurrent && (
+                            <CheckCircle2 className="size-3 flex-shrink-0 text-info" />
+                          )}
+                          {/* Ahead/Behind Indicators */}
+                          {(branch.ahead || 0) > 0 && (
+                            <div className="flex items-center gap-0.5 text-[10px] text-foreground bg-secondary px-1 rounded">
+                              <ArrowUp className="size-2.5" />
+                              {branch.ahead}
+                            </div>
+                          )}
+                          {(branch.behind || 0) > 0 && (
+                            <div className="flex items-center gap-0.5 text-[10px] text-amber-400 bg-amber-950/30 px-1 rounded">
+                              <ArrowDown className="size-2.5" />
+                              {branch.behind}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                    {!branch.isCurrent && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteBranch(branch.name);
+                        }}
+                        className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -445,46 +653,105 @@ export const BranchesPanel = memo(function BranchesPanel({
               <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
             ) : (
               <div className="divide-y divide-border">
-                {remoteBranches
-                  .filter(b => b.name.toLowerCase().includes(remoteFilter.toLowerCase()))
-                  .map((branch) => {
-                    const branchName = extractBranchNameFromRemote(branch.name);
-                    const isLocalBranch = localBranches.some(b => b.name === branchName);
-
-                    return (
-                      <div
-                        key={branch.name}
-                        className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
-                        onContextMenu={(e) => handleContextMenu(e, branch)}
+                {/* Branch Groups */}
+                {Object.entries(remoteGrouped.groups).sort(([a], [b]) => a.localeCompare(b)).map(([groupName, branches]) => {
+                  const isExpanded = !!expandedRemoteGroups[groupName];
+                  return (
+                    <div key={`remote-group-${groupName}`} className="flex flex-col">
+                      <div 
+                        className="flex items-center gap-2 p-2 hover:bg-accent/30 cursor-pointer text-muted-foreground transition-colors group"
+                        onClick={() => toggleRemoteGroup(groupName)}
                       >
-                        <div
-                          className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
-                          onClick={() => !isLocalBranch && handleCheckout(branch.name)}
-                        >
-                          <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-accent-purple" />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm text-foreground">
-                              {branch.name}
-                            </div>
-                            {isLocalBranch && (
-                              <div className="text-[10px] text-muted-foreground">
-                                Local branch exists
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteRemoteBranch(branch.name);
-                          }}
-                          className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
-                        </button>
+                        {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                        <span className="text-xs font-medium uppercase tracking-wider">{groupName}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary/50 group-hover:bg-secondary transition-colors">
+                          {branches.length}
+                        </span>
                       </div>
-                    );
-                  })}
+                      {isExpanded && (
+                        <div className="flex flex-col bg-accent/10 border-l border-border ml-3">
+                          {branches.map((branch) => {
+                            const branchName = extractBranchNameFromRemote(branch.name);
+                            const isLocalBranch = localBranches.some(b => b.name === branchName);
+                            return (
+                              <div
+                                key={branch.name}
+                                className="group/item flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                                onContextMenu={(e) => handleContextMenu(e, branch)}
+                              >
+                                <div
+                                  className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
+                                  onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                                >
+                                  <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-accent-purple" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm text-foreground">
+                                      {branch.name}
+                                    </div>
+                                    {isLocalBranch && (
+                                      <div className="text-[10px] text-muted-foreground">
+                                        Local branch exists
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteRemoteBranch(branch.name);
+                                  }}
+                                  className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"
+                                >
+                                  <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Root Level Remote Branches */}
+                {remoteGrouped.root.map((branch) => {
+                  const branchName = extractBranchNameFromRemote(branch.name);
+                  const isLocalBranch = localBranches.some(b => b.name === branchName);
+
+                  return (
+                    <div
+                      key={branch.name}
+                      className="group flex items-center justify-between p-2.5 transition-colors hover:bg-accent/50"
+                      onContextMenu={(e) => handleContextMenu(e, branch)}
+                    >
+                      <div
+                        className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer"
+                        onClick={() => !isLocalBranch && handleCheckout(branch.name)}
+                      >
+                        <GitMerge className="size-3.5 flex-shrink-0 mt-0.5 text-accent-purple" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm text-foreground">
+                            {branch.name}
+                          </div>
+                          {isLocalBranch && (
+                            <div className="text-[10px] text-muted-foreground">
+                              Local branch exists
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRemoteBranch(branch.name);
+                        }}
+                        className="ml-2 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        <Trash2 className="size-3.5 text-red-400 hover:text-red-300" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -590,6 +857,51 @@ export const BranchesPanel = memo(function BranchesPanel({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={renameDialog.isOpen} onOpenChange={(open) => {
+        if (!open) {
+          setRenameDialog({ isOpen: false, oldName: '', newName: '' });
+        }
+      }}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Rename Branch</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Enter a new name for branch <span className="font-semibold text-foreground">{renameDialog.oldName}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={renameDialog.newName}
+              onChange={(e) => setRenameDialog({ ...renameDialog, newName: e.target.value })}
+              placeholder="new-branch-name"
+              className="bg-secondary border-border text-foreground"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  submitRename();
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setRenameDialog({ isOpen: false, oldName: '', newName: '' })}
+                className="bg-secondary border-border text-foreground hover:bg-muted"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={submitRename}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!renameDialog.newName.trim()}
+              >
+                Rename
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Context Menu */}
       {contextMenu && (
         <div
@@ -598,35 +910,61 @@ export const BranchesPanel = memo(function BranchesPanel({
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('pull')}
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2 border-b border-border/50 text-emerald-500 font-semibold"
+            onClick={() => handleMenuAction('review-changes')}
           >
-            Pull latest changes
+            <Sparkles className="size-3.5" />
+            Review changes (AI)...
           </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('fetch')}
-          >
-            Fetch latest changes
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors border-t border-border"
-            onClick={() => handleMenuAction('merge')}
-          >
-            Merge to current
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('rebase')}
-          >
-            Rebase current onto {contextMenu.branch}
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('interactive-rebase')}
-          >
-            Interactive Rebase...
-          </div>
+
+          {contextMenu.isRemote && (
+            <>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('pull')}
+              >
+                Pull latest changes
+              </div>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('fetch')}
+              >
+                Fetch latest changes
+              </div>
+            </>
+          )}
+
+          {!contextMenu.isRemote && (
+            <div
+              className={`px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors ${contextMenu.isRemote ? 'border-t border-border' : ''}`}
+              onClick={() => handleMenuAction('rename')}
+            >
+              Rename branch
+            </div>
+          )}
+
+          {!contextMenu.isCurrent && (
+            <>
+              <div
+                className={`px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors ${!contextMenu.isRemote ? 'border-t border-border' : ''}`}
+                onClick={() => handleMenuAction('merge')}
+              >
+                Merge to current
+              </div>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('rebase')}
+              >
+                Rebase current onto {contextMenu.branch}
+              </div>
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('interactive-rebase')}
+              >
+                Interactive Rebase...
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -637,6 +975,14 @@ export const BranchesPanel = memo(function BranchesPanel({
           targetBranch={rebaseTargetBranch}
           currentBranch={currentBranch}
           onStartRebase={handleStartInteractiveRebase}
+        />
+      )}
+
+      {reviewBranchName && (
+        <BranchReviewModal
+          isOpen={!!reviewBranchName}
+          onClose={() => setReviewBranchName(null)}
+          branchName={reviewBranchName}
         />
       )}
     </div>

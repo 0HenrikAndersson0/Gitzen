@@ -121,7 +121,7 @@ async function runGitSpawn(args: string[], options: GitOptions = {}): Promise<Gi
     const child = spawn('git', args, {
       cwd: repoPath || undefined,
       env: {
-        ...process.env,
+        ...fixPath(),
         GIT_TERMINAL_PROMPT: '0',
         LC_ALL: 'C',
         ...options.env
@@ -423,24 +423,29 @@ export async function stageFiles(filePaths: string[]): Promise<{ success: boolea
 
     // Use execFile with argument array to avoid shell quoting issues with special characters
     // The -- separator tells git that everything after is a file path
-    for (const filePath of filePaths) {
-      const fileStatus = fileStatusMap.get(filePath);
+    const toAdd: string[] = [];
+    const toRm: string[] = [];
 
-      // For deleted files that were previously tracked, use git rm to stage the deletion
-      // For new files or modified files, use git add
-      if (fileStatus === 'deleted') {
-        // Use git rm for deleted files - this stages the deletion
-        await runGitExecFile(['rm', '--', filePath], {
-          cwd: currentRepoPath!,
-          maxBuffer: 10 * 1024 * 1024,
-        });
+    for (const filePath of filePaths) {
+      if (fileStatusMap.get(filePath) === 'deleted') {
+        toRm.push(filePath);
       } else {
-        // Use git add for new or modified files
-        await runGitExecFile(['add', '--', filePath], {
-          cwd: currentRepoPath!,
-          maxBuffer: 10 * 1024 * 1024,
-        });
+        toAdd.push(filePath);
       }
+    }
+
+    if (toRm.length > 0) {
+      await runGitExecFile(['rm', '--', ...toRm], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    }
+
+    if (toAdd.length > 0) {
+      await runGitExecFile(['add', '--', ...toAdd], {
+        cwd: currentRepoPath!,
+        maxBuffer: 10 * 1024 * 1024,
+      });
     }
     return { success: true };
   } catch (error: any) {
@@ -504,11 +509,10 @@ export async function commit(message: string, amend: boolean = false): Promise<{
       return { success: false, error: 'No repository open' };
     }
 
-    const escapedMessage = message.replace(/"/g, '\\"');
     if (amend) {
-      await runGitCommand(`commit --amend -m "${escapedMessage}"`);
+      await runGitExecFile(['commit', '--amend', '-m', message], { cwd: currentRepoPath! });
     } else {
-      await runGitCommand(`commit -m "${escapedMessage}"`);
+      await runGitExecFile(['commit', '-m', message], { cwd: currentRepoPath! });
     }
     return { success: true };
   } catch (error: any) {
@@ -1579,6 +1583,20 @@ export async function deleteBranch(branchName: string, force: boolean = false): 
   }
 }
 
+export async function renameBranch(oldName: string, newName: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    await runGitCommand(`branch -m "${oldName}" "${newName}"`);
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
 export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
@@ -1894,6 +1912,27 @@ export async function abortConflict(): Promise<{ success: boolean; error?: strin
   }
 }
 
+export async function openFileInDefaultEditor(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    const fullPath = path.join(currentRepoPath, filePath);
+    const error = await shell.openPath(fullPath);
+    if (error) throw new Error(error);
+    return { success: true };
+  } catch (openError: any) {
+    try {
+      if (!currentRepoPath) return { success: false, error: 'No repository open' };
+      const fullPath = path.join(currentRepoPath, filePath);
+      const platform = process.platform;
+      const command = platform === 'win32' ? `start "" "${fullPath}"` : platform === 'darwin' ? `open "${fullPath}"` : `xdg-open "${fullPath}"`;
+      await execAsync(command, { maxBuffer: 10 * 1024 * 1024 });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to open file' };
+    }
+  }
+}
+
 export async function openFileInMergeTool(filePath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
   const signal = startOperation();
   try {
@@ -2042,7 +2081,7 @@ export async function rebaseBranch(branch: string): Promise<{ success: boolean; 
       return { success: false, error: 'No repository open' };
     }
 
-    await runGitCommand(`rebase ${branch}`);
+    await runGitExecFile(['rebase', branch], { cwd: currentRepoPath! });
     return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || error.stderr || 'Unknown error';
@@ -2917,3 +2956,433 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
     return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
   }
 }
+
+function fixPath() {
+  if (os.platform() === 'win32') return process.env;
+
+  const extraPaths = [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin'
+  ];
+
+  const currentPath = process.env.PATH || '';
+  const pathSeparator = ':';
+  const existingPaths = new Set(currentPath.split(pathSeparator));
+  
+  const newPaths = [...existingPaths];
+  for (const p of extraPaths) {
+    if (!existingPaths.has(p) && fs.existsSync(p)) {
+      newPaths.push(p);
+    }
+  }
+
+  return {
+    ...process.env,
+    PATH: newPaths.join(pathSeparator)
+  };
+}
+
+export async function generateCommitMessage(): Promise<{ success: boolean; message?: string; error?: string }> {
+  let tempDiffFile: string | null = null;
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+
+    // 1. Get staged changes
+    const { stdout: diff } = await runGitCommand('diff --cached');
+    if (!diff.trim()) {
+      return { success: false, error: 'No staged changes found. Please stage changes before generating a commit message.' };
+    }
+
+    // 2. Write diff to a temporary file to avoid shell escaping issues
+    tempDiffFile = path.join(os.tmpdir(), `gitzen-diff-${Date.now()}.txt`);
+    fs.writeFileSync(tempDiffFile, diff);
+
+    const prompt = "Write a concise commit message for these changes. Output ONLY the raw commit message without any markdown formatting, prefixes like 'Subject:', or explanations.";
+    const platform = os.platform();
+    
+    let command = '';
+    const env = fixPath();
+
+    if (platform === 'win32') {
+      // PowerShell script reading from temp file
+      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+    } else {
+      // Bash script reading from temp file
+      command = `
+if command -v gemini &> /dev/null; then
+  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+elif command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
+else
+  echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
+  exit 1
+fi
+`.trim();
+    }
+
+    // Execute the constructed script with the prompt in an environment variable
+    const { stdout: aiOutput } = await execAsync(command, { 
+      cwd: currentRepoPath,
+      env: { ...env, GITZEN_PROMPT: prompt }
+    });
+    
+    // Clean up the output (remove extra whitespace, markdown blocks, etc.)
+    let finalMessage = aiOutput.trim();
+    // Remove markdown code blocks if present
+    finalMessage = finalMessage.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    // Remove leading "Commit message:" or similar common prefixes if AI is talkative
+    finalMessage = finalMessage.replace(/^(commit message|message|subject|title):\s*/i, '').trim();
+
+    if (!finalMessage) {
+      return { success: false, error: 'AI failed to generate a message.' };
+    }
+
+    return { success: true, message: finalMessage };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    // Clean up temporary file
+    if (tempDiffFile && fs.existsSync(tempDiffFile)) {
+      try {
+        fs.unlinkSync(tempDiffFile);
+      } catch (e) {
+        console.error('Failed to delete temporary diff file:', e);
+      }
+    }
+  }
+}
+
+export async function generateConflictResolution(filePath: string): Promise<{ success: boolean; explanation?: string; resolvedCode?: string; error?: string }> {
+  let tempConflictFile: string | null = null;
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+
+    const absolutePath = path.join(currentRepoPath, filePath);
+    if (!fs.existsSync(absolutePath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    const content = fs.readFileSync(absolutePath, 'utf8');
+    if (!content.includes('<<<<<<<')) {
+      return { success: false, error: 'No merge conflict markers found in file.' };
+    }
+
+    // Write content to a temporary file
+    tempConflictFile = path.join(os.tmpdir(), `gitzen-conflict-${Date.now()}.txt`);
+    fs.writeFileSync(tempConflictFile, content);
+
+    const prompt = `
+You are a git merge conflict resolver. Analyze the provided file content containing git merge conflict markers (<<<<<<< HEAD, =======, >>>>>>>).
+Perform a logical merge of the changes.
+
+Output your response EXACTLY in the following format:
+EXPLANATION:
+<A brief one or two sentence explanation of what you changed and why.>
+---
+CODE:
+<The full resolved file content without any conflict markers and without any markdown code blocks.>
+`.trim();
+
+    const platform = os.platform();
+    let command = '';
+    const env = fixPath();
+
+    if (platform === 'win32') {
+      const escapedTempPath = tempConflictFile.replace(/'/g, "''");
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (gemini or claude).' }"`;
+    } else {
+      command = `
+if command -v gemini &> /dev/null; then
+  cat "${tempConflictFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+elif command -v claude &> /dev/null; then
+  cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: No supported AI CLI found (gemini or claude)." >&2
+  exit 1
+fi
+`.trim();
+    }
+
+    const { stdout: aiOutput } = await execAsync(command, { 
+      cwd: currentRepoPath,
+      env: { ...env, GITZEN_PROMPT: prompt }
+    });
+
+    const explanationMarker = 'EXPLANATION:';
+    const codeMarker = 'CODE:';
+    const separator = '---';
+
+    let explanation = '';
+    let resolvedCode = '';
+
+    const expIndex = aiOutput.indexOf(explanationMarker);
+    const codeIndex = aiOutput.indexOf(codeMarker);
+
+    if (expIndex !== -1 && codeIndex !== -1) {
+      explanation = aiOutput.substring(expIndex + explanationMarker.length, aiOutput.indexOf(separator, expIndex)).trim();
+      resolvedCode = aiOutput.substring(codeIndex + codeMarker.length).trim();
+      
+      // Remove potential markdown code blocks if the AI ignored the instruction
+      resolvedCode = resolvedCode.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    } else {
+      // Fallback if AI didn't follow the format strictly
+      explanation = "AI could not provide a formatted explanation.";
+      resolvedCode = aiOutput.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    }
+
+    if (!resolvedCode) {
+      return { success: false, error: 'AI failed to generate resolved code.' };
+    }
+
+    return { success: true, explanation, resolvedCode };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  } finally {
+    if (tempConflictFile && fs.existsSync(tempConflictFile)) {
+      try {
+        fs.unlinkSync(tempConflictFile);
+      } catch (e) {
+        console.error('Failed to delete temporary conflict file:', e);
+      }
+    }
+  }
+}
+
+export async function applyConflictResolution(filePath: string, resolvedCode: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!currentRepoPath) return { success: false, error: 'No repository open' };
+    const absolutePath = path.join(currentRepoPath, filePath);
+    fs.writeFileSync(absolutePath, resolvedCode, 'utf8');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+const EXCLUDE_LOCK_FILES = [
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb',
+  'composer.lock',
+  'Cargo.lock',
+  'Gemfile.lock',
+  'poetry.lock',
+  'mix.lock',
+  '*.lock'
+];
+
+function getExcludePathspecs(): string {
+  return EXCLUDE_LOCK_FILES.map(pattern => `":(exclude)*${pattern}"`).join(' ');
+}
+
+export async function getBaseBranch(): Promise<string> {
+  try {
+    await runGitCommand('show-ref --verify refs/heads/main');
+    return 'main';
+  } catch {
+    try {
+      await runGitCommand('show-ref --verify refs/heads/master');
+      return 'master';
+    } catch {
+      return 'main';
+    }
+  }
+}
+
+export async function getBranchDiffFiles(branchName: string): Promise<{ success: boolean; baseBranch?: string; files?: any[]; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const baseBranch = await getBaseBranch();
+    const excludeArgs = getExcludePathspecs();
+
+    // Use triple-dot diff to get changes in target branch since it diverged from base, excluding lockfiles
+    const { stdout: diffText } = await runGitCommand(`diff ${baseBranch}...${branchName} -- . ${excludeArgs}`);
+    if (!diffText.trim()) {
+      return { success: true, baseBranch, files: [] };
+    }
+
+    const diffLines = diffText.split('\n');
+    const files: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }> = [];
+
+    let currentFile: { path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string } | null = null;
+    let fileDiffStart = 0;
+
+    for (let i = 0; i < diffLines.length; i++) {
+      const line = diffLines[i];
+      if (line.startsWith('diff --git')) {
+        if (currentFile) {
+          currentFile.diff = diffLines.slice(fileDiffStart, i).join('\n');
+          if (currentFile.path) {
+            files.push(currentFile);
+          }
+        }
+        fileDiffStart = i;
+        currentFile = null;
+
+        const match = line.match(/^diff --git (?:a\/|"?a\/)(.+) (?:b\/|"?b\/)(.+?)(?:"?)$/);
+        if (match) {
+          const path = match[2] || match[1];
+          currentFile = {
+            path: path.replace(/^"|"$/g, ''),
+            status: 'modified',
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        } else {
+          currentFile = {
+            path: '',
+            status: 'modified',
+            additions: 0,
+            deletions: 0,
+            diff: '',
+          };
+        }
+      }
+
+      if (currentFile) {
+        if (line.startsWith('new file mode')) {
+          currentFile.status = 'added';
+        } else if (line.startsWith('deleted file mode')) {
+          currentFile.status = 'deleted';
+        } else if (line.startsWith('+++ b/')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('--- a/') && (!currentFile.path || currentFile.status === 'deleted')) {
+          currentFile.path = line.substring(6).trim().replace(/^"|"$/g, '');
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentFile.additions++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentFile.deletions++;
+        }
+      }
+    }
+
+    if (currentFile) {
+      currentFile.diff = diffLines.slice(fileDiffStart).join('\n');
+      if (currentFile.path) {
+        files.push(currentFile);
+      }
+    }
+
+    return { success: true, baseBranch, files };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error' };
+  }
+}
+
+export async function getAIBranchReview(branchName: string): Promise<{ success: boolean; summary?: string; explanation?: string; error?: string }> {
+  let tempDiffFile: string | null = null;
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    const baseBranch = await getBaseBranch();
+    const excludeArgs = getExcludePathspecs();
+    const { stdout: rawDiffText } = await runGitCommand(`diff ${baseBranch}...${branchName} -- . ${excludeArgs}`);
+    if (!rawDiffText.trim()) {
+      return {
+        success: true,
+        summary: 'No changes found compared to the ' + baseBranch + ' branch.',
+        explanation: 'No files were changed.'
+      };
+    }
+
+    // Limit diff text size for AI review to prevent command/arguments overflow and save tokens
+    const MAX_AI_DIFF_CHARACTERS = 200000; // ~200KB limit
+    let diffText = rawDiffText;
+    if (rawDiffText.length > MAX_AI_DIFF_CHARACTERS) {
+      diffText = rawDiffText.substring(0, MAX_AI_DIFF_CHARACTERS) + '\n\n[Diff truncated for AI review because it exceeds size limits...]';
+    }
+
+    tempDiffFile = path.join(os.tmpdir(), `gitzen-review-${Date.now()}.txt`);
+    fs.writeFileSync(tempDiffFile, diffText);
+
+    const prompt = `You are a Senior Software Architect reviewing a Git branch.
+Below is the git diff of the branch:
+[DIFF]
+
+Please analyze the diff and provide a review.
+Your output must be formatted exactly as follows:
+
+=== SUMMARY ===
+[Provide a high-level summary of the overall changes in this branch and their intended purpose. Keep it clear, concise, and structured in Markdown.]
+
+=== EXPLANATION ===
+[Provide a detailed explanation of the changes, what they do, and how they work. Write it in clear Markdown.]`;
+
+    const platform = os.platform();
+    let command = '';
+    const env = fixPath();
+
+    if (platform === 'win32') {
+      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+    } else {
+      command = `
+if command -v gemini &> /dev/null; then
+  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+elif command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
+else
+  echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
+  exit 1
+fi
+`.trim();
+    }
+
+    const { stdout: aiOutput } = await execAsync(command, { 
+      cwd: currentRepoPath,
+      env: { ...env, GITZEN_PROMPT: prompt }
+    });
+
+    const summaryMarker = '=== SUMMARY ===';
+    const explanationMarker = '=== EXPLANATION ===';
+
+    const sumIndex = aiOutput.indexOf(summaryMarker);
+    const expIndex = aiOutput.indexOf(explanationMarker);
+
+    let summary = '';
+    let explanation = '';
+
+    if (sumIndex !== -1 && expIndex !== -1) {
+      summary = aiOutput.substring(sumIndex + summaryMarker.length, expIndex).trim();
+      explanation = aiOutput.substring(expIndex + explanationMarker.length).trim();
+    } else {
+      // Fallback
+      summary = aiOutput.trim();
+      explanation = "Detailed explanation could not be separated automatically.";
+    }
+
+    // Clean up markdown block formats if AI wrapped them
+    summary = summary.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+    explanation = explanation.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
+
+    return { success: true, summary, explanation };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error during AI generation' };
+  } finally {
+    if (tempDiffFile && fs.existsSync(tempDiffFile)) {
+      try {
+        fs.unlinkSync(tempDiffFile);
+      } catch (e) {
+        console.error('Failed to delete temporary diff file:', e);
+      }
+    }
+  }
+}
+

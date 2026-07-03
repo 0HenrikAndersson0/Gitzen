@@ -59,7 +59,7 @@ export function HistoryFilterBar({ filters, onChange, onApply, onClear }: Histor
         />
       </div>
 
-      <div className="flex items-center gap-2 w-[130px]">
+      <div className="flex items-center gap-2 w-[160px]">
         <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
         <Input
           type="date"
@@ -68,11 +68,12 @@ export function HistoryFilterBar({ filters, onChange, onApply, onClear }: Histor
           onChange={(e) => handleChange('since', e.target.value)}
           onKeyDown={handleKeyDown}
           title="Since Date"
-          className="h-8 text-xs bg-background [color-scheme:dark]" // Support for dark mode calendar icon
+          style={{ colorScheme: 'dark' }}
+          className="h-8 text-xs bg-background px-2" // Reduced padding for date input
         />
       </div>
 
-      <div className="flex items-center gap-2 w-[130px]">
+      <div className="flex items-center gap-2 w-[160px]">
         <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
         <Input
           type="date"
@@ -81,7 +82,8 @@ export function HistoryFilterBar({ filters, onChange, onApply, onClear }: Histor
           onChange={(e) => handleChange('until', e.target.value)}
           onKeyDown={handleKeyDown}
           title="Until Date"
-          className="h-8 text-xs bg-background [color-scheme:dark]"
+          style={{ colorScheme: 'dark' }}
+          className="h-8 text-xs bg-background px-2"
         />
       </div>
 

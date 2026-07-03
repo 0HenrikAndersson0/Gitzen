@@ -194,8 +194,21 @@ ipcMain.handle('git:unstageAll', async () => {
 });
 
 ipcMain.handle('git:commit', async (_, message, amend) => {
-  return await gitService.commit(message, amend);
+  return gitService.commit(message, amend);
 });
+
+ipcMain.handle('git:generateCommitMessage', async () => {
+  return gitService.generateCommitMessage();
+});
+
+ipcMain.handle('git:generateConflictResolution', async (_, filePath) => {
+  return gitService.generateConflictResolution(filePath);
+});
+
+ipcMain.handle('git:applyConflictResolution', async (_, filePath, resolvedCode) => {
+  return gitService.applyConflictResolution(filePath, resolvedCode);
+});
+
 
 ipcMain.handle('git:undoCommit', async () => {
   return await gitService.undoLastCommit();
@@ -325,6 +338,14 @@ ipcMain.handle('git:getCommitDiff', async (_, commitHash) => {
   return await gitService.getCommitDiff(commitHash);
 });
 
+ipcMain.handle('git:getBranchDiff', async (_, branchName) => {
+  return await gitService.getBranchDiffFiles(branchName);
+});
+
+ipcMain.handle('git:getAIBranchReview', async (_, branchName) => {
+  return await gitService.getAIBranchReview(branchName);
+});
+
 ipcMain.handle('git:getFileDiff', async (_, filePath, staged) => {
   return await gitService.getFileDiff(filePath, staged);
 });
@@ -335,6 +356,10 @@ ipcMain.handle('git:getFileBlame', async (_, filePath, commitHash) => {
 
 ipcMain.handle('git:deleteBranch', async (_, branchName, force) => {
   return await gitService.deleteBranch(branchName, force);
+});
+
+ipcMain.handle('git:renameBranch', async (_, oldName, newName) => {
+  return await gitService.renameBranch(oldName, newName);
 });
 
 ipcMain.handle('git:deleteRemoteBranch', async (_, remoteBranchName) => {
@@ -407,6 +432,10 @@ ipcMain.handle('git:abortConflict', async () => {
 
 ipcMain.handle('git:openFileInMergeTool', async (_, filePath) => {
   return await gitService.openFileInMergeTool(filePath);
+});
+
+ipcMain.handle('git:openFileInDefaultEditor', async (_, filePath) => {
+  return await gitService.openFileInDefaultEditor(filePath);
 });
 
 ipcMain.handle('git:rebaseBranch', async (_, branch) => {

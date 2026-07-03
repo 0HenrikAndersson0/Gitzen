@@ -178,6 +178,7 @@ export default function App() {
 
   const {
     handleCommit,
+    handleGenerateCommitMessage,
     handleClone,
     handleStageAll,
     handleUnstageAll,
@@ -189,6 +190,7 @@ export default function App() {
     handleDeleteStash,
     handleAddRemote,
     handlePull,
+    handleFetch,
     handlePush,
     handleForcePush,
     handleAbortRebase,
@@ -207,12 +209,15 @@ export default function App() {
     handleCheckout,
     handleCreateBranch,
     handleDeleteBranch,
+    handleDeleteRemoteBranch,
     handleRevertCommit,
     handleResetCommits,
     handleConfirmReset,
     handleOpenRepo,
     handleUndoCommit,
-    handleCancelOperation
+    handleCancelOperation,
+    handleGenerateConflictResolution,
+    handleApplyConflictResolution
   } = gitOps;
 
   useEffect(() => {
@@ -367,6 +372,7 @@ export default function App() {
           onOpenSettings={() => setShowSettingsDialog(true)}
           onPush={handlePush}
           onPull={handlePull}
+          onFetch={handleFetch}
           onStash={handleStash}
           onToggleGraphs={() => setShowGraphs(!showGraphs)}
           onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
@@ -456,6 +462,7 @@ export default function App() {
                     onCheckout={handleCheckout}
                     onCreateBranch={handleCreateBranch}
                     onDeleteBranch={handleDeleteBranch}
+                    onDeleteRemoteBranch={handleDeleteRemoteBranch}
                     onMergeBranch={handleMergeBranch}
                     onFinishGitFlow={gitOps.handleFinishGitFlow}
                     onSetLoading={(loading, message) => {
@@ -552,6 +559,7 @@ export default function App() {
                     onCherryPick={handleCherryPick}
                     onRevertCommit={handleRevertCommit}
                     onResetCommits={handleResetCommits}
+                    onBranchDropAction={gitOps.handleBranchDropAction}
                   />
                 </div>
               )}
@@ -579,7 +587,9 @@ export default function App() {
                       onStageAll={handleStageAll}
                       onUnstageAll={handleUnstageAll}
                       onCommit={handleCommit}
+                      onGenerateCommitMessage={handleGenerateCommitMessage}
                       onRevertFile={handleRevertFile}
+
                       onDeleteFile={handleDeleteFile}
                       onRefresh={() => refreshStatus()}
                       commitMessage={commitMessage}
@@ -620,6 +630,8 @@ export default function App() {
         onAbortConflict={handleAbortConflict}
         onResolveFiles={handleResolveFiles}
         onResolveConflict={handleResolveConflict}
+        onResolveWithAI={handleGenerateConflictResolution}
+        onApplyAIResolution={handleApplyConflictResolution}
         onClose={() => setShowMergeConflictDialog(false)}
       />
 

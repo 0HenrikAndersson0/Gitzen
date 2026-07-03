@@ -17,6 +17,7 @@ interface CommitPanelProps {
   onStageAll?: () => void;
   onUnstageAll?: () => void;
   onCommit: (message: string, amend?: boolean) => void;
+  onGenerateCommitMessage?: () => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
   onRefresh?: () => void;
@@ -34,6 +35,7 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
   onStageAll,
   onUnstageAll,
   onCommit,
+  onGenerateCommitMessage,
   onRevertFile,
   onDeleteFile,
   onRefresh,
@@ -102,7 +104,20 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
         </div>
 
         <div className="space-y-2 flex-none">
-          <Label htmlFor="commit-message">Commit Message</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="commit-message">Commit Message</Label>
+            {onGenerateCommitMessage && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  onGenerateCommitMessage();
+                }}
+                className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1 font-medium"
+              >
+                <span>✨ Auto-generate</span>
+              </button>
+            )}
+          </div>
           <Textarea
             ref={ref}
             id="commit-message"

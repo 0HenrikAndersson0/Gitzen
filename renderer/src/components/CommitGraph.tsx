@@ -1,4 +1,4 @@
-import { GitBranch, Tag, ArrowRight } from 'lucide-react';
+import { GitBranch, Tag, ArrowRight, GitMerge } from 'lucide-react';
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, memo, useCallback, forwardRef } from 'react';
 import { CommitDetails } from './CommitDetails';
 import { CreateTagDialog } from './CreateTagDialog';
@@ -28,6 +28,7 @@ interface CommitGraphProps {
   onCherryPick?: (commitHash: string) => void;
   onRevertCommit?: (commitHash: string) => void;
   onResetCommits?: (commitHash: string) => void;
+  onBranchDropAction?: (source: string, target: string, action: 'merge' | 'rebase') => void;
 }
 
 // Layout Engine
@@ -37,6 +38,7 @@ interface GraphNode {
   y: number;
   color: string;
   commit: Commit;
+  parentLanes: number[];
 }
 
 interface GraphEdge {
@@ -57,6 +59,56 @@ const COLORS = [
   '#84cc16', // lime
   '#f43f5e', // rose
 ];
+
+const STORAGE_KEY = 'gitzen-commit-columns';
+const MIN_COL_WIDTHS = { author: 80, date: 70 };
+const DEFAULT_COL_WIDTHS = { author: 160, date: 110 };
+
+function loadColumnWidths(): { author: number; date: number } {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        author: Math.max(MIN_COL_WIDTHS.author, parsed.author ?? DEFAULT_COL_WIDTHS.author),
+        date: Math.max(MIN_COL_WIDTHS.date, parsed.date ?? DEFAULT_COL_WIDTHS.date),
+      };
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_COL_WIDTHS };
+}
+
+function saveColumnWidths(widths: { author: number; date: number }) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(widths)); } catch { /* ignore */ }
+}
+
+// Factory for column drag-resize handlers — returns an onMouseDown for the header cell
+function createColumnDragHandler(
+  onResize: (delta: number) => void,
+  onDragStart?: () => void,
+  onDragEnd?: () => void,
+) {
+  return (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    onDragStart?.();
+    const onMouseMove = (ev: MouseEvent) => {
+      onResize(ev.clientX - startX);
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      onDragEnd?.();
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+}
 
 function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: number = 40) {
   return useMemo(() => {
@@ -83,17 +135,12 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
       }
 
       const color = COLORS[laneIndex % COLORS.length];
-      nodes.push({
-        id: commit.id,
-        x: laneIndex * spacingX + 10,
-        y: index * spacingY + spacingY / 2,
-        color,
-        commit
-      });
-
+      
       const parents = commit.parents || [];
+      const pLanes: number[] = [];
       if (parents.length > 0) {
         activeLanes[laneIndex] = parents[0];
+        pLanes.push(laneIndex);
         for (let i = 1; i < parents.length; i++) {
           let pLane = activeLanes.findIndex(l => l === null);
           if (pLane === -1) {
@@ -101,19 +148,33 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
             activeLanes.push(null);
           }
           activeLanes[pLane] = parents[i];
+          pLanes.push(pLane);
         }
       }
+
+      nodes.push({
+        id: commit.id,
+        x: laneIndex * spacingX + 10,
+        y: index * spacingY + spacingY / 2,
+        color,
+        commit,
+        parentLanes: pLanes
+      });
     });
 
     commits.forEach((commit, index) => {
       const sourceNode = nodes[index];
       const parents = commit.parents || [];
-      parents.forEach(parentId => {
+      parents.forEach((parentId, pIdx) => {
         const targetNode = nodes.find(n => n.id === parentId);
+        const pLane = sourceNode.parentLanes[pIdx];
+        const edgeColor = COLORS[pLane % COLORS.length];
+        const targetX = pLane * spacingX + 10;
+        
         if (targetNode) {
-          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: targetNode.x, toY: targetNode.y, color: sourceNode.color });
+          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: targetNode.x, toY: targetNode.y, color: edgeColor });
         } else {
-          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: sourceNode.x, toY: (commits.length + 1) * spacingY, color: sourceNode.color });
+          edges.push({ fromX: sourceNode.x, fromY: sourceNode.y, toX: targetX, toY: (commits.length + 1) * spacingY, color: edgeColor });
         }
       });
     });
@@ -124,7 +185,9 @@ function useGraphLayout(commits: Commit[], spacingX: number = 24, spacingY: numb
 
 const GraphContext = React.createContext<{
   width: number; height: number; edges: GraphEdge[]; nodes: GraphNode[]; currentBranchHeadId: string | null | undefined;
-}>({ width: 0, height: 0, edges: [], nodes: [], currentBranchHeadId: null });
+  colWidths: { author: number; date: number };
+  resizingColumn: string | null;
+}>({ width: 0, height: 0, edges: [], nodes: [], currentBranchHeadId: null, colWidths: DEFAULT_COL_WIDTHS, resizingColumn: null });
 
 const InnerElement = forwardRef<HTMLDivElement, React.HTMLProps<HTMLDivElement>>(({ children, style, ...rest }, ref) => {
   const { width, height, edges, nodes, currentBranchHeadId } = React.useContext(GraphContext);
@@ -153,6 +216,7 @@ export const CommitGraph = memo(function CommitGraph({
   onCherryPick,
   onRevertCommit,
   onResetCommits,
+  onBranchDropAction,
   currentBranch,
 }: CommitGraphProps) {
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
@@ -164,13 +228,52 @@ export const CommitGraph = memo(function CommitGraph({
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 });
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; commitHash: string } | null>(null);
+  const [dropMenu, setDropMenu] = useState<{ x: number; y: number; source: string; target: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const dropMenuRef = useRef<HTMLDivElement>(null);
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [tagTargetCommit, setTagTargetCommit] = useState<string | undefined>(undefined);
+
+  // Column widths state (persisted to localStorage)
+  const [colWidths, setColWidths] = useState(loadColumnWidths);
+  const colWidthsStartRef = useRef(colWidths);
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+
+  const handleAuthorResize = useCallback((delta: number) => {
+    setColWidths(prev => {
+      const updated = { ...prev, author: Math.max(MIN_COL_WIDTHS.author, colWidthsStartRef.current.author + delta) };
+      saveColumnWidths(updated);
+      return updated;
+    });
+  }, []);
+
+  const handleDateResize = useCallback((delta: number) => {
+    setColWidths(prev => {
+      const updated = { ...prev, date: Math.max(MIN_COL_WIDTHS.date, colWidthsStartRef.current.date + delta) };
+      saveColumnWidths(updated);
+      return updated;
+    });
+  }, []);
+
+  // Drag handlers for header cells
+  const authorDragDown = useMemo(() => createColumnDragHandler(
+    handleAuthorResize, () => setResizingColumn('author'), () => setResizingColumn(null)
+  ), [handleAuthorResize]);
+  const dateDragDown = useMemo(() => createColumnDragHandler(
+    handleDateResize, () => setResizingColumn('date'), () => setResizingColumn(null)
+  ), [handleDateResize]);
+
+  // Update start ref on mousedown (used by ResizeHandle's delta-based approach)
+  useEffect(() => {
+    const onMouseDown = () => { colWidthsStartRef.current = colWidths; };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [colWidths]);
 
   const spacingX = 20;
   const spacingY = 36;
   const { nodes, edges, width, height } = useGraphLayout(commits, spacingX, spacingY);
+  const graphColWidth = width + 20; // auto-sized to fit all lanes
 
   useLayoutEffect(() => {
     const updateSize = () => {
@@ -243,12 +346,15 @@ export const CommitGraph = memo(function CommitGraph({
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as globalThis.Node)) setContextMenu(null); };
-    if (contextMenu) {
+    const handleClickOutside = (event: MouseEvent) => { 
+      if (menuRef.current && !menuRef.current.contains(event.target as globalThis.Node)) setContextMenu(null); 
+      if (dropMenuRef.current && !dropMenuRef.current.contains(event.target as globalThis.Node)) setDropMenu(null);
+    };
+    if (contextMenu || dropMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [contextMenu]);
+  }, [contextMenu, dropMenu]);
 
   const formatTime = useCallback((date: Date) => {
     const now = new Date();
@@ -280,29 +386,73 @@ export const CommitGraph = memo(function CommitGraph({
 
     return (
       <div
-        className={`absolute pr-4 flex flex-col justify-center transition-colors border-b border-border/30 cursor-pointer ${hoveredCommitId === commit.id ? 'bg-secondary/50' : isCurrentHead ? 'bg-emerald-100 dark:bg-emerald-950/20' : 'hover:bg-accent/30'}`}
-        style={{ ...style, left: 0, paddingLeft: width + 20, boxSizing: 'border-box' }}
+        className={`absolute flex items-center transition-colors border-b border-border/30 cursor-pointer ${hoveredCommitId === commit.id ? 'bg-secondary/50' : isCurrentHead ? 'bg-emerald-100 dark:bg-emerald-950/20' : 'hover:bg-accent/30'}`}
+        style={{ ...style, left: 0, boxSizing: 'border-box' }}
         onClick={() => setSelectedCommit(commit)}
         onContextMenu={(e) => handleContextMenu(e, commit.hash)}
         onMouseEnter={() => setHoveredCommitId(commit.id)}
         onMouseLeave={() => setHoveredCommitId(null)}
       >
-        <div className="flex items-center gap-3">
-          <p className="font-medium text-foreground text-sm truncate flex-1 flex items-center gap-2">{commit.message}</p>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {commit.branch && <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border ${getBranchBadgeStyle(commit.branch)}`}>{commit.branch}</span>}
+        {/* Graph column — auto-sized, transparent (SVG overlay renders beneath) */}
+        <div className="flex-shrink-0" style={{ width: graphColWidth }} />
+
+        {/* Message column — takes remaining space */}
+        <div className="flex-1 min-w-0 flex items-center gap-2 px-2 overflow-hidden">
+          <p className="font-medium text-foreground text-sm truncate min-w-0 flex-shrink">{commit.message}</p>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {commit.branch && (
+              <span 
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border cursor-move transition-transform active:scale-95 ${getBranchBadgeStyle(commit.branch)}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/gitzen-branch', commit.branch!);
+                  e.dataTransfer.effectAllowed = 'copyMove';
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  e.currentTarget.classList.add('ring-2', 'ring-primary');
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove('ring-2', 'ring-primary');
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove('ring-2', 'ring-primary');
+                  const draggedBranch = e.dataTransfer.getData('application/gitzen-branch');
+                  if (draggedBranch && draggedBranch !== commit.branch) {
+                    setDropMenu({ x: e.clientX, y: e.clientY, source: draggedBranch, target: commit.branch! });
+                  }
+                }}
+              >
+                {commit.branch}
+              </span>
+            )}
             {commit.tags && commit.tags.map(tag => (
               <span key={tag} className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20"><Tag className="h-2 w-2" />{tag}</span>
             ))}
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground w-32 justify-end">
-            <span className="flex items-center gap-1 truncate max-w-[80px]">{commit.author}</span>
-            <span className="flex-shrink-0">{formatTime(commit.timestamp)}</span>
-          </div>
+        </div>
+
+        {/* Author column — resizable */}
+        <div
+          className={`flex-shrink-0 px-2 text-xs text-muted-foreground truncate border-l border-border/20 transition-colors ${resizingColumn === 'author' ? 'bg-primary/8' : ''}`}
+          style={{ width: colWidths.author }}
+          title={commit.author}
+        >
+          {commit.author}
+        </div>
+
+        {/* Date column — resizable */}
+        <div
+          className={`flex-shrink-0 px-2 pr-4 text-xs text-muted-foreground text-right border-l border-border/20 transition-colors ${resizingColumn === 'date' ? 'bg-primary/8' : ''}`}
+          style={{ width: colWidths.date }}
+        >
+          {formatTime(commit.timestamp)}
         </div>
       </div>
     );
-  }, [nodes, commitsWithTags, currentBranchHeadId, hoveredCommitId, width, formatTime]);
+  }, [nodes, commitsWithTags, currentBranchHeadId, hoveredCommitId, graphColWidth, colWidths, resizingColumn, formatTime]);
 
   if (commits.length === 0) {
     return (
@@ -320,9 +470,31 @@ export const CommitGraph = memo(function CommitGraph({
         <span className="ml-auto text-sm text-muted-foreground">{commits.length} commit{commits.length !== 1 ? 's' : ''}</span>
       </div>
 
+      {/* Column header row */}
+      <div className="flex items-center h-7 bg-muted/40 border-b border-border flex-none text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
+        <div className="flex-shrink-0" style={{ width: graphColWidth }}>
+          <span className="px-2">Graph</span>
+        </div>
+        <div className="flex-1 min-w-0 px-2">Message</div>
+        <div
+          className={`flex-shrink-0 px-2 border-l border-border/20 cursor-col-resize transition-colors hover:bg-muted/60 ${resizingColumn === 'author' ? 'bg-primary/15 text-foreground' : ''}`}
+          style={{ width: colWidths.author }}
+          onMouseDown={authorDragDown}
+        >
+          Author
+        </div>
+        <div
+          className={`flex-shrink-0 px-2 pr-4 border-l border-border/20 text-right cursor-col-resize transition-colors hover:bg-muted/60 ${resizingColumn === 'date' ? 'bg-primary/15 text-foreground' : ''}`}
+          style={{ width: colWidths.date }}
+          onMouseDown={dateDragDown}
+        >
+          Date
+        </div>
+      </div>
+
       <div className="flex-1 min-h-0 bg-background relative" ref={measureRef}>
         {dimensions.height > 0 && (
-          <GraphContext.Provider value={{ width, height, edges, nodes, currentBranchHeadId }}>
+          <GraphContext.Provider value={{ width, height, edges, nodes, currentBranchHeadId, colWidths, resizingColumn }}>
             <List
               ref={listRef}
               height={dimensions.height}
@@ -361,6 +533,32 @@ export const CommitGraph = memo(function CommitGraph({
           {onCherryPick && (<div className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" onClick={() => { onCherryPick(contextMenu.commitHash); setContextMenu(null); }}><ArrowRight className="size-3.5 text-blue-400" /> Cherry Pick Commit</div>)}
           {onRevertCommit && (<div className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" onClick={() => { onRevertCommit(contextMenu.commitHash); setContextMenu(null); }}><div className="size-3.5 flex items-center justify-center font-bold text-red-400 text-xs">R</div> Revert Commit</div>)}
           {onResetCommits && (<div className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2 border-t border-border mt-1 pt-1" onClick={() => { onResetCommits(contextMenu.commitHash); setContextMenu(null); }}><div className="size-3.5 flex items-center justify-center font-bold text-orange-400 text-xs">X</div> Reset Branch to Here...</div>)}
+        </div>
+      )}
+
+      {dropMenu && (
+        <div ref={dropMenuRef} className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden py-1 min-w-[200px]" style={{ left: dropMenu.x, top: dropMenu.y }}>
+          <div className="px-4 py-2 text-xs font-semibold text-muted-foreground border-b border-border mb-1 bg-muted/30">
+            Action: {dropMenu.source} → {dropMenu.target}
+          </div>
+          <div 
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" 
+            onClick={() => { 
+              onBranchDropAction?.(dropMenu.source, dropMenu.target, 'merge'); 
+              setDropMenu(null); 
+            }}
+          >
+            <GitMerge className="size-3.5 text-emerald-500" /> Merge {dropMenu.source} into {dropMenu.target}
+          </div>
+          <div 
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors flex items-center gap-2" 
+            onClick={() => { 
+              onBranchDropAction?.(dropMenu.source, dropMenu.target, 'rebase'); 
+              setDropMenu(null); 
+            }}
+          >
+            <ArrowRight className="size-3.5 text-blue-400" /> Rebase {dropMenu.source} onto {dropMenu.target}
+          </div>
         </div>
       )}
 

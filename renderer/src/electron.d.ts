@@ -48,6 +48,9 @@ declare global {
       gitStageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitUnstageAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCommit: (message: string, amend?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGenerateCommitMessage: () => Promise<{ success: boolean; message?: string; error?: string }>;
+      gitGenerateConflictResolution: (filePath: string) => Promise<{ success: boolean; explanation?: string; resolvedCode?: string; error?: string }>;
+      gitApplyConflictResolution: (filePath: string, resolvedCode: string) => Promise<{ success: boolean; error?: string }>;
       gitUndoCommit: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPush: (remote?: string, branch?: string, force?: boolean, overwrite?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitPull: (remote?: string, branch?: string, targetBranch?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -87,7 +90,9 @@ declare global {
       gitGetCherryPickStatus: () => Promise<{ success: boolean; inProgress: boolean; error?: string; errorType?: string }>;
       gitGetCommitsForInteractiveRebase: (targetBranch: string) => Promise<{ success: boolean; commits?: any[]; error?: string; errorType?: string }>;
       gitInteractiveRebase: (targetBranch: string, todoLines: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitCancelOperation: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      openFileInDefaultEditor: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       checkGitFlowInitialized: () => Promise<{ success: boolean; initialized?: boolean; error?: string; errorType?: string }>;
       initializeGitFlow: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       startGitFlowBranch: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -109,12 +114,15 @@ declare global {
       getRemoteBranches: () => Promise<{ success: boolean; branches?: Array<{ name: string; remote: string }>; error?: string; errorType?: string }>;
       getTags: () => Promise<{ success: boolean; tags?: Array<{ name: string; commit: string; date: Date }>; error?: string; errorType?: string }>;
       getCommitDiff: (commitHash: string) => Promise<{ success: boolean; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string; errorType?: string }>;
+      gitGetBranchDiff: (branchName: string) => Promise<{ success: boolean; baseBranch?: string; files?: Array<{ path: string; status: 'modified' | 'added' | 'deleted'; additions: number; deletions: number; diff: string }>; error?: string }>;
+      gitGetAIBranchReview: (branchName: string) => Promise<{ success: boolean; summary?: string; explanation?: string; error?: string }>;
       getFileDiff: (filePath: string, staged: boolean) => Promise<{ success: boolean; diff?: string; error?: string; errorType?: string }>;
       getFileBlame: (filePath: string, commitHash?: string) => Promise<{ success: boolean; blame?: Array<{ commitHash: string; author: string; date: string; lineNo: number; content: string; }>; error?: string; errorType?: string }>;
       applyPatch: (patch: string, options?: { reverse?: boolean; cached?: boolean }) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       revertFileChanges: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteBranch: (branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      renameBranch: (oldName: string, newName: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteRemoteBranch: (branchName: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteTag: (tagName: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       createTag: (name: string, commitHash?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;

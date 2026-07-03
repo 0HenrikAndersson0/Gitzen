@@ -82,7 +82,7 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
     });
   };
 
-  const handleMenuAction = (action: 'revert' | 'delete') => {
+  const handleMenuAction = (action: 'revert' | 'delete' | 'open') => {
     if (!contextMenu) return;
 
     const file = contextMenu.file;
@@ -90,6 +90,8 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
       onRevertFile(file.path);
     } else if (action === 'delete' && onDeleteFile) {
       onDeleteFile(file.path);
+    } else if (action === 'open') {
+      (window as any).electronAPI.openFileInDefaultEditor(file.path);
     }
     setContextMenu(null);
   };
@@ -169,6 +171,12 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
           className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
+          <div
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors border-b border-border/50"
+            onClick={() => handleMenuAction('open')}
+          >
+            Open in Default Editor
+          </div>
           {contextMenu.file.status === 'added' ? (
             <div
               className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"

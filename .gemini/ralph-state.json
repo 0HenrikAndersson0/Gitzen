@@ -1,6 +1,0 @@
-{
-  "iteration": 1,
-  "max_iterations": 10,
-  "completion_promise": "Verified that the FileDiff modal includes navigation buttons (or keyboard support) to switch between the diffs of changed files, and the diff updates correctly when navigating.",
-  "prompt": "Add 'Next' and 'Previous' navigation buttons to the FileDiff modal so users can inspect changes across multiple files without closing and reopening the modal. The navigation should cycle through the list of currently changed files."
-}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, FileText, CheckCircle2, Trash2, Save, AlertCircle } from 'lucide-react';
+import { AlertTriangle, FileText, CheckCircle2, Trash2, Save, AlertCircle, Wand2, Loader2, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import {
@@ -11,6 +11,11 @@ import {
   DialogTitle,
 } from './ui/dialog';
 
+interface AIProposal {
+  explanation: string;
+  resolvedCode: string;
+}
+
 interface MergeConflictDialogProps {
   open: boolean;
   conflictedFiles: ConflictedFile[];
@@ -18,6 +23,8 @@ interface MergeConflictDialogProps {
   onAbortConflict: () => void;
   onResolveFiles: (filePaths: string[]) => Promise<void>;
   onResolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<void>;
+  onResolveWithAI: (filePath: string) => Promise<{ explanation: string; resolvedCode: string } | null>;
+  onApplyAIResolution: (filePath: string, resolvedCode: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -28,14 +35,20 @@ export function MergeConflictDialog({
   onAbortConflict,
   onResolveFiles,
   onResolveConflict,
+  onResolveWithAI,
+  onApplyAIResolution,
   onClose 
 }: MergeConflictDialogProps) {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [resolving, setResolving] = useState(false);
+  const [aiProposals, setAiProposals] = useState<Record<string, AIProposal>>({});
+  const [loadingAI, setLoadingAI] = useState<Record<string, boolean>>({});
 
   // Reset selected files when conflictedFiles changes
   useEffect(() => {
     setSelectedFiles(new Set());
+    setAiProposals({});
+    setLoadingAI({});
   }, [conflictedFiles]);
 
   // Close dialog when all files are resolved
@@ -96,6 +109,36 @@ export function MergeConflictDialog({
     }
   };
 
+  const handleFetchAIResolution = async (filePath: string) => {
+    setLoadingAI(prev => ({ ...prev, [filePath]: true }));
+    try {
+      const proposal = await onResolveWithAI(filePath);
+      if (proposal) {
+        setAiProposals(prev => ({ ...prev, [filePath]: proposal }));
+      }
+    } finally {
+      setLoadingAI(prev => ({ ...prev, [filePath]: false }));
+    }
+  };
+
+  const handleAcceptAIResolution = async (filePath: string) => {
+    const proposal = aiProposals[filePath];
+    if (!proposal) return;
+
+    setResolving(true);
+    try {
+      await onApplyAIResolution(filePath, proposal.resolvedCode);
+      // Remove from proposals after applying
+      setAiProposals(prev => {
+        const next = { ...prev };
+        delete next[filePath];
+        return next;
+      });
+    } finally {
+      setResolving(false);
+    }
+  };
+
   const bulkResolvableFiles = conflictedFiles.filter(f => 
     f.type === 'both-modified' || f.type === 'both-added' || f.type === 'both-deleted' || f.type === 'unknown'
   );
@@ -117,7 +160,7 @@ export function MergeConflictDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="bg-card border-border max-w-3xl max-h-[85vh]">
+      <DialogContent className="bg-card border-border max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <AlertTriangle className="size-5 text-amber-500" />
@@ -128,9 +171,9 @@ export function MergeConflictDialog({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
+        <div className="flex-1 overflow-hidden flex flex-col space-y-4 py-4 min-h-0">
           {bulkResolvableFiles.length > 0 && (
-            <div className="flex items-center justify-between bg-background p-2 rounded border border-border">
+            <div className="flex-shrink-0 flex items-center justify-between bg-background p-2 rounded border border-border">
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={allSelected}
@@ -153,21 +196,23 @@ export function MergeConflictDialog({
             </div>
           )}
           
-          <div className="bg-background border border-border rounded-lg max-h-[500px] overflow-y-auto">
+          <div className="flex-1 bg-background border border-border rounded-lg overflow-y-auto">
             {conflictedFiles.length > 0 ? (
               <div className="divide-y divide-border">
                 {conflictedFiles.map((file, index) => {
                   const isSelected = selectedFiles.has(file.path);
                   const isDeletedConflict = file.type === 'deleted-by-us' || file.type === 'deleted-by-them';
+                  const hasProposal = !!aiProposals[file.path];
+                  const isLoadingAI = !!loadingAI[file.path];
                   
                   return (
                     <div
                       key={index}
                       className={`flex flex-col gap-2 p-3 transition-colors ${
-                        isSelected ? 'bg-secondary' : 'hover:bg-card'
+                        isSelected ? 'bg-secondary' : 'hover:bg-card/50'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0">
                           {!isDeletedConflict && (
                             <Checkbox
@@ -213,31 +258,94 @@ export function MergeConflictDialog({
                               </Button>
                             </>
                           ) : (
-                            <Button
-                              onClick={() => onOpenFile(file.path)}
-                              className="bg-secondary hover:bg-muted text-foreground border border-border h-8 text-xs"
-                              size="sm"
-                            >
-                              Open Merge Tool
-                            </Button>
+                            <>
+                              {!hasProposal ? (
+                                <Button
+                                  onClick={() => handleFetchAIResolution(file.path)}
+                                  disabled={resolving || isLoadingAI}
+                                  className="bg-secondary hover:bg-muted text-foreground border border-border h-8 text-xs"
+                                  size="sm"
+                                >
+                                  {isLoadingAI ? <Loader2 className="size-3 mr-1.5 animate-spin" /> : <Wand2 className="size-3 mr-1.5" />}
+                                  Auto Resolve (AI)
+                                </Button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    onClick={() => handleAcceptAIResolution(file.path)}
+                                    disabled={resolving}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
+                                    size="sm"
+                                  >
+                                    <CheckCircle2 className="size-3 mr-1.5" />
+                                    Accept AI Solution
+                                  </Button>
+                                  <Button
+                                    onClick={() => setAiProposals(prev => {
+                                      const next = { ...prev };
+                                      delete next[file.path];
+                                      return next;
+                                    })}
+                                    variant="ghost"
+                                    className="h-8 text-xs px-2 text-muted-foreground hover:text-foreground"
+                                    size="sm"
+                                  >
+                                    Discard
+                                  </Button>
+                                </div>
+                              )}
+                              <Button
+                                onClick={() => onOpenFile(file.path)}
+                                className="bg-secondary hover:bg-muted text-foreground border border-border h-8 text-xs"
+                                size="sm"
+                              >
+                                Open Merge Tool
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
+
+                      {hasProposal && (
+                        <div className="mt-1 ml-7 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-md text-xs">
+                            <div className="flex items-center gap-1.5 mb-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                              <Sparkles className="size-3" />
+                              AI Explanation
+                            </div>
+                            <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {aiProposals[file.path].explanation}
+                            </p>
+                          </div>
+                          
+                          <div className="border border-border rounded-md overflow-hidden bg-zinc-950">
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-border">
+                              <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">Proposed Resolution</span>
+                              <FileText className="size-3 text-zinc-500" />
+                            </div>
+                            <div className="p-3 max-h-[200px] overflow-y-auto">
+                              <pre className="text-[11px] font-mono text-zinc-300 leading-relaxed">
+                                <code>{aiProposals[file.path].resolvedCode}</code>
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="p-4 text-center text-muted-foreground">
-                <CheckCircle2 className="size-8 mx-auto mb-2 text-foreground" />
-                <p className="font-medium">All conflicts resolved!</p>
-                <p className="text-xs mt-1">You can now complete the merge.</p>
+              <div className="p-8 text-center text-muted-foreground">
+                <CheckCircle2 className="size-12 mx-auto mb-4 text-emerald-500" />
+                <p className="font-semibold text-foreground text-lg">All conflicts resolved!</p>
+                <p className="text-sm mt-1">You can now complete the merge operation.</p>
               </div>
             )}
           </div>
         </div>
 
-        <DialogFooter className="flex-row justify-between sm:justify-between">
+        <DialogFooter className="flex-row justify-between sm:justify-between flex-shrink-0 pt-2">
           <Button
             onClick={onAbortConflict}
             className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
