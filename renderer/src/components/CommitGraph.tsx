@@ -309,9 +309,16 @@ export const CommitGraph = memo(function CommitGraph({
   useEffect(() => {
     if (currentBranchHeadId && listRef.current && nodes.length > 0) {
       const index = nodes.findIndex(n => n.id === currentBranchHeadId);
-      if (index !== -1) listRef.current.scrollToItem(index, 'center');
+      if (index !== -1) {
+        listRef.current.scrollToItem(index, 'center');
+        const node = nodes[index];
+        if (node) {
+          const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
+          setSelectedCommit(commit);
+        }
+      }
     }
-  }, [currentBranchHeadId, nodes]);
+  }, [currentBranchHeadId, nodes, commitsWithTags]);
 
   const loadTags = async () => {
     try {
@@ -386,7 +393,15 @@ export const CommitGraph = memo(function CommitGraph({
 
     return (
       <div
-        className={`absolute flex items-center transition-colors border-b border-border/30 cursor-pointer ${hoveredCommitId === commit.id ? 'bg-secondary/50' : isCurrentHead ? 'bg-emerald-100 dark:bg-emerald-950/20' : 'hover:bg-accent/30'}`}
+        className={`absolute flex items-center transition-colors border-b border-border/30 cursor-pointer ${
+          selectedCommit?.id === commit.id
+            ? 'bg-primary/15 dark:bg-primary/20 border-l-2 border-l-primary'
+            : hoveredCommitId === commit.id
+            ? 'bg-secondary/50'
+            : isCurrentHead
+            ? 'bg-emerald-100 dark:bg-emerald-950/20'
+            : 'hover:bg-accent/30'
+        }`}
         style={{ ...style, left: 0, boxSizing: 'border-box' }}
         onClick={() => setSelectedCommit(commit)}
         onContextMenu={(e) => handleContextMenu(e, commit.hash)}
