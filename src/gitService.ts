@@ -3010,18 +3010,18 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     if (platform === 'win32') {
       // PowerShell script reading from temp file
       const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
     } else {
       // Bash script reading from temp file
       command = `
-if command -v gemini &> /dev/null; then
-  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+if command -v agy &> /dev/null; then
+  cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
   cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
 elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
   cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
 else
-  echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
+  echo "Error: No supported AI CLI found (agy, claude, or gh copilot)." >&2
   exit 1
 fi
 `.trim();
@@ -3096,15 +3096,15 @@ CODE:
 
     if (platform === 'win32') {
       const escapedTempPath = tempConflictFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (gemini or claude).' }"`;
+      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (agy or claude).' }"`;
     } else {
       command = `
-if command -v gemini &> /dev/null; then
-  cat "${tempConflictFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+if command -v agy &> /dev/null; then
+  cat "${tempConflictFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
   cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
 else
-  echo "Error: No supported AI CLI found (gemini or claude)." >&2
+  echo "Error: No supported AI CLI found (agy or claude)." >&2
   exit 1
 fi
 `.trim();
@@ -3329,17 +3329,17 @@ Your output must be formatted exactly as follows:
 
     if (platform === 'win32') {
       const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command gemini -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gemini ask $env:GITZEN_PROMPT --skip-trust } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (gemini, claude, or gh copilot).' }"`;
+      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
     } else {
       command = `
-if command -v gemini &> /dev/null; then
-  cat "${tempDiffFile}" | gemini ask "$GITZEN_PROMPT" --skip-trust
+if command -v agy &> /dev/null; then
+  cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
   cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
 elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
   cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
 else
-  echo "Error: No supported AI CLI found (gemini, claude, or gh copilot)." >&2
+  echo "Error: No supported AI CLI found (agy, claude, or gh copilot)." >&2
   exit 1
 fi
 `.trim();

@@ -369,7 +369,7 @@ export function BranchReviewModal({ isOpen, onClose, branchName }: BranchReviewM
                 <AlertCircle className="size-4 shrink-0" />
                 <div>
                   <span className="font-semibold">AI analysis error:</span> {errorAI}
-                  <p className="mt-1 text-[10px] text-zinc-500">Ensure you have a supported AI tool like `gemini` or `claude` installed and set up in your system PATH.</p>
+                  <p className="mt-1 text-[10px] text-zinc-500">Ensure you have a supported AI tool like `agy` or `claude` installed and set up in your system PATH.</p>
                 </div>
               </div>
             ) : summary ? (
