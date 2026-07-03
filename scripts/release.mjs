@@ -24,22 +24,21 @@ function run() {
         const currentVersion = pkg.version;
 
         // 3. Calculate new version
-        // Logic: Increment patch and force suffix to -alpha-1
-        // Matches x.y.z or x.y.z-suffix
+        // Logic: Increment patch and preserve the current suffix (e.g., -beta-1, -alpha-1)
         const versionMatch = currentVersion.match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
         if (!versionMatch) {
             console.error(`❌ Current version ${currentVersion} is not valid semver.`);
             process.exit(1);
         }
 
-        const [_, major, minor, patch] = versionMatch;
+        const [_, major, minor, patch, suffix] = versionMatch;
         const newPatch = parseInt(patch) + 1;
-        const newVersion = `${major}.${minor}.${newPatch}-alpha-1`;
+        const suffixPart = suffix ? `-${suffix}` : '';
+        const newVersion = `${major}.${minor}.${newPatch}${suffixPart}`;
 
         console.log(`🚀 Preparing release: ${currentVersion} -> ${newVersion}`);
 
         // 4. Run npm version to update files (package.json, package-lock.json)
-        // --no-git-tag-version: we handle tagging manually to ensure format
         console.log('📦 Bumping package versions...');
         execSync(`npm version ${newVersion} --no-git-tag-version`, { stdio: 'inherit' });
 
@@ -49,7 +48,6 @@ function run() {
         console.log('📝 Generating release notes...');
         try {
             // Find previous tag
-            // We look for the closest tag reachable from HEAD
             const previousTag = execSync('git describe --tags --abbrev=0').toString().trim();
             console.log(`   Previous tag: ${previousTag}`);
 
