@@ -282,6 +282,10 @@ ipcMain.handle('git:checkoutBranch', async (_, name) => {
   return await gitService.checkoutBranch(name);
 });
 
+ipcMain.handle('git:getBranchHeadIndex', async (_, branchName) => {
+  return await gitService.getBranchHeadIndex(branchName);
+});
+
 ipcMain.handle('git:mergeBranchToCurrent', async (_, branchToMerge) => {
   return await gitService.mergeBranchToCurrent(branchToMerge);
 });

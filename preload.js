@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitGetBranches: () => ipcRenderer.invoke('git:getBranches'),
   gitCreateBranch: (name, checkout) => ipcRenderer.invoke('git:createBranch', name, checkout),
   gitCheckoutBranch: (name) => ipcRenderer.invoke('git:checkoutBranch', name),
+  gitGetBranchHeadIndex: (name) => ipcRenderer.invoke('git:getBranchHeadIndex', name),
   gitMergeBranchToCurrent: (branchToMerge) => ipcRenderer.invoke('git:mergeBranchToCurrent', branchToMerge),
   getRepoPath: () => ipcRenderer.invoke('git:getRepoPath'),
   getSuperprojectPath: () => ipcRenderer.invoke('git:getSuperprojectPath'),

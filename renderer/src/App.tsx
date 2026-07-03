@@ -206,7 +206,7 @@ export default function App() {
     handleResolveConflict,
     handleSwitchRepo,
     handleOpenNewRepo,
-    handleCheckout,
+    handleCheckout: gitOpsCheckout,
     handleCreateBranch,
     handleDeleteBranch,
     handleDeleteRemoteBranch,
@@ -219,6 +219,19 @@ export default function App() {
     handleGenerateConflictResolution,
     handleApplyConflictResolution
   } = gitOps;
+
+  const handleCheckout = async (branch: string) => {
+    try {
+      const result = await window.electronAPI.gitGetBranchHeadIndex(branch);
+      if (result.success && result.index !== undefined && result.index !== -1) {
+        const requiredLimit = Math.min(2000, Math.max(50, result.index + 20));
+        setHistoryLimit(prev => Math.max(prev, requiredLimit));
+      }
+    } catch (e) {
+      console.error('Failed to get branch head index:', e);
+    }
+    await gitOpsCheckout(branch);
+  };
 
   useEffect(() => {
     // Listen for menu events

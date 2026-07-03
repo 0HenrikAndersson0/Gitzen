@@ -3386,3 +3386,41 @@ fi
   }
 }
 
+export async function getBranchHeadIndex(branchName: string): Promise<{ success: boolean; index?: number; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // 1. Get the commit hash of the selected branch head
+    let branchHeadHash = '';
+    try {
+      const { stdout } = await runGitCommand(`rev-parse "${branchName}"`);
+      branchHeadHash = stdout.trim();
+    } catch (e) {
+      // If we can't find the branch head, it might be a remote branch not tracked locally yet
+      try {
+        const { stdout } = await runGitCommand(`rev-parse "origin/${branchName}"`);
+        branchHeadHash = stdout.trim();
+      } catch (err) {
+        return { success: false, error: `Branch ${branchName} not found` };
+      }
+    }
+
+    if (!branchHeadHash) {
+      return { success: false, error: `Could not parse commit hash for branch ${branchName}` };
+    }
+
+    // 2. Get the list of all commit hashes in --date-order up to 2000 commits
+    const { stdout: logOutput } = await runGitCommand('log -n 2000 --all --date-order --pretty=format:%H');
+    const hashes = logOutput.split('\n').map(h => h.trim()).filter(Boolean);
+
+    // 3. Find the index of the branch head hash
+    const index = hashes.indexOf(branchHeadHash);
+    return { success: true, index };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to get branch head index' };
+  }
+}
+
+

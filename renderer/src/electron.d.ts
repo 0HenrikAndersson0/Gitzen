@@ -69,6 +69,7 @@ declare global {
       gitFetchAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGetBranchHeadIndex: (name: string) => Promise<{ success: boolean; index?: number; error?: string }>;
       gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string; errorType?: string }>;
       getConflictedFiles: () => Promise<{ success: boolean; files?: ConflictedFile[]; error?: string; errorType?: string }>;
       resolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<{ success: boolean; error?: string; errorType?: string }>;

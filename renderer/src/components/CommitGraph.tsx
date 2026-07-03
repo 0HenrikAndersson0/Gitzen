@@ -311,14 +311,9 @@ export const CommitGraph = memo(function CommitGraph({
       const index = nodes.findIndex(n => n.id === currentBranchHeadId);
       if (index !== -1) {
         listRef.current.scrollToItem(index, 'center');
-        const node = nodes[index];
-        if (node) {
-          const commit = commitsWithTags.find(c => c.id === node.id) || node.commit;
-          setSelectedCommit(commit);
-        }
       }
     }
-  }, [currentBranchHeadId, nodes, commitsWithTags]);
+  }, [currentBranchHeadId, nodes]);
 
   const loadTags = async () => {
     try {
@@ -396,10 +391,10 @@ export const CommitGraph = memo(function CommitGraph({
         className={`absolute flex items-center transition-colors border-b border-border/30 cursor-pointer ${
           selectedCommit?.id === commit.id
             ? 'bg-primary/15 dark:bg-primary/20 border-l-2 border-l-primary'
+            : isCurrentHead
+            ? 'bg-emerald-100/70 dark:bg-emerald-950/30 border-l-2 border-l-emerald-500 dark:border-l-emerald-600'
             : hoveredCommitId === commit.id
             ? 'bg-secondary/50'
-            : isCurrentHead
-            ? 'bg-emerald-100 dark:bg-emerald-950/20'
             : 'hover:bg-accent/30'
         }`}
         style={{ ...style, left: 0, boxSizing: 'border-box' }}
