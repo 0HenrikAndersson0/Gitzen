@@ -111,6 +111,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setMaxCommits: (maxCommits) => ipcRenderer.invoke('settings:setMaxCommits', maxCommits),
   getTheme: () => ipcRenderer.invoke('settings:getTheme'),
   setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
+  getAIProvider: () => ipcRenderer.invoke('settings:getAIProvider'),
+  setAIProvider: (provider) => ipcRenderer.invoke('settings:setAIProvider', provider),
+  getOllamaModel: () => ipcRenderer.invoke('settings:getOllamaModel'),
+  setOllamaModel: (model) => ipcRenderer.invoke('settings:setOllamaModel', model),
+  getOllamaHost: () => ipcRenderer.invoke('settings:getOllamaHost'),
+  setOllamaHost: (host) => ipcRenderer.invoke('settings:setOllamaHost', host),
+  gitGetOllamaModels: () => ipcRenderer.invoke('git:getOllamaModels'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   onShowShortcuts: (callback) => {
