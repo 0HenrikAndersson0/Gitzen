@@ -3002,18 +3002,29 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     fs.writeFileSync(tempDiffFile, diff);
 
     const prompt = "Write a concise commit message for these changes. Output ONLY the raw commit message without any markdown formatting, prefixes like 'Subject:', or explanations.";
-    const platform = os.platform();
-    
-    let command = '';
-    const env = fixPath();
+    const provider = settingsService.getAIProvider();
+    let finalMessage = '';
 
-    if (platform === 'win32') {
-      // PowerShell script reading from temp file
-      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+    if (provider === 'ollama') {
+      const host = settingsService.getOllamaHost();
+      const model = settingsService.getOllamaModel();
+      if (!model) {
+        return { success: false, error: 'Please select an Ollama model in settings.' };
+      }
+      const ollamaPrompt = `${prompt}\n\nHere is the diff of the changes:\n${diff}`;
+      finalMessage = await callOllama(ollamaPrompt, host, model);
     } else {
-      // Bash script reading from temp file
-      command = `
+      const platform = os.platform();
+      let command = '';
+      const env = fixPath();
+
+      if (platform === 'win32') {
+        // PowerShell script reading from temp file
+        const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+        command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+      } else {
+        // Bash script reading from temp file
+        command = `
 if command -v agy &> /dev/null; then
   cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3025,16 +3036,16 @@ else
   exit 1
 fi
 `.trim();
-    }
+      }
 
-    // Execute the constructed script with the prompt in an environment variable
-    const { stdout: aiOutput } = await execAsync(command, { 
-      cwd: currentRepoPath,
-      env: { ...env, GITZEN_PROMPT: prompt }
-    });
-    
-    // Clean up the output (remove extra whitespace, markdown blocks, etc.)
-    let finalMessage = aiOutput.trim();
+      // Execute the constructed script with the prompt in an environment variable
+      const { stdout: aiOutput } = await execAsync(command, { 
+        cwd: currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt }
+      });
+      
+      finalMessage = aiOutput.trim();
+    }
     // Remove markdown code blocks if present
     finalMessage = finalMessage.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
     // Remove leading "Commit message:" or similar common prefixes if AI is talkative
@@ -3090,15 +3101,27 @@ CODE:
 <The full resolved file content without any conflict markers and without any markdown code blocks.>
 `.trim();
 
-    const platform = os.platform();
-    let command = '';
-    const env = fixPath();
+    const provider = settingsService.getAIProvider();
+    let aiOutput = '';
 
-    if (platform === 'win32') {
-      const escapedTempPath = tempConflictFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (agy or claude).' }"`;
+    if (provider === 'ollama') {
+      const host = settingsService.getOllamaHost();
+      const model = settingsService.getOllamaModel();
+      if (!model) {
+        return { success: false, error: 'Please select an Ollama model in settings.' };
+      }
+      const ollamaPrompt = `${prompt}\n\nHere is the file containing conflict markers:\n${content}`;
+      aiOutput = await callOllama(ollamaPrompt, host, model);
     } else {
-      command = `
+      const platform = os.platform();
+      let command = '';
+      const env = fixPath();
+
+      if (platform === 'win32') {
+        const escapedTempPath = tempConflictFile.replace(/'/g, "''");
+        command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (agy or claude).' }"`;
+      } else {
+        command = `
 if command -v agy &> /dev/null; then
   cat "${tempConflictFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3108,12 +3131,14 @@ else
   exit 1
 fi
 `.trim();
-    }
+      }
 
-    const { stdout: aiOutput } = await execAsync(command, { 
-      cwd: currentRepoPath,
-      env: { ...env, GITZEN_PROMPT: prompt }
-    });
+      const { stdout } = await execAsync(command, { 
+        cwd: currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt }
+      });
+      aiOutput = stdout;
+    }
 
     const explanationMarker = 'EXPLANATION:';
     const codeMarker = 'CODE:';
@@ -3323,15 +3348,27 @@ Your output must be formatted exactly as follows:
 === EXPLANATION ===
 [Provide a detailed explanation of the changes, what they do, and how they work. Write it in clear Markdown.]`;
 
-    const platform = os.platform();
-    let command = '';
-    const env = fixPath();
+    const provider = settingsService.getAIProvider();
+    let aiOutput = '';
 
-    if (platform === 'win32') {
-      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+    if (provider === 'ollama') {
+      const host = settingsService.getOllamaHost();
+      const model = settingsService.getOllamaModel();
+      if (!model) {
+        return { success: false, error: 'Please select an Ollama model in settings.' };
+      }
+      const ollamaPrompt = `${prompt}\n\nHere is the branch diff to review:\n${diffText}`;
+      aiOutput = await callOllama(ollamaPrompt, host, model);
     } else {
-      command = `
+      const platform = os.platform();
+      let command = '';
+      const env = fixPath();
+
+      if (platform === 'win32') {
+        const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+        command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+      } else {
+        command = `
 if command -v agy &> /dev/null; then
   cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3343,12 +3380,14 @@ else
   exit 1
 fi
 `.trim();
-    }
+      }
 
-    const { stdout: aiOutput } = await execAsync(command, { 
-      cwd: currentRepoPath,
-      env: { ...env, GITZEN_PROMPT: prompt }
-    });
+      const { stdout } = await execAsync(command, { 
+        cwd: currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt }
+      });
+      aiOutput = stdout;
+    }
 
     const summaryMarker = '=== SUMMARY ===';
     const explanationMarker = '=== EXPLANATION ===';
@@ -3421,6 +3460,40 @@ export async function getBranchHeadIndex(branchName: string): Promise<{ success:
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to get branch head index' };
   }
+}
+
+export async function getOllamaModels(): Promise<{ success: boolean; models?: string[]; error?: string }> {
+  try {
+    const host = settingsService.getOllamaHost();
+    const response = await fetch(`${host}/api/tags`);
+    if (!response.ok) {
+      throw new Error(`Ollama returned status ${response.status}`);
+    }
+    const data = (await response.json()) as { models?: Array<{ name: string }> };
+    const models = (data.models || []).map(m => m.name);
+    return { success: true, models };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to connect to Ollama. Make sure Ollama is running.' };
+  }
+}
+
+async function callOllama(prompt: string, host: string, model: string): Promise<string> {
+  const response = await fetch(`${host}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: false
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama returned status ${response.status}`);
+  }
+
+  const data = (await response.json()) as { response: string };
+  return data.response.trim();
 }
 
 

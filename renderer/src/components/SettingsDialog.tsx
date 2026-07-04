@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, User, Globe } from 'lucide-react';
+import { Settings, FolderOpen, User, Globe, Cpu } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -28,6 +28,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [isGlobalConfig, setIsGlobalConfig] = useState(true);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [aiProvider, setAIProvider] = useState<'agy' | 'claude' | 'ollama'>('agy');
+  const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
+  const [ollamaModel, setOllamaModel] = useState('');
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -35,14 +39,50 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     }
   }, [open]);
 
+  const loadOllamaModels = async () => {
+    try {
+      const result = await window.electronAPI.gitGetOllamaModels();
+      if (result.success && result.models) {
+        setOllamaModels(result.models);
+        if (result.models.length > 0 && !result.models.includes(ollamaModel)) {
+          if (!ollamaModel) {
+            setOllamaModel(result.models[0]);
+          }
+        }
+      } else {
+        setOllamaModels([]);
+      }
+    } catch (e) {
+      console.error('Failed to load Ollama models:', e);
+      setOllamaModels([]);
+    }
+  };
+
+  useEffect(() => {
+    if (open && aiProvider === 'ollama') {
+      loadOllamaModels();
+    }
+  }, [open, aiProvider]);
+
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const [mergeToolResult, maxCommitsResult, gitUserResult, remoteResult] = await Promise.all([
+      const [
+        mergeToolResult,
+        maxCommitsResult,
+        gitUserResult,
+        remoteResult,
+        aiProviderResult,
+        ollamaHostResult,
+        ollamaModelResult
+      ] = await Promise.all([
         window.electronAPI.getMergeToolPath(),
         window.electronAPI.getMaxCommits(),
         window.electronAPI.getGitUserConfig(),
         window.electronAPI.getRemoteUrl('origin'),
+        window.electronAPI.getAIProvider(),
+        window.electronAPI.getOllamaHost(),
+        window.electronAPI.getOllamaModel(),
       ]);
       if (mergeToolResult.success) {
         setMergeToolPath(mergeToolResult.mergeToolPath || '');
@@ -57,6 +97,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       }
       if (remoteResult.success) {
         setRemoteUrl(remoteResult.url || '');
+      }
+      if (aiProviderResult.success) {
+        setAIProvider(aiProviderResult.provider || 'agy');
+      }
+      if (ollamaHostResult.success) {
+        setOllamaHost(ollamaHostResult.host || 'http://localhost:11434');
+      }
+      if (ollamaModelResult.success) {
+        setOllamaModel(ollamaModelResult.model || '');
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -85,11 +134,22 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const [mergeToolResult, maxCommitsResult, gitUserResult, remoteResult] = await Promise.all([
+      const [
+        mergeToolResult,
+        maxCommitsResult,
+        gitUserResult,
+        remoteResult,
+        aiProviderResult,
+        ollamaHostResult,
+        ollamaModelResult
+      ] = await Promise.all([
         window.electronAPI.setMergeToolPath(mergeToolPath),
         window.electronAPI.setMaxCommits(maxCommits),
         window.electronAPI.setGitUserConfig(gitName, gitEmail, isGlobalConfig),
         remoteUrl ? window.electronAPI.setRemoteUrl('origin', remoteUrl) : Promise.resolve({ success: true }),
+        window.electronAPI.setAIProvider(aiProvider),
+        window.electronAPI.setOllamaHost(ollamaHost),
+        window.electronAPI.setOllamaModel(ollamaModel),
       ]);
 
       const errors: string[] = [];
@@ -97,6 +157,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       if (!maxCommitsResult.success) errors.push(`Max Commits: ${maxCommitsResult.error}`);
       if (!gitUserResult.success) errors.push(`Git User: ${gitUserResult.error}`);
       if (!remoteResult.success) errors.push(`Remote URL: ${(remoteResult as any).error}`);
+      if (!aiProviderResult.success) errors.push(`AI Provider: ${aiProviderResult.error}`);
+      if (!ollamaHostResult.success) errors.push(`Ollama Host: ${ollamaHostResult.error}`);
+      if (!ollamaModelResult.success) errors.push(`Ollama Model: ${ollamaModelResult.error}`);
 
       if (errors.length === 0) {
         toast.success('Settings saved successfully');
@@ -249,6 +312,86 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             <p className="text-xs text-muted-foreground">
               Maximum number of commits to display in the commit graph. Higher values may impact performance. (10-200)
             </p>
+          </div>
+
+          <div className="space-y-4 border-t border-border pt-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Cpu className="size-4 text-foreground" />
+              <h3 className="text-sm font-medium text-foreground">AI Assistant</h3>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="aiProvider">AI Provider</Label>
+              <select
+                id="aiProvider"
+                value={aiProvider}
+                onChange={(e) => setAIProvider(e.target.value as any)}
+                className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={loading}
+              >
+                <option value="agy">Antigravity (agy CLI)</option>
+                <option value="claude">Claude (claude CLI)</option>
+                <option value="ollama">Ollama (Local LLM)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Choose the AI model provider to use for commit messages, conflict resolution, and code reviews.
+              </p>
+            </div>
+
+            {aiProvider === 'ollama' && (
+              <div className="space-y-4 border-l-2 border-border pl-4 ml-1">
+                <div className="space-y-2">
+                  <Label htmlFor="ollamaHost">Ollama Host</Label>
+                  <Input
+                    id="ollamaHost"
+                    type="text"
+                    placeholder="http://localhost:11434"
+                    value={ollamaHost}
+                    onChange={(e) => setOllamaHost(e.target.value)}
+                    className="bg-background border-border font-mono text-xs"
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The URL where your local Ollama server is running (default: http://localhost:11434).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ollamaModel">Ollama Model</Label>
+                  <div className="flex gap-2">
+                    <select
+                      id="ollamaModel"
+                      value={ollamaModel}
+                      onChange={(e) => setOllamaModel(e.target.value)}
+                      className="flex h-9 flex-1 rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loading}
+                    >
+                      {ollamaModels.length === 0 ? (
+                        <option value="">No models found. Check if Ollama is running.</option>
+                      ) : (
+                        ollamaModels.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <Button
+                      onClick={loadOllamaModels}
+                      variant="outline"
+                      type="button"
+                      className="bg-secondary border-border hover:bg-muted text-xs h-9"
+                      disabled={loading}
+                    >
+                      Refresh
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Select the local model to run. Use 'Refresh' to reload pulled models from your Ollama server.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
