@@ -69,6 +69,7 @@ declare global {
       gitFetchAll: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCreateBranch: (name: string, checkout?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitCheckoutBranch: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGetBranchHeadIndex: (name: string) => Promise<{ success: boolean; index?: number; error?: string }>;
       gitMergeBranchToCurrent: (branchToMerge: string) => Promise<{ success: boolean; hasConflicts?: boolean; conflictedFiles?: ConflictedFile[]; error?: string; errorType?: string }>;
       getConflictedFiles: () => Promise<{ success: boolean; files?: ConflictedFile[]; error?: string; errorType?: string }>;
       resolveConflict: (filePath: string, decision: 'keep' | 'delete') => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -139,6 +140,13 @@ declare global {
       setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getTheme: () => Promise<{ success: boolean; theme?: string; error?: string; errorType?: string }>;
       setTheme: (theme: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getAIProvider: () => Promise<{ success: boolean; provider?: 'agy' | 'claude' | 'ollama' | 'copilot'; error?: string; errorType?: string }>;
+      setAIProvider: (provider: 'agy' | 'claude' | 'ollama' | 'copilot') => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getOllamaModel: () => Promise<{ success: boolean; model?: string; error?: string; errorType?: string }>;
+      setOllamaModel: (model: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getOllamaHost: () => Promise<{ success: boolean; host?: string; error?: string; errorType?: string }>;
+      setOllamaHost: (host: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGetOllamaModels: () => Promise<{ success: boolean; models?: string[]; error?: string; errorType?: string }>;
       checkForUpdates: () => Promise<any>;
       openExternal: (url: string) => Promise<{ success: boolean }>;
       onShowShortcuts: (callback: () => void) => void;

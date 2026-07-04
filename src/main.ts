@@ -282,6 +282,10 @@ ipcMain.handle('git:checkoutBranch', async (_, name) => {
   return await gitService.checkoutBranch(name);
 });
 
+ipcMain.handle('git:getBranchHeadIndex', async (_, branchName) => {
+  return await gitService.getBranchHeadIndex(branchName);
+});
+
 ipcMain.handle('git:mergeBranchToCurrent', async (_, branchToMerge) => {
   return await gitService.mergeBranchToCurrent(branchToMerge);
 });
@@ -653,6 +657,69 @@ ipcMain.handle('settings:setTheme', (_, theme: string) => {
   try {
     settingsService.setTheme(theme);
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+// AI Settings Handlers
+ipcMain.handle('settings:getAIProvider', () => {
+  try {
+    const provider = settingsService.getAIProvider();
+    return { success: true, provider };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setAIProvider', (_, provider: 'agy' | 'claude' | 'ollama' | 'copilot') => {
+  try {
+    settingsService.setAIProvider(provider);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:getOllamaModel', () => {
+  try {
+    const model = settingsService.getOllamaModel();
+    return { success: true, model };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setOllamaModel', (_, model: string) => {
+  try {
+    settingsService.setOllamaModel(model);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:getOllamaHost', () => {
+  try {
+    const host = settingsService.getOllamaHost();
+    return { success: true, host };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setOllamaHost', (_, host: string) => {
+  try {
+    settingsService.setOllamaHost(host);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('git:getOllamaModels', async () => {
+  try {
+    return await gitService.getOllamaModels();
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

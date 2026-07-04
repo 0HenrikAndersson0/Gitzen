@@ -5,6 +5,9 @@ interface AppSettings {
   mergeToolPath?: string;
   maxCommits?: number;
   theme?: string;
+  aiProvider?: 'agy' | 'claude' | 'ollama' | 'copilot';
+  ollamaModel?: string;
+  ollamaHost?: string;
 }
 
 let userDataPath: string | null = null;
@@ -82,5 +85,38 @@ export function setTheme(theme: string): void {
 
 export function getAllSettings(): AppSettings {
   return loadSettings();
+}
+
+export function getAIProvider(): 'agy' | 'claude' | 'ollama' | 'copilot' {
+  const settings = loadSettings();
+  return settings.aiProvider ?? 'agy';
+}
+
+export function setAIProvider(provider: 'agy' | 'claude' | 'ollama' | 'copilot'): void {
+  const settings = loadSettings();
+  settings.aiProvider = provider;
+  saveSettings(settings);
+}
+
+export function getOllamaModel(): string {
+  const settings = loadSettings();
+  return settings.ollamaModel ?? '';
+}
+
+export function setOllamaModel(model: string): void {
+  const settings = loadSettings();
+  settings.ollamaModel = model;
+  saveSettings(settings);
+}
+
+export function getOllamaHost(): string {
+  const settings = loadSettings();
+  return settings.ollamaHost ?? 'http://localhost:11434';
+}
+
+export function setOllamaHost(host: string): void {
+  const settings = loadSettings();
+  settings.ollamaHost = host;
+  saveSettings(settings);
 }
 

@@ -3002,18 +3002,62 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     fs.writeFileSync(tempDiffFile, diff);
 
     const prompt = "Write a concise commit message for these changes. Output ONLY the raw commit message without any markdown formatting, prefixes like 'Subject:', or explanations.";
-    const platform = os.platform();
-    
-    let command = '';
-    const env = fixPath();
+    const provider = settingsService.getAIProvider();
+    let finalMessage = '';
 
-    if (platform === 'win32') {
-      // PowerShell script reading from temp file
-      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+    if (provider === 'ollama') {
+      const host = settingsService.getOllamaHost();
+      const model = settingsService.getOllamaModel();
+      if (!model) {
+        return { success: false, error: 'Please select an Ollama model in settings.' };
+      }
+      const ollamaPrompt = `${prompt}\n\nHere is the diff of the changes:\n${diff}`;
+      finalMessage = await callOllama(ollamaPrompt, host, model);
     } else {
-      // Bash script reading from temp file
-      command = `
+      const platform = os.platform();
+      let command = '';
+      const env = fixPath();
+
+      if (platform === 'win32') {
+        // PowerShell script reading from temp file
+        const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+        if (provider === 'agy') {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+        } else if (provider === 'claude') {
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+        } else if (provider === 'copilot') {
+          command = `powershell.exe -Command "if (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'gh CLI or copilot extension not found in PATH.' }"`;
+        } else {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found.' }"`;
+        }
+      } else {
+        // Bash script reading from temp file
+        if (provider === 'agy') {
+          command = `
+if command -v agy &> /dev/null; then
+  cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
+else
+  echo "Error: agy CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'claude') {
+          command = `
+if command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: claude CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'copilot') {
+          command = `
+if command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
+else
+  echo "Error: gh CLI or copilot extension not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else {
+          command = `
 if command -v agy &> /dev/null; then
   cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3023,18 +3067,18 @@ elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
 else
   echo "Error: No supported AI CLI found (agy, claude, or gh copilot)." >&2
   exit 1
-fi
-`.trim();
-    }
+fi`.trim();
+        }
+      }
 
-    // Execute the constructed script with the prompt in an environment variable
-    const { stdout: aiOutput } = await execAsync(command, { 
-      cwd: currentRepoPath,
-      env: { ...env, GITZEN_PROMPT: prompt }
-    });
-    
-    // Clean up the output (remove extra whitespace, markdown blocks, etc.)
-    let finalMessage = aiOutput.trim();
+      // Execute the constructed script with the prompt in an environment variable
+      const { stdout: aiOutput } = await execAsync(command, { 
+        cwd: currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt }
+      });
+      
+      finalMessage = aiOutput.trim();
+    }
     // Remove markdown code blocks if present
     finalMessage = finalMessage.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
     // Remove leading "Commit message:" or similar common prefixes if AI is talkative
@@ -3090,15 +3134,59 @@ CODE:
 <The full resolved file content without any conflict markers and without any markdown code blocks.>
 `.trim();
 
-    const platform = os.platform();
-    let command = '';
-    const env = fixPath();
+    const provider = settingsService.getAIProvider();
+    let aiOutput = '';
 
-    if (platform === 'win32') {
-      const escapedTempPath = tempConflictFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (agy or claude).' }"`;
+    if (provider === 'ollama') {
+      const host = settingsService.getOllamaHost();
+      const model = settingsService.getOllamaModel();
+      if (!model) {
+        return { success: false, error: 'Please select an Ollama model in settings.' };
+      }
+      const ollamaPrompt = `${prompt}\n\nHere is the file containing conflict markers:\n${content}`;
+      aiOutput = await callOllama(ollamaPrompt, host, model);
     } else {
-      command = `
+      const platform = os.platform();
+      let command = '';
+      const env = fixPath();
+      if (platform === 'win32') {
+        const escapedTempPath = tempConflictFile.replace(/'/g, "''");
+        if (provider === 'agy') {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+        } else if (provider === 'claude') {
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+        } else if (provider === 'copilot') {
+          command = `powershell.exe -Command "if (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'resolve git merge conflicts' } else { Write-Error 'gh CLI or copilot extension not found in PATH.' }"`;
+        } else {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found.' }"`;
+        }
+      } else {
+        if (provider === 'agy') {
+          command = `
+if command -v agy &> /dev/null; then
+  cat "${tempConflictFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
+else
+  echo "Error: agy CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'claude') {
+          command = `
+if command -v claude &> /dev/null; then
+  cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: claude CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'copilot') {
+          command = `
+if command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempConflictFile}" | gh copilot suggest -t "resolve git merge conflicts"
+else
+  echo "Error: gh CLI or copilot extension not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else {
+          command = `
 if command -v agy &> /dev/null; then
   cat "${tempConflictFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3106,14 +3194,16 @@ elif command -v claude &> /dev/null; then
 else
   echo "Error: No supported AI CLI found (agy or claude)." >&2
   exit 1
-fi
-`.trim();
-    }
+fi`.trim();
+        }
+      }
 
-    const { stdout: aiOutput } = await execAsync(command, { 
-      cwd: currentRepoPath,
-      env: { ...env, GITZEN_PROMPT: prompt }
-    });
+      const { stdout } = await execAsync(command, { 
+        cwd: currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt }
+      });
+      aiOutput = stdout;
+    }
 
     const explanationMarker = 'EXPLANATION:';
     const codeMarker = 'CODE:';
@@ -3323,15 +3413,60 @@ Your output must be formatted exactly as follows:
 === EXPLANATION ===
 [Provide a detailed explanation of the changes, what they do, and how they work. Write it in clear Markdown.]`;
 
-    const platform = os.platform();
-    let command = '';
-    const env = fixPath();
+    const provider = settingsService.getAIProvider();
+    let aiOutput = '';
 
-    if (platform === 'win32') {
-      const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-      command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+    if (provider === 'ollama') {
+      const host = settingsService.getOllamaHost();
+      const model = settingsService.getOllamaModel();
+      if (!model) {
+        return { success: false, error: 'Please select an Ollama model in settings.' };
+      }
+      const ollamaPrompt = `${prompt}\n\nHere is the branch diff to review:\n${diffText}`;
+      aiOutput = await callOllama(ollamaPrompt, host, model);
     } else {
-      command = `
+      const platform = os.platform();
+      let command = '';
+      const env = fixPath();
+
+      if (platform === 'win32') {
+        const escapedTempPath = tempDiffFile.replace(/'/g, "''");
+        if (provider === 'agy') {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+        } else if (provider === 'claude') {
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+        } else if (provider === 'copilot') {
+          command = `powershell.exe -Command "if (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit review' } else { Write-Error 'gh CLI or copilot extension not found in PATH.' }"`;
+        } else {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found.' }"`;
+        }
+      } else {
+        if (provider === 'agy') {
+          command = `
+if command -v agy &> /dev/null; then
+  cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
+else
+  echo "Error: agy CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'claude') {
+          command = `
+if command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: claude CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'copilot') {
+          command = `
+if command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit review"
+else
+  echo "Error: gh CLI or copilot extension not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else {
+          command = `
 if command -v agy &> /dev/null; then
   cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3341,14 +3476,16 @@ elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
 else
   echo "Error: No supported AI CLI found (agy, claude, or gh copilot)." >&2
   exit 1
-fi
-`.trim();
+fi`.trim();
+        }
+      }
+ 
+      const { stdout } = await execAsync(command, { 
+        cwd: currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt }
+      });
+      aiOutput = stdout;
     }
-
-    const { stdout: aiOutput } = await execAsync(command, { 
-      cwd: currentRepoPath,
-      env: { ...env, GITZEN_PROMPT: prompt }
-    });
 
     const summaryMarker = '=== SUMMARY ===';
     const explanationMarker = '=== EXPLANATION ===';
@@ -3385,4 +3522,76 @@ fi
     }
   }
 }
+
+export async function getBranchHeadIndex(branchName: string): Promise<{ success: boolean; index?: number; error?: string }> {
+  try {
+    if (!currentRepoPath) {
+      return { success: false, error: 'No repository open' };
+    }
+
+    // 1. Get the commit hash of the selected branch head
+    let branchHeadHash = '';
+    try {
+      const { stdout } = await runGitCommand(`rev-parse "${branchName}"`);
+      branchHeadHash = stdout.trim();
+    } catch (e) {
+      // If we can't find the branch head, it might be a remote branch not tracked locally yet
+      try {
+        const { stdout } = await runGitCommand(`rev-parse "origin/${branchName}"`);
+        branchHeadHash = stdout.trim();
+      } catch (err) {
+        return { success: false, error: `Branch ${branchName} not found` };
+      }
+    }
+
+    if (!branchHeadHash) {
+      return { success: false, error: `Could not parse commit hash for branch ${branchName}` };
+    }
+
+    // 2. Get the list of all commit hashes in --date-order up to 2000 commits
+    const { stdout: logOutput } = await runGitCommand('log -n 2000 --all --date-order --pretty=format:%H');
+    const hashes = logOutput.split('\n').map(h => h.trim()).filter(Boolean);
+
+    // 3. Find the index of the branch head hash
+    const index = hashes.indexOf(branchHeadHash);
+    return { success: true, index };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to get branch head index' };
+  }
+}
+
+export async function getOllamaModels(): Promise<{ success: boolean; models?: string[]; error?: string }> {
+  try {
+    const host = settingsService.getOllamaHost();
+    const response = await fetch(`${host}/api/tags`);
+    if (!response.ok) {
+      throw new Error(`Ollama returned status ${response.status}`);
+    }
+    const data = (await response.json()) as { models?: Array<{ name: string }> };
+    const models = (data.models || []).map(m => m.name);
+    return { success: true, models };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to connect to Ollama. Make sure Ollama is running.' };
+  }
+}
+
+async function callOllama(prompt: string, host: string, model: string): Promise<string> {
+  const response = await fetch(`${host}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      prompt,
+      stream: false
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama returned status ${response.status}`);
+  }
+
+  const data = (await response.json()) as { response: string };
+  return data.response.trim();
+}
+
 

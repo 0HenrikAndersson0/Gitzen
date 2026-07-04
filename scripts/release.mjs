@@ -38,6 +38,11 @@ function run() {
 
         console.log(`🚀 Preparing release: ${currentVersion} -> ${newVersion}`);
 
+        // Create and checkout release branch
+        const releaseBranch = `release/${newVersion}`;
+        console.log(`🌿 Creating release branch ${releaseBranch}...`);
+        execSync(`git checkout -b ${releaseBranch}`, { stdio: 'inherit' });
+
         // 4. Run npm version to update files (package.json, package-lock.json)
         console.log('📦 Bumping package versions...');
         execSync(`npm version ${newVersion} --no-git-tag-version`, { stdio: 'inherit' });
@@ -79,11 +84,12 @@ function run() {
 
         // 9. Push
         console.log('⬆️  Pushing changes and tag...');
-        execSync(`git push origin ${branch}`, { stdio: 'inherit' });
+        execSync(`git push origin ${releaseBranch}`, { stdio: 'inherit' });
         execSync(`git push origin ${tagName}`, { stdio: 'inherit' });
 
         console.log('✅ Release script completed successfully!');
         console.log(`   New Version: ${newVersion}`);
+        console.log(`   Release Branch: ${releaseBranch}`);
         console.log(`   Tag: ${tagName}`);
         console.log('   Changes pushed to remote.');
 
