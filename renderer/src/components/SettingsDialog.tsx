@@ -28,7 +28,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [isGlobalConfig, setIsGlobalConfig] = useState(true);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [aiProvider, setAIProvider] = useState<'agy' | 'claude' | 'ollama'>('agy');
+  const [aiProvider, setAIProvider] = useState<'agy' | 'claude' | 'ollama' | 'copilot'>('agy');
   const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
   const [ollamaModel, setOllamaModel] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
@@ -332,6 +332,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 <option value="agy">Antigravity (agy CLI)</option>
                 <option value="claude">Claude (claude CLI)</option>
                 <option value="ollama">Ollama (Local LLM)</option>
+                <option value="copilot">GitHub Copilot (gh CLI)</option>
               </select>
               <p className="text-xs text-muted-foreground">
                 Choose the AI model provider to use for commit messages, conflict resolution, and code reviews.

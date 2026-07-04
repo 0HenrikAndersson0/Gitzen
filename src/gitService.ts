@@ -3021,10 +3021,43 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
       if (platform === 'win32') {
         // PowerShell script reading from temp file
         const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-        command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+        if (provider === 'agy') {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+        } else if (provider === 'claude') {
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+        } else if (provider === 'copilot') {
+          command = `powershell.exe -Command "if (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'gh CLI or copilot extension not found in PATH.' }"`;
+        } else {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found.' }"`;
+        }
       } else {
         // Bash script reading from temp file
-        command = `
+        if (provider === 'agy') {
+          command = `
+if command -v agy &> /dev/null; then
+  cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
+else
+  echo "Error: agy CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'claude') {
+          command = `
+if command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: claude CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'copilot') {
+          command = `
+if command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit message"
+else
+  echo "Error: gh CLI or copilot extension not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else {
+          command = `
 if command -v agy &> /dev/null; then
   cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3034,8 +3067,8 @@ elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
 else
   echo "Error: No supported AI CLI found (agy, claude, or gh copilot)." >&2
   exit 1
-fi
-`.trim();
+fi`.trim();
+        }
       }
 
       // Execute the constructed script with the prompt in an environment variable
@@ -3116,12 +3149,44 @@ CODE:
       const platform = os.platform();
       let command = '';
       const env = fixPath();
-
       if (platform === 'win32') {
         const escapedTempPath = tempConflictFile.replace(/'/g, "''");
-        command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found (agy or claude).' }"`;
+        if (provider === 'agy') {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+        } else if (provider === 'claude') {
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+        } else if (provider === 'copilot') {
+          command = `powershell.exe -Command "if (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'resolve git merge conflicts' } else { Write-Error 'gh CLI or copilot extension not found in PATH.' }"`;
+        } else {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found.' }"`;
+        }
       } else {
-        command = `
+        if (provider === 'agy') {
+          command = `
+if command -v agy &> /dev/null; then
+  cat "${tempConflictFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
+else
+  echo "Error: agy CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'claude') {
+          command = `
+if command -v claude &> /dev/null; then
+  cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: claude CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'copilot') {
+          command = `
+if command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempConflictFile}" | gh copilot suggest -t "resolve git merge conflicts"
+else
+  echo "Error: gh CLI or copilot extension not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else {
+          command = `
 if command -v agy &> /dev/null; then
   cat "${tempConflictFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3129,8 +3194,8 @@ elif command -v claude &> /dev/null; then
 else
   echo "Error: No supported AI CLI found (agy or claude)." >&2
   exit 1
-fi
-`.trim();
+fi`.trim();
+        }
       }
 
       const { stdout } = await execAsync(command, { 
@@ -3366,9 +3431,42 @@ Your output must be formatted exactly as follows:
 
       if (platform === 'win32') {
         const escapedTempPath = tempDiffFile.replace(/'/g, "''");
-        command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found (agy, claude, or gh copilot).' }"`;
+        if (provider === 'agy') {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+        } else if (provider === 'claude') {
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+        } else if (provider === 'copilot') {
+          command = `powershell.exe -Command "if (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit review' } else { Write-Error 'gh CLI or copilot extension not found in PATH.' }"`;
+        } else {
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | agy --prompt $env:GITZEN_PROMPT --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command gh -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | gh copilot suggest -t 'git commit message' } else { Write-Error 'No supported AI CLI found.' }"`;
+        }
       } else {
-        command = `
+        if (provider === 'agy') {
+          command = `
+if command -v agy &> /dev/null; then
+  cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
+else
+  echo "Error: agy CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'claude') {
+          command = `
+if command -v claude &> /dev/null; then
+  cat "${tempDiffFile}" | claude "$GITZEN_PROMPT"
+else
+  echo "Error: claude CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else if (provider === 'copilot') {
+          command = `
+if command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
+  cat "${tempDiffFile}" | gh copilot suggest -t "git commit review"
+else
+  echo "Error: gh CLI or copilot extension not found in PATH." >&2
+  exit 1
+fi`.trim();
+        } else {
+          command = `
 if command -v agy &> /dev/null; then
   cat "${tempDiffFile}" | agy --prompt "$GITZEN_PROMPT" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
@@ -3378,10 +3476,10 @@ elif command -v gh &> /dev/null && gh copilot --help &> /dev/null; then
 else
   echo "Error: No supported AI CLI found (agy, claude, or gh copilot)." >&2
   exit 1
-fi
-`.trim();
+fi`.trim();
+        }
       }
-
+ 
       const { stdout } = await execAsync(command, { 
         cwd: currentRepoPath,
         env: { ...env, GITZEN_PROMPT: prompt }

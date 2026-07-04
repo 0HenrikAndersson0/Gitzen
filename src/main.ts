@@ -672,7 +672,7 @@ ipcMain.handle('settings:getAIProvider', () => {
   }
 });
 
-ipcMain.handle('settings:setAIProvider', (_, provider: 'agy' | 'claude' | 'ollama') => {
+ipcMain.handle('settings:setAIProvider', (_, provider: 'agy' | 'claude' | 'ollama' | 'copilot') => {
   try {
     settingsService.setAIProvider(provider);
     return { success: true };

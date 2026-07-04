@@ -5,7 +5,7 @@ interface AppSettings {
   mergeToolPath?: string;
   maxCommits?: number;
   theme?: string;
-  aiProvider?: 'agy' | 'claude' | 'ollama';
+  aiProvider?: 'agy' | 'claude' | 'ollama' | 'copilot';
   ollamaModel?: string;
   ollamaHost?: string;
 }
@@ -87,12 +87,12 @@ export function getAllSettings(): AppSettings {
   return loadSettings();
 }
 
-export function getAIProvider(): 'agy' | 'claude' | 'ollama' {
+export function getAIProvider(): 'agy' | 'claude' | 'ollama' | 'copilot' {
   const settings = loadSettings();
   return settings.aiProvider ?? 'agy';
 }
 
-export function setAIProvider(provider: 'agy' | 'claude' | 'ollama'): void {
+export function setAIProvider(provider: 'agy' | 'claude' | 'ollama' | 'copilot'): void {
   const settings = loadSettings();
   settings.aiProvider = provider;
   saveSettings(settings);
