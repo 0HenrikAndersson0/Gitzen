@@ -3594,4 +3594,21 @@ async function callOllama(prompt: string, host: string, model: string): Promise<
   return data.response.trim();
 }
 
+export async function openTerminal(): Promise<{ success: boolean; error?: string }> {
+  if (!currentRepoPath) return { success: false, error: 'No repository open' };
+  try {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      await execAsync(`open -a Terminal "${currentRepoPath}"`);
+    } else if (platform === 'win32') {
+      await execAsync(`start cmd`, { cwd: currentRepoPath });
+    } else {
+      await execAsync(`x-terminal-emulator`, { cwd: currentRepoPath });
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to open terminal' };
+  }
+}
+
 

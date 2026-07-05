@@ -1,7 +1,8 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter, Terminal } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from './ui/button';
+import { toast } from 'sonner';
 
 interface RepoHeaderProps {
   repoName: string | null;
@@ -206,6 +207,21 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
         <div className="flex gap-2 items-center">
           {repoName && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const result = await window.electronAPI.openTerminal();
+                  if (!result.success) {
+                    toast.error(result.error || 'Failed to open terminal');
+                  }
+                }}
+                className="gap-2 border-border bg-secondary/50 hover:bg-accent text-foreground transition-colors"
+                title="Open in Terminal"
+              >
+                <Terminal className="size-4" />
+                <span className="hidden sm:inline">Terminal</span>
+              </Button>
               {onStartGitFlow && (
                 <Button
                   variant="outline"
@@ -222,10 +238,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 variant="outline"
                 size="sm"
                 onClick={onToggleGraphs}
-                className={`gap-2 border-border transition-colors ${isShowingGraphs
-                    ? 'bg-zinc-500/20 text-zinc-400 hover:bg-zinc-500/30'
-                    : 'bg-secondary/50 hover:bg-accent text-foreground'
-                  }`}
+                className={`gap-2 border-border transition-colors ${isShowingGraphs ? 'bg-zinc-500/20 text-zinc-400 hover:bg-zinc-500/30' : 'bg-secondary/50 hover:bg-accent text-foreground'}`}
                 title="View repository graphs"
               >
                 <BarChart2 className="size-4" />
@@ -235,10 +248,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 variant="outline"
                 size="sm"
                 onClick={onToggleFilters}
-                className={`gap-2 border-border transition-colors ${isShowingFilters
-                    ? 'bg-zinc-500/20 text-zinc-400 hover:bg-zinc-500/30'
-                    : 'bg-secondary/50 hover:bg-accent text-foreground'
-                  }`}
+                className={`gap-2 border-border transition-colors ${isShowingFilters ? 'bg-zinc-500/20 text-zinc-400 hover:bg-zinc-500/30' : 'bg-secondary/50 hover:bg-accent text-foreground'}`}
                 title="Toggle History Filters"
               >
                 <Filter className="size-4" />

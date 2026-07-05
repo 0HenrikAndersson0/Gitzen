@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gitGetCommitsForInteractiveRebase: (targetBranch) => ipcRenderer.invoke('git:getCommitsForInteractiveRebase', targetBranch),
   gitInteractiveRebase: (targetBranch, todoLines) => ipcRenderer.invoke('git:performInteractiveRebase', targetBranch, todoLines),
   gitCancelOperation: () => ipcRenderer.invoke('git:cancelOperation'),
+  openTerminal: () => ipcRenderer.invoke('git:openTerminal'),
   checkGitFlowInitialized: () => ipcRenderer.invoke('git:checkGitFlowInitialized'),
   initializeGitFlow: () => ipcRenderer.invoke('git:initializeGitFlow'),
   startGitFlowBranch: (type, name) => ipcRenderer.invoke('git:startGitFlowBranch', type, name),

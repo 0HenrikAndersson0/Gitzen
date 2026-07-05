@@ -511,6 +511,10 @@ ipcMain.handle('git:cancelOperation', () => {
 });
 
 // Git Flow handlers
+ipcMain.handle('git:openTerminal', async () => {
+  return await gitService.openTerminal();
+});
+
 ipcMain.handle('git:checkGitFlowInitialized', async () => {
   return await gitService.checkGitFlowInitialized();
 });

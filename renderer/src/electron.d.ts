@@ -94,6 +94,7 @@ declare global {
       gitCancelOperation: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       openFileInMergeTool: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       openFileInDefaultEditor: (filePath: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      openTerminal: () => Promise<{ success: boolean; error?: string }>;
       checkGitFlowInitialized: () => Promise<{ success: boolean; initialized?: boolean; error?: string; errorType?: string }>;
       initializeGitFlow: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       startGitFlowBranch: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
