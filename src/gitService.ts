@@ -268,17 +268,20 @@ export async function applyPatch(patch: string, options: { reverse?: boolean, ca
   }
 }
 
-export async function createStash(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+export async function createStash(message?: string, files?: string[]): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
     const branchResult = await getCurrentBranch();
     const branchName = branchResult.branch || 'unknown';
-    const message = `WIP on ${branchName}`;
-    const escapedMessage = message.replace(/"/g, '\\"');
-    const command = `stash push -m "${escapedMessage}"`;
-    await runGitCommand(command);
+    const stashMessage = message || `WIP on ${branchName}`;
+    
+    const args = ['stash', 'push', '-m', stashMessage];
+    if (files && files.length > 0) {
+      args.push('--', ...files);
+    }
+    await runGitExecFile(args, { cwd: currentRepoPath });
     return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);

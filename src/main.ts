@@ -246,8 +246,8 @@ ipcMain.handle('git:getStashes', async () => {
   return await gitService.getStashes();
 });
 
-ipcMain.handle('git:createStash', async () => {
-  return await gitService.createStash();
+ipcMain.handle('git:createStash', async (event, message?: string, files?: string[]) => {
+  return await gitService.createStash(message, files);
 });
 
 ipcMain.handle('git:applyStash', async (_, name) => {
