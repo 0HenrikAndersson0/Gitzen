@@ -182,7 +182,9 @@ export default function App() {
     handleClone,
     handleStageAll,
     handleUnstageAll,
-    handleToggleStage,
+    handleStageFiles,
+    handleUnstageFiles,
+    handleRevertFiles,
     handleRevertFile,
     handleDeleteFile,
     handleStash,
@@ -596,7 +598,10 @@ export default function App() {
                     <CommitPanel
                       ref={commitMessageTextareaRef}
                       files={files}
-                      onToggleStage={handleToggleStage}
+                      onStageFiles={handleStageFiles}
+                      onUnstageFiles={handleUnstageFiles}
+                      onRevertFiles={handleRevertFiles}
+                      onStashFiles={handleStash}
                       onStageAll={handleStageAll}
                       onUnstageAll={handleUnstageAll}
                       onCommit={handleCommit}

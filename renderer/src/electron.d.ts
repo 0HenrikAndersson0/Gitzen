@@ -60,7 +60,7 @@ declare global {
       gitGetCurrentBranch: () => Promise<{ success: boolean; branch?: string; error?: string; errorType?: string }>;
       gitGetHistory: (maxCount?: number, filters?: HistoryFilters) => Promise<{ success: boolean; commits?: Commit[]; hasMore?: boolean; error?: string; errorType?: string }>;
       getStashes: () => Promise<{ success: boolean; stashes?: { name: string; message: string }[]; error?: string; errorType?: string }>;
-      createStash: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      createStash: (message?: string, files?: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       applyStash: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       deleteStash: (name: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitGetBranches: () => Promise<{ success: boolean; branches?: string[]; error?: string; errorType?: string }>;

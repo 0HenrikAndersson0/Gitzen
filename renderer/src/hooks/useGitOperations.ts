@@ -255,11 +255,12 @@ export function useGitOperations({
     });
   };
 
-  const handleStash = async () => {
-    addLog('info', 'Stashing changes...');
-    await withLoading('Stashing changes...', async () => {
+  const handleStash = async (files?: string[]) => {
+    const msg = files && files.length > 0 ? `Stashing ${files.length} selected file(s)...` : 'Stashing changes...';
+    addLog('info', msg);
+    await withLoading(msg, async () => {
       try {
-        const result = await window.electronAPI.createStash();
+        const result = await window.electronAPI.createStash(undefined, files);
         if (result.success) {
           addLog('success', 'Changes stashed successfully');
           toast.success('Changes stashed successfully!');
@@ -1245,7 +1246,71 @@ export function useGitOperations({
     });
   }, [addLog, refreshStatusInternal, withLoading]);
 
+  const handleStageFiles = async (paths: string[]) => {
+    if (!paths.length) return;
+    await withLoading(`Staging ${paths.length} file(s)...`, async () => {
+      try {
+        const result = await window.electronAPI.gitStage(paths);
+        if (result.success) {
+          await refreshStatusInternal();
+        } else {
+          addLog('error', result.error || 'Failed to stage files');
+          toast.error(result.error || 'Failed to stage files');
+        }
+      } catch (error: any) {
+        addLog('error', `Failed to stage files: ${error.message || error}`);
+        toast.error('Failed to stage files');
+      }
+    });
+  };
+
+  const handleUnstageFiles = async (paths: string[]) => {
+    if (!paths.length) return;
+    await withLoading(`Unstaging ${paths.length} file(s)...`, async () => {
+      try {
+        const result = await window.electronAPI.gitUnstage(paths);
+        if (result.success) {
+          await refreshStatusInternal();
+        } else {
+          addLog('error', result.error || 'Failed to unstage files');
+          toast.error(result.error || 'Failed to unstage files');
+        }
+      } catch (error: any) {
+        addLog('error', `Failed to unstage files: ${error.message || error}`);
+        toast.error('Failed to unstage files');
+      }
+    });
+  };
+
+  const handleRevertFiles = async (paths: string[]) => {
+    if (!paths.length) return;
+    await withLoading(`Reverting ${paths.length} file(s)...`, async () => {
+      try {
+        let successCount = 0;
+        for (const path of paths) {
+          const result = await window.electronAPI.revertFileChanges(path);
+          if (result.success) {
+            successCount++;
+          } else {
+            addLog('error', result.error || `Failed to revert ${path}`);
+          }
+        }
+        if (successCount > 0) {
+          addLog('success', `Reverted ${successCount} file(s)`);
+          toast.success(`Reverted ${successCount} file(s)`);
+          await refreshStatusInternal();
+        }
+      } catch (error: any) {
+        addLog('error', `Failed to revert files: ${error.message || error}`);
+        toast.error('Failed to revert files');
+      }
+    });
+  };
+
   return {
+    handleStageFiles,
+    handleUnstageFiles,
+    handleRevertFiles,
     handleCommit,
     handleGenerateCommitMessage,
     handleClone,
