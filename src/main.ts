@@ -246,8 +246,8 @@ ipcMain.handle('git:getStashes', async () => {
   return await gitService.getStashes();
 });
 
-ipcMain.handle('git:createStash', async () => {
-  return await gitService.createStash();
+ipcMain.handle('git:createStash', async (event, message?: string, files?: string[]) => {
+  return await gitService.createStash(message, files);
 });
 
 ipcMain.handle('git:applyStash', async (_, name) => {
@@ -511,6 +511,10 @@ ipcMain.handle('git:cancelOperation', () => {
 });
 
 // Git Flow handlers
+ipcMain.handle('git:openTerminal', async () => {
+  return await gitService.openTerminal();
+});
+
 ipcMain.handle('git:checkGitFlowInitialized', async () => {
   return await gitService.checkGitFlowInitialized();
 });

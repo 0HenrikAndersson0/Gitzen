@@ -11,16 +11,30 @@ interface FileChange {
 
 interface FileStagingProps {
   files: FileChange[];
-  onToggleStage: (path: string) => void;
+  onStageFiles?: (paths: string[]) => void;
+  onUnstageFiles?: (paths: string[]) => void;
+  onRevertFiles?: (paths: string[]) => void;
+  onStashFiles?: (paths: string[]) => void;
   onRevertFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
   onRefresh?: () => void;
   selectedFileIndex?: number;
+  selectedPaths?: Set<string>;
+  onSelectionChange?: (paths: Set<string>) => void;
 }
 
-export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, onRefresh, selectedFileIndex }: FileStagingProps) {
+export function FileStaging({ files, onStageFiles, onUnstageFiles, onRevertFiles, onStashFiles, onRevertFile, onDeleteFile, onRefresh, selectedFileIndex, selectedPaths: externalSelectedPaths, onSelectionChange }: FileStagingProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
+  const [internalSelectedPaths, setInternalSelectedPaths] = useState<Set<string>>(new Set());
+const selectedPaths = externalSelectedPaths !== undefined ? externalSelectedPaths : internalSelectedPaths;
+const setSelectedPaths = (paths: Set<string>) => {
+  if (externalSelectedPaths === undefined) {
+    setInternalSelectedPaths(paths);
+  }
+  onSelectionChange?.(paths);
+};
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -82,16 +96,28 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
     });
   };
 
-  const handleMenuAction = (action: 'revert' | 'delete' | 'open') => {
+  const handleMenuAction = (action: 'revert' | 'delete' | 'open' | 'stage' | 'unstage' | 'stash') => {
     if (!contextMenu) return;
 
     const file = contextMenu.file;
-    if (action === 'revert' && onRevertFile) {
-      onRevertFile(file.path);
+    const targets = selectedPaths.has(file.path) ? Array.from(selectedPaths) : [file.path];
+
+    if (action === 'stage' && onStageFiles) {
+      onStageFiles(targets);
+    } else if (action === 'unstage' && onUnstageFiles) {
+      onUnstageFiles(targets);
+    } else if (action === 'revert') {
+      if (onRevertFiles) {
+        onRevertFiles(targets);
+      } else if (onRevertFile) {
+        targets.forEach(t => onRevertFile(t));
+      }
+    } else if (action === 'stash' && onStashFiles) {
+      onStashFiles(targets);
     } else if (action === 'delete' && onDeleteFile) {
-      onDeleteFile(file.path);
+      targets.forEach(t => onDeleteFile(t));
     } else if (action === 'open') {
-      (window as any).electronAPI.openFileInDefaultEditor(file.path);
+      targets.forEach(t => (window as any).electronAPI.openFileInDefaultEditor(t));
     }
     setContextMenu(null);
   };
@@ -137,29 +163,51 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
         </div>
       ) : (
         files.map((file, index) => (
-          <div
-            key={file.path}
-            ref={(el) => (itemRefs.current[index] = el)}
-            className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${selectedFileIndex === index
-                ? 'border-border bg-accent'
-                : 'border-border bg-background/50 hover:bg-card/50'
-              }`}
-            onContextMenu={(e) => handleContextMenu(e, file)}
-            onClick={() => setSelectedFile(file)}
-          >
+            <div
+              key={file.path}
+              ref={(el) => { itemRefs.current[index] = el; }}
+              className={`flex items-center gap-3 rounded-md border p-3 transition-colors cursor-pointer ${
+                  selectedPaths.has(file.path)
+                    ? 'border-primary bg-primary/10'
+                    : selectedFileIndex === index
+                      ? 'border-border bg-accent'
+                      : 'border-border bg-background/50 hover:bg-card/50'
+                }`}
+              onContextMenu={(e) => handleContextMenu(e, file)}
+              onClick={(e) => {
+                e.preventDefault();
+                setSelectedFile(file);
+              }}
+            >
             <Checkbox
-              checked={file.staged}
-              onCheckedChange={() => onToggleStage(file.path)}
+              checked={selectedPaths.has(file.path)}
+              onCheckedChange={(checked) => {
+                const newPaths = new Set(selectedPaths);
+                if (checked) {
+                  newPaths.add(file.path);
+                } else {
+                  newPaths.delete(file.path);
+                }
+                setSelectedPaths(newPaths);
+                setLastSelectedIndex(index);
+              }}
               onClick={(e) => e.stopPropagation()}
               className="border-border"
             />
-            <span className={`font-mono ${getStatusColor(file.status)} w-4`}>
-              {getStatusLabel(file.status)}
-            </span>
-            <span className="flex-1 font-mono text-sm truncate min-w-0">{file.path}</span>
-            {file.status === 'deleted' && (
-              <FileX className="size-4 text-destructive" />
-            )}
+<span className={`font-mono ${getStatusColor(file.status)} w-4`}>
+  {getStatusLabel(file.status)}
+</span>
+<div className="flex-1 flex items-center gap-2 min-w-0">
+  <span className="font-mono text-sm truncate">{file.path}</span>
+  {file.staged && (
+    <span className="flex-none text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+      Staged
+    </span>
+  )}
+</div>
+{file.status === 'deleted' && (
+  <FileX className="flex-none size-4 text-destructive" />
+)}
           </div>
         ))
       )}
@@ -176,6 +224,24 @@ export function FileStaging({ files, onToggleStage, onRevertFile, onDeleteFile, 
             onClick={() => handleMenuAction('open')}
           >
             Open in Default Editor
+          </div>
+          <div
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('stage')}
+          >
+            Stage
+          </div>
+          <div
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('unstage')}
+          >
+            Unstage
+          </div>
+          <div
+            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+            onClick={() => handleMenuAction('stash')}
+          >
+            Stash
           </div>
           {contextMenu.file.status === 'added' ? (
             <div

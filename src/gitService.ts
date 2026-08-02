@@ -268,17 +268,20 @@ export async function applyPatch(patch: string, options: { reverse?: boolean, ca
   }
 }
 
-export async function createStash(): Promise<{ success: boolean; error?: string; errorType?: string }> {
+export async function createStash(message?: string, files?: string[]): Promise<{ success: boolean; error?: string; errorType?: string }> {
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
     }
     const branchResult = await getCurrentBranch();
     const branchName = branchResult.branch || 'unknown';
-    const message = `WIP on ${branchName}`;
-    const escapedMessage = message.replace(/"/g, '\\"');
-    const command = `stash push -m "${escapedMessage}"`;
-    await runGitCommand(command);
+    const stashMessage = message || `WIP on ${branchName}`;
+    
+    const args = ['stash', 'push', '-m', stashMessage];
+    if (files && files.length > 0) {
+      args.push('--', ...files);
+    }
+    await runGitExecFile(args, { cwd: currentRepoPath });
     return { success: true };
   } catch (error: any) {
     const parsed = parseGitError(error);
@@ -3592,6 +3595,23 @@ async function callOllama(prompt: string, host: string, model: string): Promise<
 
   const data = (await response.json()) as { response: string };
   return data.response.trim();
+}
+
+export async function openTerminal(): Promise<{ success: boolean; error?: string }> {
+  if (!currentRepoPath) return { success: false, error: 'No repository open' };
+  try {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      await execAsync(`open -a Terminal "${currentRepoPath}"`);
+    } else if (platform === 'win32') {
+      await execAsync(`start cmd`, { cwd: currentRepoPath });
+    } else {
+      await execAsync(`x-terminal-emulator`, { cwd: currentRepoPath });
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to open terminal' };
+  }
 }
 
 
