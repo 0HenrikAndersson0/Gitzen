@@ -213,53 +213,58 @@ const setSelectedPaths = (paths: Set<string>) => {
       )}
 
       {/* Context Menu */}
-      {contextMenu && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
+      {contextMenu && (() => {
+        const targetsCount = selectedPaths.has(contextMenu.file.path) ? selectedPaths.size : 1;
+        const countStr = targetsCount > 1 ? ` (${targetsCount})` : '';
+
+        return (
           <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors border-b border-border/50"
-            onClick={() => handleMenuAction('open')}
+            ref={menuRef}
+            className="fixed z-50 bg-secondary border border-border rounded-md shadow-xl overflow-hidden"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
           >
-            Open in Default Editor
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('stage')}
-          >
-            Stage
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('unstage')}
-          >
-            Unstage
-          </div>
-          <div
-            className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-            onClick={() => handleMenuAction('stash')}
-          >
-            Stash
-          </div>
-          {contextMenu.file.status === 'added' ? (
+            <div
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors border-b border-border/50"
+              onClick={() => handleMenuAction('open')}
+            >
+              Open in Default Editor
+            </div>
             <div
               className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-              onClick={() => handleMenuAction('delete')}
+              onClick={() => handleMenuAction('stage')}
             >
-              Delete file
+              Stage{countStr}
             </div>
-          ) : (
             <div
               className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
-              onClick={() => handleMenuAction('revert')}
+              onClick={() => handleMenuAction('unstage')}
             >
-              Revert changes
+              Unstage{countStr}
             </div>
-          )}
-        </div>
-      )}
+            <div
+              className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+              onClick={() => handleMenuAction('stash')}
+            >
+              Stash{countStr}
+            </div>
+            {contextMenu.file.status === 'added' ? (
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('delete')}
+              >
+                Delete file{countStr}
+              </div>
+            ) : (
+              <div
+                className="px-4 py-2 text-sm text-foreground hover:bg-muted cursor-pointer transition-colors"
+                onClick={() => handleMenuAction('revert')}
+              >
+                Revert changes{countStr}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* File Diff Modal */}
       {selectedFile && (

@@ -98,66 +98,9 @@ export const CommitPanel = forwardRef<HTMLTextAreaElement, CommitPanelProps>(({
 {files.length > 0 && (
   <div className="p-3 border-t border-border/50 flex gap-4 flex-wrap">
     {selectedPaths.size > 0 ? (
-      <>
-        <span className="text-xs text-muted-foreground flex items-center mr-2">
-          {selectedPaths.size} selected
-        </span>
-        <button
-          onClick={() => {
-            if (onStageFiles) onStageFiles(Array.from(selectedPaths));
-            setSelectedPaths(new Set());
-          }}
-          className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
-        >
-          Stage
-        </button>
-        <button
-          onClick={() => {
-            if (onUnstageFiles) onUnstageFiles(Array.from(selectedPaths));
-            setSelectedPaths(new Set());
-          }}
-          className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
-        >
-          Unstage
-        </button>
-        {Array.from(selectedPaths).some(p => files.find(f => f.path === p)?.status !== 'added') && (
-          <button
-            onClick={() => {
-              if (onRevertFiles) {
-                const revertPaths = Array.from(selectedPaths).filter(p => files.find(f => f.path === p)?.status !== 'added');
-                if (revertPaths.length > 0) onRevertFiles(revertPaths);
-              }
-              setSelectedPaths(new Set());
-            }}
-            className="text-xs text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
-          >
-            Revert
-          </button>
-        )}
-        {Array.from(selectedPaths).some(p => files.find(f => f.path === p)?.status === 'added') && (
-          <button
-            onClick={() => {
-              if (onDeleteFile) {
-                const deletePaths = Array.from(selectedPaths).filter(p => files.find(f => f.path === p)?.status === 'added');
-                deletePaths.forEach(p => onDeleteFile(p));
-              }
-              setSelectedPaths(new Set());
-            }}
-            className="text-xs text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
-          >
-            Delete
-          </button>
-        )}
-        <button
-          onClick={() => {
-            if (onStashFiles) onStashFiles(Array.from(selectedPaths));
-            setSelectedPaths(new Set());
-          }}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-        >
-          Stash
-        </button>
-      </>
+      <span className="text-xs text-muted-foreground flex items-center mr-2">
+        {selectedPaths.size} selected
+      </span>
     ) : (
       <>
         {unstagedFiles.length > 0 && (
