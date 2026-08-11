@@ -32,7 +32,7 @@
     "@types/react-dom": "^19.2.1",
     "@types/react-window": "^1.8.8",
     "@vitejs/plugin-react": "^6.0.2",
-    "concurrently": "^9.1.2",
+    "concurrently": "^9.2.4",
     "electron": "^42.5.1",
     "electron-builder": "^26.8.1",
     "typescript": "^6.0.3",
