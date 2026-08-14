@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
 
-![Gitzen Screenshot](layout.png)
+![Gitzen Screenshot](sample.png)
 
 ## Overview
 
