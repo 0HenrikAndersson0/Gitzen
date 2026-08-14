@@ -19,6 +19,8 @@
 
 Gitzen aims to provide a reliable and efficient interface for managing Git repositories. Unlike many other GUI clients that bundle their own Git implementations, Gitzen directly utilizes your system's native `git` binary, guaranteeing absolute compatibility with your existing configurations, hooks, and SSH setups.
 
+📚 **[Read the official Gitzen Documentation](https://gitzen-web.henrikandersson84.workers.dev/docs)**
+
 ## ✨ Key Features
 
 - **Intuitive Commit History:** Clear commit history tree with robust branch and tag visualization.
@@ -28,6 +30,14 @@ Gitzen aims to provide a reliable and efficient interface for managing Git repos
 - **Modern UI & Themes:** Hand-crafted, modern themes (Dark & Light) optimized for minimal eye strain, built with Tailwind CSS and Radix UI.
 - **Native Git Integration:** Explicitly shells out to your local system's `git` binary—no outdated NodeGit dependencies.
 - **Secure Credentials:** Secure storage of git credentials using system keychains.
+
+## 🤖 Built-in AI Features
+
+Gitzen deeply integrates with agentic and local LLMs to accelerate your Git workflow:
+- **Auto-Generated Commits:** Instantly generate concise, accurate commit messages based on your currently staged changes.
+- **Smart Conflict Resolution:** Analyze `<<<<<<< HEAD` merge conflict markers and intelligently resolve them with logical explanations.
+- **Branch Reviews:** Generate comprehensive, PR-style summaries of all unmerged changes on your branch.
+- **Flexible Providers:** Run completely offline with **Ollama** (local models), or utilize powerful CLI tools if installed: **Antigravity (`agy`)**, **Anthropic (`claude`)**, and **GitHub Copilot (`gh copilot`)**.
 
 ## 🚀 Getting Started
 
