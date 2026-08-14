@@ -11,6 +11,7 @@ import { CommitGraph } from './components/CommitGraph';
 import { BranchesPanel } from './components/BranchesPanel';
 import { TagsPanel } from './components/TagsPanel';
 import { GraphsView } from './components/GraphsView';
+import { AgentSessionView } from './components/AgentSessionView';
 import { HistoryFilterBar } from './components/HistoryFilterBar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
@@ -48,6 +49,7 @@ export default function App() {
     showLeftPanel, setShowLeftPanel,
     showBottomPanel, setShowBottomPanel,
     showGraphs, setShowGraphs,
+    showAgentSession, setShowAgentSession,
     logs,
     hasCredentials, setHasCredentials,
     historyLimit, setHistoryLimit,
@@ -380,6 +382,7 @@ export default function App() {
           canStash={files.length > 0}
           isShowingGraphs={showGraphs}
           isShowingFilters={showHistoryFilters}
+          isShowingAgentSession={showAgentSession}
           superprojectPath={gitState.superprojectPath}
           onOpenSuperproject={gitOps.handleOpenRepo}
           onSwitchRepo={handleSwitchRepo}
@@ -389,7 +392,14 @@ export default function App() {
           onPull={handlePull}
           onFetch={handleFetch}
           onStash={handleStash}
-          onToggleGraphs={() => setShowGraphs(!showGraphs)}
+          onToggleGraphs={() => {
+            setShowGraphs(!showGraphs);
+            if (!showGraphs) setShowAgentSession(false);
+          }}
+          onToggleAgentSession={() => {
+            setShowAgentSession(!showAgentSession);
+            if (!showAgentSession) setShowGraphs(false);
+          }}
           onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
           onStartGitFlow={async () => {
             const isInit = await gitOps.checkGitFlowInitialized();
@@ -461,6 +471,16 @@ export default function App() {
         {showGraphs && repoName ? (
           <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
             <GraphsView />
+          </div>
+        ) : showAgentSession && repoName ? (
+          <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
+            <AgentSessionView 
+              repoPath={repoPath!} 
+              currentBranch={currentBranch} 
+              files={files}
+              onRefresh={() => refreshStatus()}
+              gitOps={gitOps}
+            />
           </div>
         ) : (
           <>

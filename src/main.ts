@@ -4,6 +4,7 @@ import * as recentReposService from './recentReposService';
 import * as settingsService from './settingsService';
 import * as updateService from './updateService';
 import * as watcherService from './watcherService';
+import { setupPtyIpc } from './ptyService';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -149,6 +150,9 @@ recentReposService.setUserDataPath(app.getPath('userData'));
 
 // Initialize settings service
 settingsService.setUserDataPath(app.getPath('userData'));
+
+// Initialize PTY service
+setupPtyIpc();
 
 // IPC handlers
 ipcMain.handle('git:clone', async (_, url, localPath) => {

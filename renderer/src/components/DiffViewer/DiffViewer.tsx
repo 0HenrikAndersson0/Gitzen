@@ -1,5 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { DiffHunk, DiffLine } from '../../lib/diffUtils';
+import { MessageSquarePlus, Trash2, Send } from 'lucide-react';
+
+export interface DraftComment {
+    hunkIndex: number;
+    lineIndex: number;
+    text: string;
+}
 
 export interface DiffViewerProps {
     hunks: DiffHunk[];
@@ -8,6 +15,9 @@ export interface DiffViewerProps {
     selectedLines?: Set<string>;
     onToggleLine?: (hunkIdx: number, lineIdx: number) => void;
     onToggleHunk?: (hunkIdx: number) => void;
+    draftComments?: DraftComment[];
+    onAddDraftComment?: (comment: DraftComment) => void;
+    onRemoveDraftComment?: (hunkIndex: number, lineIndex: number, index: number) => void;
 }
 
 const WordDiffViewer: React.FC<{ line: DiffLine; isAdd: boolean }> = ({ line, isAdd }) => {
@@ -53,8 +63,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     readOnly = true,
     selectedLines = new Set(),
     onToggleLine,
-    onToggleHunk
+    onToggleHunk,
+    draftComments = [],
+    onAddDraftComment,
+    onRemoveDraftComment
 }) => {
+    const [activeCommentKey, setActiveCommentKey] = useState<string | null>(null);
+    const [commentText, setCommentText] = useState('');
+
     if (!hunks || hunks.length === 0) {
         return (
             <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
@@ -101,16 +117,16 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                                     const isSelected = selectedLines.has(`${hunkIndex}-${lineIndex}`);
 
                                     return (
-                                        <div
-                                            key={lineIndex}
-                                            className={`flex group hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${line.type === 'add'
-                                                ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
-                                                : line.type === 'remove'
-                                                    ? 'bg-red-50/50 dark:bg-red-950/20'
-                                                    : 'bg-transparent'
-                                                }`}
-                                            onClick={() => isSelectable && onToggleLine?.(hunkIndex, lineIndex)}
-                                        >
+                                        <React.Fragment key={lineIndex}>
+                                            <div
+                                                className={`relative flex group hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${line.type === 'add'
+                                                    ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                                                    : line.type === 'remove'
+                                                        ? 'bg-red-50/50 dark:bg-red-950/20'
+                                                        : 'bg-transparent'
+                                                    }`}
+                                                onClick={() => isSelectable && onToggleLine?.(hunkIndex, lineIndex)}
+                                            >
                                             <div className="flex w-[120px] flex-shrink-0 select-none border-r border-border/50 sticky left-0 bg-inherit z-10 items-center">
                                                 <span className="w-12 px-2 text-right text-muted-foreground/60 select-none">
                                                     {line.oldLineNumber || ''}
@@ -144,8 +160,91 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                                                 </span>
                                                 <WordDiffViewer line={line} isAdd={line.type === 'add'} />
                                             </div>
+                                            
+                                            {/* Hover add comment button */}
+                                            {onAddDraftComment && (
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setActiveCommentKey(`${hunkIndex}-${lineIndex}`); setCommentText(''); }}
+                                                        className="bg-primary/90 hover:bg-primary text-white p-1 rounded-md shadow-sm flex items-center justify-center cursor-pointer"
+                                                        title="Add inline feedback"
+                                                    >
+                                                        <MessageSquarePlus className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                    );
+                                        
+                                        {/* Inline Comment Input Box */}
+                                        {activeCommentKey === `${hunkIndex}-${lineIndex}` && (
+                                            <div className="flex border-y border-border/50 bg-card p-3 shadow-inner my-0.5">
+                                                <div className="w-[120px] shrink-0 border-r border-border/50 bg-inherit z-10" />
+                                                <div className="flex-1 px-4 flex flex-col gap-2">
+                                                    <textarea
+                                                        autoFocus
+                                                        value={commentText}
+                                                        onChange={(e) => setCommentText(e.target.value)}
+                                                        placeholder="Add your feedback for this line..."
+                                                        className="w-full text-sm bg-background border border-border rounded-md p-2 min-h-[60px] focus:outline-none focus:ring-1 focus:ring-primary font-sans"
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                                e.preventDefault();
+                                                                if (commentText.trim()) {
+                                                                    onAddDraftComment?.({ hunkIndex, lineIndex, text: commentText.trim() });
+                                                                    setActiveCommentKey(null);
+                                                                    setCommentText('');
+                                                                }
+                                                            } else if (e.key === 'Escape') {
+                                                                setActiveCommentKey(null);
+                                                            }
+                                                        }}
+                                                    />
+                                                    <div className="flex justify-end gap-2">
+                                                        <button 
+                                                            onClick={() => setActiveCommentKey(null)}
+                                                            className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent font-sans"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (commentText.trim()) {
+                                                                    onAddDraftComment?.({ hunkIndex, lineIndex, text: commentText.trim() });
+                                                                    setActiveCommentKey(null);
+                                                                    setCommentText('');
+                                                                }
+                                                            }}
+                                                            disabled={!commentText.trim()}
+                                                            className="px-3 py-1.5 text-xs rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-sans disabled:opacity-50 flex items-center gap-1.5"
+                                                        >
+                                                            <Send className="w-3 h-3" /> Save Draft
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Display Existing Draft Comments */}
+                                        {draftComments.filter(c => c.hunkIndex === hunkIndex && c.lineIndex === lineIndex).map((comment, idx) => (
+                                            <div key={`comment-${idx}`} className="flex border-y border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 my-0.5">
+                                                <div className="w-[120px] shrink-0 border-r border-border/50 bg-inherit z-10" />
+                                                <div className="flex-1 px-4 flex justify-between items-start gap-4">
+                                                    <div className="text-sm font-sans text-emerald-800 dark:text-emerald-200 whitespace-pre-wrap">
+                                                        <span className="font-semibold text-xs uppercase bg-emerald-200 dark:bg-emerald-800/50 px-1.5 py-0.5 rounded text-emerald-800 dark:text-emerald-300 mr-2">Draft</span>
+                                                        {comment.text}
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => onRemoveDraftComment?.(hunkIndex, lineIndex, idx)}
+                                                        className="text-emerald-600/50 hover:text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 p-1.5 rounded-md transition-colors"
+                                                        title="Delete Draft"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </React.Fragment>
+                                );
                                 })}
                             </div>
                         </div>
@@ -250,7 +349,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
                                         return (
                                             <div
-                                                className={`flex flex-1 group hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer ${line.type === 'add'
+                                                className={`relative flex flex-1 group hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer ${line.type === 'add'
                                                     ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                                     : line.type === 'remove'
                                                         ? 'bg-red-50/50 dark:bg-red-950/20'
@@ -285,20 +384,110 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                                                     <span className="flex-1">
                                                         <WordDiffViewer line={line} isAdd={line.type === 'add'} />
                                                     </span>
+                                                    
+                                                    {/* Hover add comment button */}
+                                                    {onAddDraftComment && (
+                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); setActiveCommentKey(`${hunkIndex}-${idx}`); setCommentText(''); }}
+                                                                className="bg-primary/90 hover:bg-primary text-white p-1 rounded-md shadow-sm flex items-center justify-center cursor-pointer"
+                                                                title="Add inline feedback"
+                                                            >
+                                                                <MessageSquarePlus className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
                                     };
 
                                     return (
-                                        <div key={rowIndex} className="flex min-w-full" style={{ minHeight: '1.25rem' }}>
-                                            <div className="flex-1 border-r border-border/50 min-w-0 flex">
-                                                {getCell('left')}
+                                        <React.Fragment key={rowIndex}>
+                                            <div className="flex min-w-full relative" style={{ minHeight: '1.25rem' }}>
+                                                <div className="flex-1 border-r border-border/50 min-w-0 flex relative">
+                                                    {getCell('left')}
+                                                </div>
+                                                <div className="flex-1 min-w-0 flex relative">
+                                                    {getCell('right')}
+                                                </div>
                                             </div>
-                                            <div className="flex-1 min-w-0 flex">
-                                                {getCell('right')}
-                                            </div>
-                                        </div>
+                                            
+                                            {/* Inline Comment Input Box */}
+                                            {(activeCommentKey === `${hunkIndex}-${row.left?.idx}` || activeCommentKey === `${hunkIndex}-${row.right?.idx}`) && (
+                                                <div className="flex border-y border-border/50 bg-card p-3 shadow-inner my-0.5">
+                                                    <div className="w-[80px] shrink-0 bg-inherit z-10" />
+                                                    <div className="flex-1 px-4 flex flex-col gap-2">
+                                                        <textarea
+                                                            autoFocus
+                                                            value={commentText}
+                                                            onChange={(e) => setCommentText(e.target.value)}
+                                                            placeholder="Add your feedback for this line..."
+                                                            className="w-full text-sm bg-background border border-border rounded-md p-2 min-h-[60px] focus:outline-none focus:ring-1 focus:ring-primary font-sans"
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                    e.preventDefault();
+                                                                    if (commentText.trim()) {
+                                                                        const idx = row.right?.idx ?? row.left?.idx;
+                                                                        if (idx !== undefined) {
+                                                                            onAddDraftComment?.({ hunkIndex, lineIndex: idx, text: commentText.trim() });
+                                                                            setActiveCommentKey(null);
+                                                                            setCommentText('');
+                                                                        }
+                                                                    }
+                                                                } else if (e.key === 'Escape') {
+                                                                    setActiveCommentKey(null);
+                                                                }
+                                                            }}
+                                                        />
+                                                        <div className="flex justify-end gap-2">
+                                                            <button 
+                                                                onClick={() => setActiveCommentKey(null)}
+                                                                className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent font-sans"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => {
+                                                                    if (commentText.trim()) {
+                                                                        const idx = row.right?.idx ?? row.left?.idx;
+                                                                        if (idx !== undefined) {
+                                                                            onAddDraftComment?.({ hunkIndex, lineIndex: idx, text: commentText.trim() });
+                                                                            setActiveCommentKey(null);
+                                                                            setCommentText('');
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                disabled={!commentText.trim()}
+                                                                className="px-3 py-1.5 text-xs rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-sans disabled:opacity-50 flex items-center gap-1.5"
+                                                            >
+                                                                <Send className="w-3 h-3" /> Save Draft
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Display Existing Draft Comments */}
+                                            {draftComments.filter(c => c.hunkIndex === hunkIndex && (c.lineIndex === row.left?.idx || c.lineIndex === row.right?.idx)).map((comment, idx) => (
+                                                <div key={`comment-${idx}`} className="flex border-y border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 my-0.5">
+                                                    <div className="w-[80px] shrink-0 bg-inherit z-10" />
+                                                    <div className="flex-1 px-4 flex justify-between items-start gap-4">
+                                                        <div className="text-sm font-sans text-emerald-800 dark:text-emerald-200 whitespace-pre-wrap">
+                                                            <span className="font-semibold text-xs uppercase bg-emerald-200 dark:bg-emerald-800/50 px-1.5 py-0.5 rounded text-emerald-800 dark:text-emerald-300 mr-2">Draft</span>
+                                                            {comment.text}
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => onRemoveDraftComment?.(hunkIndex, comment.lineIndex, idx)}
+                                                            className="text-emerald-600/50 hover:text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 p-1.5 rounded-md transition-colors"
+                                                            title="Delete Draft"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </React.Fragment>
                                     );
                                 })}
                             </div>
