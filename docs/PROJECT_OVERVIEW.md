@@ -1,224 +1,87 @@
-# Gitzen — Project Overview & Audit
+# Gitzen - Project Overview
 
-**Version**: `0.8.12-alpha-1`  
-**Stack**: Electron 28 · React 18 · TypeScript · Vite · Tailwind CSS  
-**Git Integration**: Direct `child_process.spawn` to the system `git` binary
+## 🎯 Vision & Goals
 
----
+Gitzen is a modern, fast, and beautifully designed Git GUI application. Its primary goal is to provide a reliable, efficient, and visually pleasing interface for managing Git repositories. 
 
-## 1. Architecture & Project Structure
+Unlike many legacy GUI clients that bundle custom Git implementations (like NodeGit) or ship their own isolated Git environments, Gitzen is designed to act as a lightweight shell over your system's native `git` binary. This guarantees that any existing terminal configurations, SSH keys, hooks, and credential helpers work perfectly out of the box without any complex setup.
+
+## 🛠️ Technology Stack
+
+- **Application Framework:** Electron
+- **Main Process (Backend):** Node.js, TypeScript
+- **Renderer Process (Frontend):** React 19, TypeScript, Vite
+- **Styling:** Tailwind CSS v4, Radix UI primitives, Lucide React (Icons)
+- **Data Visualization:** Recharts (for commit graphs and repo churn)
+- **State Management:** Custom React hooks fetching via IPC Bridge
+- **Packaging:** electron-builder
+
+## 🏗️ Core Architecture
 
 ```mermaid
 graph TB
     subgraph "Main Process (Node.js)"
-        M[main.ts<br/>IPC handlers, window, menu] --> GS[gitService.ts<br/>~2,934 lines]
-        M --> WS[watcherService.ts<br/>chokidar FS watcher]
+        M[main.ts<br/>IPC handlers, Window] --> GS[gitService.ts<br/>Core Git Engine]
         M --> SS[settingsService.ts]
         M --> RR[recentReposService.ts]
-        M --> US[updateService.ts]
     end
 
-    subgraph "Preload Bridge"
-        P[preload.js<br/>contextBridge — 96 IPC methods]
+    subgraph "Secure Preload Bridge"
+        P[preload.js<br/>contextBridge]
     end
 
     subgraph "Renderer Process (React)"
-        A[App.tsx<br/>710 lines] --> UGS[useGitState.ts<br/>529 lines]
-        A --> UGO[useGitOperations.ts<br/>1,129 lines]
-        A --> UUI[useUIState.tsx]
-        A --> UAR[useAutoRefresh.ts]
-        A --> UKS[useKeyboardShortcuts.ts]
-        A --> C[27 Components]
+        A[App.tsx] --> Hooks[State & Git Hooks<br/>useGitState, useGitOperations]
+        A --> UI[UI Components<br/>Tailwind, Radix]
     end
 
-    P -- "window.electronAPI" --> A
     M -- "ipcMain.handle" --> P
-    WS -- "git:repo-changed event" --> A
+    P -- "window.electronAPI" --> A
 ```
 
-### Key Observations
+The application strictly follows Electron's recommended security practices by isolating the Node.js environment from the web frontend.
 
-| Metric | Value |
-|---|---|
-| Total IPC channels | **~96** (preload.js) |
-| Git service functions | **~65** exported functions |
-| Frontend components | **27** + UI primitives |
-| Custom hooks | **5** (state, operations, UI, auto-refresh, shortcuts) |
-| Lines in gitService.ts | **2,934** |
-| Lines in useGitOperations.ts | **1,129** |
+### 1. Main Process (`/src`)
+The backend of the application handles all heavy lifting, file system access, and command execution.
+- **`gitService.ts`**: The core engine. It utilizes Node's `child_process` (`exec`, `spawn`) to execute Git commands directly on the user's system. It parses the raw stdout/stderr and formats it into structured JSON data.
+- **`settingsService.ts`**: Manages persistent user preferences (e.g., AI providers, themes) by saving them to disk.
+- **`recentReposService.ts`**: Tracks the user's recently opened repositories.
 
-> [!NOTE]
-> The codebase is well-organized with a clear separation between the main process (git execution), preload bridge (IPC), and renderer (React UI). The hook-based architecture (`useGitState`, `useGitOperations`, `useUIState`) keeps `App.tsx` manageable despite the large feature set.
+### 2. Preload Bridge (`preload.js`)
+Acts as the secure intermediary layer. It uses Electron's `contextBridge` to expose a strictly controlled API (`window.electronAPI`) to the renderer. The frontend cannot access Node modules or the file system directly; it must invoke methods exposed here.
 
----
+### 3. Renderer Process (`/renderer/src`)
+The React frontend is built as a Single Page Application (SPA).
+- **Component Driven:** The UI is split into focused components (`CommitPanel`, `BranchesPanel`, `DiffViewer`).
+- **Responsive Layout:** Panes are conditionally rendered and resizable, providing a fluid side-by-side or unified diff viewing experience.
 
-## 2. Git Operations — Feature Coverage
+## 🔐 Authentication & Credentials
 
-### Core Operations ✅
-| Feature | Status | Notes |
-|---|---|---|
-| Clone | ✅ | With progress streaming & auth env |
-| Open repository | ✅ | `.git` directory check |
-| Status (porcelain) | ✅ | Handles renames, untracked, staged/unstaged |
-| Stage / Unstage files | ✅ | Uses `git rm` for deleted files |
-| Stage/Unstage all | ✅ | |
-| Commit (with message) | ✅ | |
-| Amend commit | ✅ | |
-| Undo last commit | ✅ | Handles initial commit edge case |
-| Push | ✅ | `--force-with-lease` and `--force` support |
-| Pull | ✅ | Fetch-to-branch for non-current branches |
-| Fetch (single/all remotes) | ✅ | With `--prune` |
+Gitzen deliberately **does not** handle raw passwords or tokens directly for Git operations. Instead, it relies on the system-level Git credentials:
+- If a user can run `git push` in their terminal, they can do it in Gitzen.
+- Support for SSH Keys, Git Credential Manager (GCM), and macOS Keychain is seamless because Gitzen simply shells out to `git`.
 
-### Branch Management ✅
-| Feature | Status | Notes |
-|---|---|---|
-| List local branches (detailed) | ✅ | `for-each-ref` with ahead/behind |
-| List remote branches | ✅ | |
-| Create branch (+ checkout) | ✅ | |
-| Checkout (local + remote tracking) | ✅ | Smart remote-to-local creation |
-| Delete local branch | ✅ | `-d` / `-D` |
-| Delete remote branch | ✅ | `push --delete` + prune |
-| Rename branch | ✅ | Just added — `git branch -m` |
-| Branch status (ahead/behind) | ✅ | |
+## 🤖 AI Integrations
 
-### Advanced Operations ✅
-| Feature | Status | Notes |
-|---|---|---|
-| Merge (with conflict detection) | ✅ | `--no-ff`, MERGE_HEAD check |
-| Rebase | ✅ | Simple + interactive |
-| Interactive Rebase | ✅ | Custom GIT_SEQUENCE_EDITOR via temp Node script |
-| Cherry-pick | ✅ | `-x` flag, abort/continue/skip |
-| Revert commit | ✅ | `--no-edit`, conflict detection |
-| Reset (soft/mixed/hard) | ✅ | |
-| Stash (create/apply/delete) | ✅ | |
-| Abort operations (merge/rebase/cherry-pick) | ✅ | Unified `abortConflict` |
+Gitzen features deep integration with agentic and local LLMs to accelerate development workflows. The AI features include auto-generating commit messages, explaining merge conflicts, and summarizing entire branch changes for PRs.
 
-### Extras ✅
-| Feature | Status | Notes |
-|---|---|---|
-| Tags (create/delete/push/list remote) | ✅ | Annotated + lightweight |
-| Git Blame | ✅ | Line-porcelain parsing |
-| File diff (staged/unstaged/untracked) | ✅ | `--no-index` for untracked |
-| Commit diff | ✅ | `-m --first-parent` for merges |
-| Git Flow (init/start/finish) | ✅ | Full lifecycle without `git-flow` CLI |
-| Submodules (list/add/sync/remove) | ✅ | Includes deinit + cache purge |
-| Graphs & analytics | ✅ | Churn, activity, contributors, growth, file types |
-| Credentials test | ✅ | `ls-remote` probe |
-| User config (get/set) | ✅ | Local + global scope |
-| Remote management | ✅ | Add, get/set URL |
-| File system watcher | ✅ | chokidar with 200ms debounce |
-| Auto-update check | ✅ | GitHub releases |
+The system is highly flexible and supports multiple providers:
+- **Local:** Ollama (Runs entirely offline via local API calls).
+- **CLI Integrations:** Integrates natively with `claude` (Anthropic), `gh copilot` (GitHub), and `agy` (Antigravity). When invoking these, the main process dynamically constructs shell scripts to securely pass the git diff context to the respective CLI tools.
 
----
+## 📂 Directory Structure
 
-## 3. Performance Analysis
-
-### 🟢 Good Patterns
-
-1. **`spawn` over `exec`**: All git commands use `spawn` via `runGitSpawn()`, avoiding shell injection and supporting streaming + `AbortController` cancellation.
-
-2. **Operation queue**: The `runQueued()` pattern in `useGitState` serializes concurrent IPC calls, preventing race conditions on the global `currentRepoPath`.
-
-3. **Debounced file watcher**: The `watcherService` uses a 200ms debounce on FS events, preventing UI thrashing during rapid changes (e.g., rebases).
-
-4. **Stale-path guards**: Every refresh callback compares `targetPath !== repoPathRef.current` before committing state updates—preventing cross-repo data contamination when switching repos.
-
-5. **`react-window` virtualization**: The commit history uses windowed rendering for large lists.
-
-### 🟡 Areas of Concern
-
-> [!WARNING]
-> #### 1. `JSON.stringify` equality checks in state updates
-> Multiple state setters use `JSON.stringify(prev) !== JSON.stringify(newState)` to avoid unnecessary re-renders (e.g., [useGitState.ts:102](file:///Users/henrikandersson/Developer/git_gui/renderer/src/hooks/useGitState.ts#L102), [204](file:///Users/henrikandersson/Developer/git_gui/renderer/src/hooks/useGitState.ts#L204), [296](file:///Users/henrikandersson/Developer/git_gui/renderer/src/hooks/useGitState.ts#L296)).
-> 
-> This is **O(n)** on every refresh cycle, and for large commit histories (up to 2,000 commits with full message bodies), this serialization adds up. Consider a cheaper comparison like checking array length + first/last element hash, or using a generation counter / ETag pattern from the backend.
-
-> [!WARNING]
-> #### 2. `onRepoChanged` triggers 10 parallel IPC calls
-> When the file watcher fires, [useGitState.ts:409-419](file:///Users/henrikandersson/Developer/git_gui/renderer/src/hooks/useGitState.ts#L409-L419) triggers **10 separate refresh functions** sequentially through the queue, including a `fetchAll` on every single FS change. On busy repos (e.g., `npm install`), this means:
-> - 10+ git subprocess spawns per debounce cycle
-> - A full `git fetch --prune` for every remote on every FS change
-> 
-> **Recommendation**: The `performFetchSilent()` call in the `onRepoChanged` handler is especially heavy; consider removing it from the watcher response (it's already on a focus event handler) or rate-limiting it to at most once per 30-60 seconds.
-
-> [!WARNING]
-> #### 3. `getHistory` runs 3 passes over the commit data
-> The `getHistory()` function in [gitService.ts:860-977](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L860-L977) performs:
-> - Pass 1: Extract branch refs
-> - Pass 2: Propagate branch labels (up to 10 iterations)
-> - Pass 3: Build final commit objects
-> 
-> For 2,000 commits, the propagation loop (Pass 2) iterates over the full list up to 10 times, building a `parentToChildren` map each time. This is **O(commits × iterations)**. Consider building the map once and propagating in a single BFS/DFS pass.
-
-> [!IMPORTANT]
-> #### 4. `useGitOperations` uses `any` types throughout
-> The hook's props are typed as `any` ([useGitOperations.ts:7](file:///Users/henrikandersson/Developer/git_gui/renderer/src/hooks/useGitOperations.ts#L7)), and many IPC calls use `(window as any).electronAPI`. This bypasses TypeScript's type checking entirely, making it easy to introduce bugs when adding or changing IPC methods. The type definitions exist in `electron.d.ts` — the hook should use `window.electronAPI` directly (which is already declared in the type file).
-
----
-
-## 4. Logical Issues & Potential Bugs
-
-> [!CAUTION]
-> #### 1. Command injection via `runGitCommand` string splitting
-> `runGitCommand()` at [line 199](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L199) splits the command string using a simple regex: `command.match(/(?:[^\s"]+|"[^"]*")+/g)`. This works for simple cases, but **branch names or commit messages containing quotes or special characters** could break. For example:
-> - `renameBranch("my branch", "new\"name")` → the inner quote in `newName` would break the split
-> - `commit()` at line 509 escapes `"` as `\"` but then passes through the same string splitter
->
-> Several functions already use `runGitExecFile()` with proper argument arrays (`stageFiles`, `mergeBranchToCurrent`, `checkoutBranch`). The remaining ones (commit, createBranch, rebase, etc.) should be migrated to use `runGitExecFile` with explicit `args[]` to avoid edge cases.
-
-> [!CAUTION]
-> #### 2. `deleteBranch` / `createBranch` don't sanitize branch names
-> At [gitService.ts:1573](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L1573), `deleteBranch` passes the branch name directly into a string command: `branch -d ${branchName}`. A branch named `main; rm -rf /` would be safely handled by `runGitSpawn()` (which splits args), **but** the quote-splitting regex could misinterpret names with spaces. This is low-risk but worth noting.
-
-> [!WARNING]
-> #### 3. `stageFiles` is O(n) subprocesses
-> [gitService.ts:426-444](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L426-L444) stages files **one at a time** in a for-loop, spawning a new process for each file. For 100 changed files, this means 100 `git add` or `git rm` calls. Instead, `git add -- file1 file2 file3` supports multiple paths in a single invocation.
-
-> [!NOTE]
-> #### 4. `unstageFiles` has the same O(n) behavior
-> [gitService.ts:488-493](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L488-L493) also runs `git reset HEAD -- file` per file. Same fix applies.
-
-> [!WARNING]
-> #### 5. `openRepository` checks only `.git` directory
-> [gitService.ts:342](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L342) uses `fs.existsSync(path.join(repoPath, '.git'))`. This will fail for:
-> - Git worktrees (`.git` is a file, not a directory)
-> - Submodules opened directly (`.git` may be a file pointing to the parent)
-> 
-> Consider using `git rev-parse --git-dir` instead.
-
-> [!NOTE]
-> #### 6. `getAuthEnv` is a no-op
-> [gitService.ts:78-83](file:///Users/henrikandersson/Developer/git_gui/src/gitService.ts#L78-L83) returns a static object `{ GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }` regardless of the remote URL parameter. This is fine as a baseline, but the `remoteUrl` parameter creates a false expectation that credential injection is URL-aware. The unused parameter should be documented or removed.
-
----
-
-## 5. Code Quality Summary
-
-### Strengths
-- **Comprehensive feature set**: Nearly every common git operation is covered, including advanced workflows (interactive rebase, cherry-pick, Git Flow, submodules).
-- **Clean IPC architecture**: Every backend function follows a consistent `{ success, error?, errorType? }` return pattern.
-- **Error classification**: `parseGitError()` categorizes errors into typed classes (`NetworkAuthError`, `MergeConflictError`, `DetachedHeadError`, `CommandNotFoundError`).
-- **Conflict handling**: Robust MERGE_HEAD / REBASE_MERGE / CHERRY_PICK_HEAD detection with proper abort/continue flows.
-- **UI state management**: Well-separated into domain hooks, preventing `App.tsx` from becoming monolithic.
-
-### Weaknesses
-- **gitService.ts is ~3K lines**: This single file handles everything from cloning to graph analytics. It would benefit from being split into modules (e.g., `branchService`, `diffService`, `graphsService`).
-- **`any` type pollution**: `useGitOperations` and several components use `(window as any)` instead of the typed `window.electronAPI`.
-- **No unit tests for frontend**: Test files exist only for `gitService.test.ts` and `branchManagement.test.ts` in the `src/` directory. No renderer-side tests.
-- **`useAutoRefresh` hook is unused**: The hook exists but doesn't appear to be imported or used anywhere — the watcher-based approach replaced it.
-
----
-
-## 6. Recommendations (Priority Order)
-
-| Priority | Item | Impact |
-|---|---|---|
-| 🔴 High | Migrate remaining `runGitCommand()` calls to `runGitExecFile()` array args | Eliminates command parsing edge cases |
-| 🔴 High | Remove `performFetchSilent()` from `onRepoChanged` handler | Massive performance win on busy repos |
-| 🟡 Medium | Batch `stageFiles` / `unstageFiles` into single git calls | N subprocess spawns → 1 |
-| 🟡 Medium | Replace `JSON.stringify` equality checks with cheaper comparisons | Reduces CPU on refresh cycles |
-| 🟡 Medium | Fix `any` types in `useGitOperations` | Restores type safety |
-| 🟢 Low | Split `gitService.ts` into domain modules | Maintainability |
-| 🟢 Low | Use `git rev-parse --git-dir` for repo detection | Worktree/submodule support |
-| 🟢 Low | Remove or document unused `useAutoRefresh` hook | Code hygiene |
-| 🟢 Low | Optimize `getHistory()` branch propagation to single pass | Performance for large repos |
+```text
+git_gui/
+├── src/                # Electron Main Process (TypeScript)
+├── renderer/           # React Frontend (Vite)
+│   ├── src/
+│   │   ├── components/ # Modular UI components
+│   │   ├── hooks/      # State and git operation hooks
+│   │   ├── lib/        # Utility functions
+│   │   └── index.css   # Tailwind entrypoint
+├── docs/               # Project documentation
+├── scripts/            # Build and release automation scripts
+├── dist/               # Compiled Main Process output (generated)
+└── release/            # Packaged application binaries (generated)
+```

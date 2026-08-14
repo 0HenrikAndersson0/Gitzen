@@ -104,18 +104,23 @@ const setSelectedPaths = (paths: Set<string>) => {
 
     if (action === 'stage' && onStageFiles) {
       onStageFiles(targets);
+      setSelectedPaths(new Set());
     } else if (action === 'unstage' && onUnstageFiles) {
       onUnstageFiles(targets);
+      setSelectedPaths(new Set());
     } else if (action === 'revert') {
       if (onRevertFiles) {
         onRevertFiles(targets);
       } else if (onRevertFile) {
         targets.forEach(t => onRevertFile(t));
       }
+      setSelectedPaths(new Set());
     } else if (action === 'stash' && onStashFiles) {
       onStashFiles(targets);
+      setSelectedPaths(new Set());
     } else if (action === 'delete' && onDeleteFile) {
       targets.forEach(t => onDeleteFile(t));
+      setSelectedPaths(new Set());
     } else if (action === 'open') {
       targets.forEach(t => (window as any).electronAPI.openFileInDefaultEditor(t));
     }
