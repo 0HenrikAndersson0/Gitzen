@@ -5,6 +5,42 @@ import * as settingsService from './settingsService';
 import * as updateService from './updateService';
 import * as watcherService from './watcherService';
 import { setupPtyIpc } from './ptyService';
+import * as fs from 'fs';
+
+// Setup global crash logging
+const setupCrashLogging = () => {
+  const logFile = path.join(app.getPath('userData'), 'gitzen-crash.log');
+  
+  const writeLog = (type: string, error: any) => {
+    try {
+      const time = new Date().toISOString();
+      const msg = `\n[${time}] [${type}]\n${error?.stack || error}\n`;
+      fs.appendFileSync(logFile, msg);
+    } catch (e) {
+      console.error('Failed to write crash log', e);
+    }
+  };
+
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    writeLog('UNCAUGHT_EXCEPTION', err);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    writeLog('UNHANDLED_REJECTION', reason);
+  });
+
+  app.on('render-process-gone', (event, webContents, details) => {
+    writeLog('RENDER_PROCESS_GONE', `Reason: ${details.reason}, ExitCode: ${details.exitCode}`);
+  });
+  
+  app.on('child-process-gone', (event, details) => {
+    writeLog('CHILD_PROCESS_GONE', `Type: ${details.type}, Reason: ${details.reason}, Name: ${details.name}`);
+  });
+};
+
+setupCrashLogging();
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
