@@ -15,7 +15,8 @@
     "compile": "tsc",
     "compile:watch": "tsc --watch",
     "test": "vitest run",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "postinstall": "electron-rebuild"
   },
   "keywords": [
     "electron",

@@ -1,5 +1,6 @@
 import * as pty from 'node-pty';
 import * as os from 'os';
+import * as path from 'path';
 import { ipcMain } from 'electron';
 
 // Map of sessionId to PTY instance
@@ -9,6 +10,36 @@ const ptyHistory = new Map<string, string>();
 
 // Cap history at roughly 100KB to prevent memory leaks
 const MAX_HISTORY_LENGTH = 100 * 1024;
+
+function fixPath() {
+  if (os.platform() === 'win32') return process.env;
+
+  const home = os.homedir();
+  const extraPaths = [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+    path.join(home, '.local', 'bin'),
+    path.join(home, 'bin')
+  ];
+
+  const currentPath = process.env.PATH || '';
+  const currentPaths = currentPath.split(':');
+  
+  const newPaths = extraPaths.filter(p => !currentPaths.includes(p));
+  
+  if (newPaths.length > 0) {
+    return {
+      ...process.env,
+      PATH: [...newPaths, ...currentPaths].join(':')
+    };
+  }
+  
+  return process.env;
+}
 
 export function setupPtyIpc() {
   ipcMain.handle('pty:spawn', (event, sessionId: string, command: string, args: string[], cwd: string) => {
@@ -20,17 +51,24 @@ export function setupPtyIpc() {
       const shell = os.platform() === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash');
       const actualCommand = command === '$SHELL' ? shell : command;
       
+      const envObj = fixPath();
+      const cleanEnv = Object.fromEntries(Object.entries(envObj).filter(([_, v]) => v !== undefined)) as Record<string, string>;
+
       const ptyProcess = pty.spawn(actualCommand, args, {
         name: 'xterm-color',
         cols: 80,
         rows: 30,
         cwd: cwd || process.cwd(),
-        env: Object.fromEntries(Object.entries(process.env).filter(([_, v]) => v !== undefined)) as Record<string, string>,
+        env: cleanEnv,
       });
 
       ptyHistory.set(sessionId, '');
 
-      ptyProcess.onData((data) => {
+      // Buffer for throttling IPC sends
+      const ptyBuffers = new Map<string, string>();
+      const ptyTimers = new Map<string, NodeJS.Timeout>();
+
+      ptyProcess.onData((data: string) => {
         // Append to history
         let currentHistory = ptyHistory.get(sessionId) || '';
         currentHistory += data;
@@ -39,13 +77,29 @@ export function setupPtyIpc() {
         }
         ptyHistory.set(sessionId, currentHistory);
 
-        // Send to any active listeners
-        event.sender.send(`pty:data:${sessionId}`, data);
+        // Throttle IPC send to prevent renderer/main process crash during large outputs
+        let buffer = ptyBuffers.get(sessionId) || '';
+        buffer += data;
+        ptyBuffers.set(sessionId, buffer);
+
+        if (!ptyTimers.has(sessionId)) {
+          const timer = setTimeout(() => {
+            const chunk = ptyBuffers.get(sessionId);
+            if (chunk && !event.sender.isDestroyed()) {
+              event.sender.send(`pty:data:${sessionId}`, chunk);
+            }
+            ptyBuffers.delete(sessionId);
+            ptyTimers.delete(sessionId);
+          }, 16); // roughly 60fps
+          ptyTimers.set(sessionId, timer);
+        }
       });
 
-      ptyProcess.onExit(({ exitCode, signal }) => {
+      ptyProcess.onExit(({ exitCode, signal }: { exitCode: number, signal?: number }) => {
         if (ptySessions.get(sessionId) === ptyProcess) {
-          event.sender.send(`pty:exit:${sessionId}`, { exitCode, signal });
+          if (!event.sender.isDestroyed()) {
+            event.sender.send(`pty:exit:${sessionId}`, { exitCode, signal });
+          }
           ptySessions.delete(sessionId);
           // Keep history even if process exited, until explicitly killed/cleared
         }
