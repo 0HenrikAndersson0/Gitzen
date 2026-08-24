@@ -80,18 +80,42 @@ export function setupPtyIpc() {
         // Throttle IPC send to prevent renderer/main process crash during large outputs
         let buffer = ptyBuffers.get(sessionId) || '';
         buffer += data;
+        
+        // Prevent V8 OOM by capping the pending IPC buffer to 5MB
+        const MAX_PENDING_BUFFER = 5 * 1024 * 1024;
+        if (buffer.length > MAX_PENDING_BUFFER) {
+           buffer = buffer.substring(buffer.length - MAX_PENDING_BUFFER);
+        }
+        
         ptyBuffers.set(sessionId, buffer);
 
         if (!ptyTimers.has(sessionId)) {
-          const timer = setTimeout(() => {
-            const chunk = ptyBuffers.get(sessionId);
-            if (chunk && !event.sender.isDestroyed()) {
-              event.sender.send(`pty:data:${sessionId}`, chunk);
+          const sendChunk = () => {
+            let chunk = ptyBuffers.get(sessionId) || '';
+            const MAX_IPC_CHUNK_SIZE = 100 * 1024;
+            
+            let toSend = chunk;
+            let hasMore = false;
+            if (chunk.length > MAX_IPC_CHUNK_SIZE) {
+               toSend = chunk.substring(0, MAX_IPC_CHUNK_SIZE);
+               ptyBuffers.set(sessionId, chunk.substring(MAX_IPC_CHUNK_SIZE));
+               hasMore = true;
+            } else {
+               ptyBuffers.delete(sessionId);
             }
-            ptyBuffers.delete(sessionId);
-            ptyTimers.delete(sessionId);
-          }, 16); // roughly 60fps
-          ptyTimers.set(sessionId, timer);
+            
+            if (toSend && !event.sender.isDestroyed()) {
+              event.sender.send(`pty:data:${sessionId}`, toSend);
+            }
+            
+            if (hasMore) {
+              ptyTimers.set(sessionId, setTimeout(sendChunk, 16));
+            } else {
+              ptyTimers.delete(sessionId);
+            }
+          };
+          
+          ptyTimers.set(sessionId, setTimeout(sendChunk, 16));
         }
       });
 
