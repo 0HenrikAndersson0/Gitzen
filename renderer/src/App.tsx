@@ -470,7 +470,7 @@ export default function App() {
       <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-row">
         {showGraphs && repoName ? (
           <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
-            <GraphsView />
+            <GraphsView key={repoPath || undefined} />
           </div>
         ) : showAgentSession && repoName ? (
           <div className="flex-1 h-full overflow-hidden flex flex-col min-w-0">
@@ -513,6 +513,7 @@ export default function App() {
                   />
                   <div className="mt-4 pb-4">
                     <TagsPanel
+                      repoPath={repoPath || undefined}
                       onSetLoading={(loading, message) => {
                         setIsLoading(loading);
                         setLoadingMessage(message);

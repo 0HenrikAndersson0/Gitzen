@@ -17,11 +17,13 @@ interface TagItem {
 interface TagsPanelProps {
   onDeleteTag?: (tag: string) => void;
   onSetLoading?: (loading: boolean, message?: string) => void;
+  repoPath?: string;
 }
 
 export const TagsPanel = memo(function TagsPanel({
   onDeleteTag,
   onSetLoading,
+  repoPath,
 }: TagsPanelProps) {
   const [tags, setTags] = useState<TagItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,8 +58,8 @@ export const TagsPanel = memo(function TagsPanel({
         }));
 
         setTags((prev) => {
-          const prevIdentifier = prev.map(t => `${t.name}-${t.isPushed}`).sort().join(',');
-          const newIdentifier = newTags.map(t => `${t.name}-${t.isPushed}`).sort().join(',');
+          const prevIdentifier = prev.map(t => `${t.name}-${t.commit}-${t.isPushed}`).sort().join(',');
+          const newIdentifier = newTags.map(t => `${t.name}-${t.commit}-${t.isPushed}`).sort().join(',');
 
           if (prevIdentifier !== newIdentifier) {
             return newTags;
@@ -79,7 +81,7 @@ export const TagsPanel = memo(function TagsPanel({
 
   useEffect(() => {
     loadTags(true);
-  }, [loadTags]);
+  }, [loadTags, repoPath]);
 
   useEffect(() => {
     const removeListener = window.electronAPI.onRepoChanged(() => {
