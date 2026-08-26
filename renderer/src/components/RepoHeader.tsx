@@ -1,4 +1,4 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter, Terminal } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter, Terminal, Sparkles } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from './ui/button';
@@ -28,10 +28,12 @@ interface RepoHeaderProps {
   onStash?: () => void;
   onToggleGraphs?: () => void;
   onToggleFilters?: () => void;
+  onToggleAgentSession?: () => void;
   onStartGitFlow?: () => void;
+  isShowingAgentSession?: boolean;
 }
 
-export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onFetch, onStash, onToggleGraphs, onToggleFilters, onStartGitFlow }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, isShowingAgentSession, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onFetch, onStash, onToggleGraphs, onToggleFilters, onToggleAgentSession, onStartGitFlow }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -221,6 +223,16 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
               >
                 <Terminal className="size-4" />
                 <span className="hidden sm:inline">Terminal</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleAgentSession}
+                className={`gap-2 border-border transition-colors ${isShowingAgentSession ? 'bg-zinc-500/20 text-zinc-400 hover:bg-zinc-500/30' : 'bg-secondary/50 hover:bg-accent text-foreground'}`}
+                title="Toggle Agent Sessions"
+              >
+                <Sparkles className="size-4" />
+                <span className="hidden sm:inline">Agent</span>
               </Button>
               {onStartGitFlow && (
                 <Button

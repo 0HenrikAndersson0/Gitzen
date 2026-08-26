@@ -21,3 +21,9 @@ release/
 # Gemini CLI
 .gemini/
 *.skill
+GEMINI.md
+PROJECT_RULES.md
+
+# Archives
+*.zip
+*.tar.gz

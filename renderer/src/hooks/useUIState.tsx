@@ -23,6 +23,7 @@ export function useUIState() {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showBottomPanel, setShowBottomPanel] = useState(true);
   const [showGraphs, setShowGraphs] = useState(false);
+  const [showAgentSession, setShowAgentSession] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [hasCredentials, setHasCredentials] = useState(true);
   const [historyLimit, setHistoryLimit] = useState(50);
@@ -110,6 +111,7 @@ export function useUIState() {
     showLeftPanel, setShowLeftPanel,
     showBottomPanel, setShowBottomPanel,
     showGraphs, setShowGraphs,
+    showAgentSession, setShowAgentSession,
     logs, setLogs,
     hasCredentials, setHasCredentials,
     historyLimit, setHistoryLimit,

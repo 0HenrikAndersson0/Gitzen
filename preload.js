@@ -141,4 +141,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('git:repo-changed', sub);
     return () => ipcRenderer.removeListener('git:repo-changed', sub);
   },
+  ptySpawn: (sessionId, command, args, cwd) => ipcRenderer.invoke('pty:spawn', sessionId, command, args, cwd),
+  ptyWrite: (sessionId, data) => ipcRenderer.invoke('pty:write', sessionId, data),
+  ptyResize: (sessionId, cols, rows) => ipcRenderer.invoke('pty:resize', sessionId, cols, rows),
+  ptyKill: (sessionId) => ipcRenderer.invoke('pty:kill', sessionId),
+  ptyRestore: (sessionId) => ipcRenderer.invoke('pty:restore', sessionId),
+  ptyExists: (sessionId) => ipcRenderer.invoke('pty:exists', sessionId),
+  onPtyData: (sessionId, callback) => {
+    const sub = (_, data) => callback(data);
+    ipcRenderer.on(`pty:data:${sessionId}`, sub);
+    return () => ipcRenderer.removeListener(`pty:data:${sessionId}`, sub);
+  },
+  onPtyExit: (sessionId, callback) => {
+    const sub = (_, data) => callback(data);
+    ipcRenderer.on(`pty:exit:${sessionId}`, sub);
+    return () => ipcRenderer.removeListener(`pty:exit:${sessionId}`, sub);
+  },
 });
