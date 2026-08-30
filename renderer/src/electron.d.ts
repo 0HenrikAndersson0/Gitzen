@@ -156,6 +156,14 @@ declare global {
       onRepoChanged: (callback: (data: any) => void) => () => void;
       getGitUserConfig: () => Promise<{ success: boolean; name?: string; email?: string; error?: string; errorType?: string }>;
       setGitUserConfig: (name: string, email: string, isGlobal: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      ptySpawn: (sessionId: string, command: string, args: string[], cwd: string) => Promise<{ success: boolean; alreadyExists?: boolean; error?: string }>;
+      ptyWrite: (sessionId: string, data: string) => Promise<{ success: boolean; error?: string }>;
+      ptyResize: (sessionId: string, cols: number, rows: number) => Promise<{ success: boolean; error?: string }>;
+      ptyKill: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+      ptyRestore: (sessionId: string) => Promise<{ success: boolean; data?: string; error?: string }>;
+      ptyExists: (sessionId: string) => Promise<{ success: boolean; exists?: boolean; error?: string }>;
+      onPtyData: (sessionId: string, callback: (data: string) => void) => () => void;
+      onPtyExit: (sessionId: string, callback: (data: { exitCode: number, signal: number }) => void) => () => void;
     };
   }
 }

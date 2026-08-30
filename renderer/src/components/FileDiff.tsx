@@ -15,7 +15,7 @@ export interface FileChange {
 interface FileDiffProps {
   file: FileChange;
   onClose: () => void;
-  onRefresh: () => void;
+  onRefresh?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
 }
@@ -133,7 +133,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
 
       if (result.success) {
         toast.success(file.staged ? 'Unstaged selected changes' : 'Staged selected changes');
-        onRefresh();
+        onRefresh?.();
         onClose();
       } else {
         toast.error(result.error || 'Failed to update changes');
@@ -162,7 +162,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
 
       if (result.success) {
         toast.success('Discarded selected changes');
-        onRefresh();
+        onRefresh?.();
         onClose();
       } else {
         toast.error(result.error || 'Failed to discard changes');
@@ -191,7 +191,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
 
       if (result.success) {
         toast.success('Discarded file changes');
-        onRefresh();
+        onRefresh?.();
         onClose();
       } else {
         toast.error(result.error || 'Failed to discard file');
@@ -258,8 +258,7 @@ export function FileDiff({ file, onClose, onRefresh, onNext, onPrevious }: FileD
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2 mt-2 sm:mt-0">
-            {!file.staged && (
+          <div className="flex flex-wrap items-center justify-end gap-2 mt-2 sm:mt-0">            {!file.staged && (
               <button
                 onClick={handleDiscardFile}
                 disabled={processing}

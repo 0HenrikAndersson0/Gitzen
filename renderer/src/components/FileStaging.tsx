@@ -276,7 +276,7 @@ const setSelectedPaths = (paths: Set<string>) => {
         <FileDiff
           file={selectedFile}
           onClose={() => setSelectedFile(null)}
-          onRefresh={onRefresh || (() => { })}
+          onRefresh={onRefresh}
           onNext={files.length > 1 ? handleNextFile : undefined}
           onPrevious={files.length > 1 ? handlePrevFile : undefined}
         />
