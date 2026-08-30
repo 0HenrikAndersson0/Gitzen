@@ -3615,4 +3615,47 @@ export async function openTerminal(): Promise<{ success: boolean; error?: string
   }
 }
 
+export async function createDemoRepo(): Promise<{ success: boolean; repoPath?: string; error?: string }> {
+  try {
+    const userDataPath = app.getPath('userData');
+    const demoRepoPath = path.join(userDataPath, 'Gitzen-Demo-Repo');
+    
+    // Create or clear demo repo directory
+    if (fs.existsSync(demoRepoPath)) {
+      fs.rmSync(demoRepoPath, { recursive: true, force: true });
+    }
+    fs.mkdirSync(demoRepoPath, { recursive: true });
+
+    // Initialize repo
+    await execAsync(`git init`, { cwd: demoRepoPath });
+    await execAsync(`git config user.name "Gitzen Explorer"`, { cwd: demoRepoPath });
+    await execAsync(`git config user.email "explorer@gitzen.app"`, { cwd: demoRepoPath });
+
+    // Create initial commit
+    fs.writeFileSync(path.join(demoRepoPath, 'README.md'), '# Welcome to Gitzen Demo Repo\\n\\nThis is a sample repository to help you explore Gitzen features.');
+    await execAsync(`git add . && git commit -m "Initial commit: Add README.md"`, { cwd: demoRepoPath });
+
+    // Create a feature branch
+    await execAsync(`git checkout -b feature/cool-new-feature`, { cwd: demoRepoPath });
+    fs.writeFileSync(path.join(demoRepoPath, 'feature.txt'), 'This is a cool new feature.');
+    await execAsync(`git add . && git commit -m "Add cool new feature"`, { cwd: demoRepoPath });
+    
+    // Create another commit on the feature branch
+    fs.appendFileSync(path.join(demoRepoPath, 'feature.txt'), '\\nAdding more details to the feature.');
+    await execAsync(`git add . && git commit -m "Update feature with details"`, { cwd: demoRepoPath });
+
+    // Go back to main and create a commit
+    await execAsync(`git checkout main || git checkout master`, { cwd: demoRepoPath });
+    fs.writeFileSync(path.join(demoRepoPath, 'index.js'), 'console.log("Hello, Gitzen!");');
+    await execAsync(`git add . && git commit -m "Add index.js entry point"`, { cwd: demoRepoPath });
+
+    // Create an uncommitted change for staging
+    fs.appendFileSync(path.join(demoRepoPath, 'README.md'), '\\n\\nTry staging and committing this change!');
+    
+    currentRepoPath = demoRepoPath;
+    return { success: true, repoPath: demoRepoPath };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to create demo repo' };
+  }
+}
 

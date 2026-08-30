@@ -42,6 +42,7 @@ declare global {
     electronAPI: {
       gitClone: (url: string, path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitOpen: (path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitCreateDemoRepo: () => Promise<{ success: boolean; repoPath?: string; error?: string }>;
       gitStatus: () => Promise<{ success: boolean; files?: FileChange[]; error?: string; errorType?: string }>;
       gitStage: (files: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       gitUnstage: (files: string[]) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -147,6 +148,8 @@ declare global {
       setOllamaModel: (model: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getOllamaHost: () => Promise<{ success: boolean; host?: string; error?: string; errorType?: string }>;
       setOllamaHost: (host: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getHasSeenTour: () => Promise<{ success: boolean; hasSeenTour?: boolean; error?: string }>;
+      setHasSeenTour: (seen: boolean) => Promise<{ success: boolean; error?: string }>;
       gitGetOllamaModels: () => Promise<{ success: boolean; models?: string[]; error?: string; errorType?: string }>;
       checkForUpdates: () => Promise<any>;
       openExternal: (url: string) => Promise<{ success: boolean }>;

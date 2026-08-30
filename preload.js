@@ -9,6 +9,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   gitClone: (url, path) => ipcRenderer.invoke('git:clone', url, path),
   gitOpen: (path) => ipcRenderer.invoke('git:open', path),
+  gitCreateDemoRepo: () => ipcRenderer.invoke('git:createDemoRepo'),
   gitStatus: () => ipcRenderer.invoke('git:status'),
   gitStage: (files) => ipcRenderer.invoke('git:stage', files),
   gitUnstage: (files) => ipcRenderer.invoke('git:unstage', files),
@@ -118,6 +119,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setOllamaModel: (model) => ipcRenderer.invoke('settings:setOllamaModel', model),
   getOllamaHost: () => ipcRenderer.invoke('settings:getOllamaHost'),
   setOllamaHost: (host) => ipcRenderer.invoke('settings:setOllamaHost', host),
+  getHasSeenTour: () => ipcRenderer.invoke('settings:getHasSeenTour'),
+  setHasSeenTour: (seen) => ipcRenderer.invoke('settings:setHasSeenTour', seen),
   gitGetOllamaModels: () => ipcRenderer.invoke('git:getOllamaModels'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),

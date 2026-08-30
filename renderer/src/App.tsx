@@ -24,9 +24,12 @@ import { InitGitFlowDialog } from './components/InitGitFlowDialog';
 import { StartGitFlowModal } from './components/StartGitFlowModal';
 import { AddSubmoduleModal } from './components/AddSubmoduleModal';
 import { SubmodulesPanel } from './components/SubmodulesPanel';
+import { TourPromptModal } from './components/TourPromptModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './components/ui/dialog';
 import { GripVertical } from 'lucide-react';
+
+import { VirtualTour } from './components/VirtualTour';
 
 import { useGitState } from './hooks/useGitState';
 import { useGitOperations } from './hooks/useGitOperations';
@@ -56,6 +59,9 @@ export default function App() {
     addLog,
     checkAuthError,
     applyTheme,
+    runTour, setRunTour,
+    showTourPrompt, setShowTourPrompt,
+    hasSeenTour, setHasSeenTour
   } = uiState;
 
   const gitState = useGitState({
@@ -238,6 +244,26 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (runTour && !repoPath) {
+      const initDemoRepo = async () => {
+        try {
+          if (window.electronAPI?.gitCreateDemoRepo) {
+            const result = await window.electronAPI.gitCreateDemoRepo();
+            if (result.success && result.repoPath) {
+              setRepoPath(result.repoPath);
+            } else {
+              toast.error('Failed to create demo repo: ' + result.error);
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      initDemoRepo();
+    }
+  }, [runTour, repoPath]);
+
+  useEffect(() => {
     // Listen for menu events
     if (window.electronAPI) {
       if (window.electronAPI.onShowShortcuts) {
@@ -372,7 +398,7 @@ export default function App() {
         />
       )}
 
-      <div className="flex-none">
+      <div className="flex-none" id="tour-repo-header">
         <RepoHeader
           repoName={repoName}
           currentBranch={currentBranch}
@@ -487,7 +513,7 @@ export default function App() {
             {/* Column 1: Left Sidebar - Branches & Tags */}
             {repoName && showLeftPanel && (
               <>
-                <div style={{ width: leftPanelWidth }} className="flex flex-col h-full overflow-y-auto min-w-0 min-h-0 scrollbar-none pr-2 shrink-0">
+                <div style={{ width: leftPanelWidth }} className="flex flex-col h-full overflow-y-auto min-w-0 min-h-0 scrollbar-none pr-2 shrink-0" id="tour-branches-panel">
                   <BranchesPanel
                     currentBranch={currentBranch}
                     localBranches={localBranches}
@@ -574,7 +600,7 @@ export default function App() {
                   </Tabs>
                 </div>
               ) : (
-                <div className="flex flex-col h-full overflow-hidden">
+                <div className="flex flex-col h-full overflow-hidden" id="tour-commit-graph">
                   {showHistoryFilters && (
                     <HistoryFilterBar
                       filters={historyFilters}
@@ -614,7 +640,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div style={{ width: rightPanelWidth }} className="flex flex-col h-full min-w-0 min-h-0 pl-2 shrink-0">
+                <div style={{ width: rightPanelWidth }} className="flex flex-col h-full min-w-0 min-h-0 pl-2 shrink-0" id="tour-commit-panel">
                   <div className="flex-1 min-h-0">
                     <CommitPanel
                       ref={commitMessageTextareaRef}
@@ -639,7 +665,7 @@ export default function App() {
                       hasCommits={commits.length > 0}
                     />
                   </div>
-                  <div className="h-[25%] min-h-[150px] flex-none mt-4">
+                  <div className="h-[25%] min-h-[150px] flex-none mt-4" id="tour-activity-log">
                     <ActivityLog logs={logs} />
                   </div>
                 </div>
@@ -754,6 +780,24 @@ export default function App() {
         </DialogContent>
       </Dialog>
 
+      <TourPromptModal
+        open={showTourPrompt}
+        onAccept={() => {
+          setShowTourPrompt(false);
+          setRunTour(true);
+        }}
+        onDecline={() => {
+          setShowTourPrompt(false);
+          setHasSeenTour(true);
+        }}
+      />
+      <VirtualTour 
+        run={runTour} 
+        onFinish={() => {
+          setRunTour(false);
+          setHasSeenTour(true);
+        }} 
+      />
       <Toaster visibleToasts={1} richColors />
     </div>
   );

@@ -37,6 +37,7 @@ Gitzen deeply integrates with agentic and local LLMs to accelerate your Git work
 - **Auto-Generated Commits:** Instantly generate concise, accurate commit messages based on your currently staged changes.
 - **Smart Conflict Resolution:** Analyze `<<<<<<< HEAD` merge conflict markers and intelligently resolve them with logical explanations.
 - **Branch Reviews:** Generate comprehensive, PR-style summaries of all unmerged changes on your branch.
+- **Agent Sessions:** Interactive AI agent sessions to collaborate on code changes, analyze your repository, and execute Git operations autonomously.
 - **Flexible Providers:** Run completely offline with **Ollama** (local models), or utilize powerful CLI tools if installed: **Antigravity (`agy`)**, **Anthropic (`claude`)**, and **GitHub Copilot (`gh copilot`)**.
 
 ## 🚀 Getting Started
