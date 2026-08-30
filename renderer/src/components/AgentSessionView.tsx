@@ -41,10 +41,10 @@ export const AgentSessionView: React.FC<AgentSessionViewProps> = ({
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
 
-  // Update sessionId when branch changes
+  // Update sessionId when repo changes
   useEffect(() => {
-    if (currentBranch) {
-      const newSessionId = `agent-${currentBranch.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+    if (repoPath) {
+      const newSessionId = `agent-${btoa(repoPath).replace(/=/g, '')}`;
       setSessionId(newSessionId);
       
       // Check if session already exists in backend
@@ -56,7 +56,7 @@ export const AgentSessionView: React.FC<AgentSessionViewProps> = ({
         }
       });
     }
-  }, [currentBranch]);
+  }, [repoPath]);
 
   useEffect(() => {
     async function loadModels() {
