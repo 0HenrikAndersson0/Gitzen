@@ -394,6 +394,38 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               </div>
             )}
           </div>
+
+          <div className="space-y-4 border-t border-border pt-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Settings className="size-4 text-foreground" />
+              <h3 className="text-sm font-medium text-foreground">Preferences</h3>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Tutorial Tour</Label>
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-xs text-muted-foreground">
+                  Reset the tutorial to see the welcome tour again on your next visit or reload.
+                </p>
+                <Button 
+                  onClick={async () => {
+                    try {
+                      await window.electronAPI.setHasSeenTour(false);
+                      toast.success('Tutorial reset successfully. Reload the app to view it again.');
+                    } catch (e) {
+                      toast.error('Failed to reset tutorial.');
+                    }
+                  }}
+                  variant="outline" 
+                  size="sm"
+                  className="bg-secondary border-border hover:bg-muted whitespace-nowrap"
+                  disabled={loading || saving}
+                >
+                  Reset Tutorial
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <DialogFooter>
