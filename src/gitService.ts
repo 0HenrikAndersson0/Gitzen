@@ -215,7 +215,6 @@ export async function cloneRepository(url: string, localPath: string, onProgress
     ], {
       maxBuffer: 10 * 1024 * 1024,
       env: {
-        ...process.env,
         ...env
       },
       signal,
@@ -1626,7 +1625,6 @@ export async function deleteRemoteBranch(remoteBranchName: string): Promise<{ su
           cwd: repoPath,
           maxBuffer: 10 * 1024 * 1024,
           env: {
-            ...process.env,
             ...authEnv
           },
         });
@@ -2420,7 +2418,6 @@ export async function performInteractiveRebase(targetBranch: string, todoLines: 
     fs.writeFileSync(helperScriptPath, helperScript);
 
     const env = {
-      ...process.env,
       TEMP_TODO: tempTodoPath,
       // Use our helper to replace the todo list
       GIT_SEQUENCE_EDITOR: `node "${helperScriptPath.replace(/\\/g, '\\\\')}"`,
@@ -2813,7 +2810,6 @@ export async function finishGitFlowBranch(type: GitFlowBranchType, name: string)
     } catch {}
 
     const env = { 
-      ...process.env, 
       GIT_MERGE_AUTOEDIT: 'no',
       GIT_EDITOR: 'node -e "process.exit(0)"' 
     };
