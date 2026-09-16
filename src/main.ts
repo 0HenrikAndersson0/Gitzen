@@ -213,6 +213,17 @@ ipcMain.handle('git:open', async (_, repoPath) => {
   return result;
 });
 
+ipcMain.handle('git:createDemoRepo', async () => {
+  const result = await gitService.createDemoRepo();
+  if (result.success && result.repoPath) {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      watcherService.watchRepo(result.repoPath, win);
+    }
+  }
+  return result;
+});
+
 ipcMain.handle('git:status', async () => {
   return await gitService.getStatus();
 });
@@ -755,6 +766,24 @@ ipcMain.handle('settings:getOllamaHost', () => {
 ipcMain.handle('settings:setOllamaHost', (_, host: string) => {
   try {
     settingsService.setOllamaHost(host);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:getHasSeenTour', () => {
+  try {
+    const hasSeenTour = settingsService.getHasSeenTour();
+    return { success: true, hasSeenTour };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setHasSeenTour', (_, seen: boolean) => {
+  try {
+    settingsService.setHasSeenTour(seen);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };

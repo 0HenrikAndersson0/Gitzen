@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 
 interface LogEntry {
@@ -27,6 +27,29 @@ export function useUIState() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [hasCredentials, setHasCredentials] = useState(true);
   const [historyLimit, setHistoryLimit] = useState(50);
+  const [hasSeenTour, setHasSeenTourState] = useState(true);
+  const [showTourPrompt, setShowTourPrompt] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+
+  React.useEffect(() => {
+    if (window.electronAPI?.getHasSeenTour) {
+      window.electronAPI.getHasSeenTour().then((res) => {
+        if (res.success && res.hasSeenTour !== undefined) {
+          setHasSeenTourState(res.hasSeenTour);
+          if (!res.hasSeenTour) {
+            setShowTourPrompt(true);
+          }
+        }
+      });
+    }
+  }, []);
+
+  const setHasSeenTour = useCallback((seen: boolean) => {
+    setHasSeenTourState(seen);
+    if (window.electronAPI?.setHasSeenTour) {
+      window.electronAPI.setHasSeenTour(seen);
+    }
+  }, []);
 
   const addLog = useCallback((type: LogEntry['type'], message: string) => {
     setLogs((prev) => [...prev, { timestamp: new Date(), type, message }]);
@@ -119,6 +142,9 @@ export function useUIState() {
     checkAuthError,
     withLoading,
     applyTheme,
-    toast
+    toast,
+    hasSeenTour, setHasSeenTour,
+    showTourPrompt, setShowTourPrompt,
+    runTour, setRunTour
   };
 }

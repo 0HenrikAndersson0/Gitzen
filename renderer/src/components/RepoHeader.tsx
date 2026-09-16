@@ -111,6 +111,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
             {repoName ? (
               <div className="relative" ref={dropdownRef}>
                 <button
+                  id="tour-repo-selector"
                   onClick={handleToggleDropdown}
                   disabled={isDisabled}
                   className={`group flex items-center gap-2 text-left transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:text-foreground'}`}
@@ -225,6 +226,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                 <span className="hidden sm:inline">Terminal</span>
               </Button>
               <Button
+                id="tour-agent-button"
                 variant="outline"
                 size="sm"
                 onClick={onToggleAgentSession}
@@ -321,6 +323,7 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
           )}
 
           <button
+            id="tour-settings"
             onClick={() => onOpenSettings?.()}
             className="p-2 rounded-lg bg-secondary/50 hover:bg-accent border border-border transition-colors"
             title="Settings"

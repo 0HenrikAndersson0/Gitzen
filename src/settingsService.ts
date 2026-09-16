@@ -8,6 +8,7 @@ interface AppSettings {
   aiProvider?: 'agy' | 'claude' | 'ollama' | 'copilot';
   ollamaModel?: string;
   ollamaHost?: string;
+  hasSeenTour?: boolean;
 }
 
 let userDataPath: string | null = null;
@@ -120,3 +121,13 @@ export function setOllamaHost(host: string): void {
   saveSettings(settings);
 }
 
+export function getHasSeenTour(): boolean {
+  const settings = loadSettings();
+  return settings.hasSeenTour ?? false;
+}
+
+export function setHasSeenTour(seen: boolean): void {
+  const settings = loadSettings();
+  settings.hasSeenTour = seen;
+  saveSettings(settings);
+}
