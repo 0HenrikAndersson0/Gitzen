@@ -2956,6 +2956,203 @@ export async function removeSubmodule(smPath: string): Promise<{ success: boolea
   }
 }
 
+export interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch?: string;
+  bare: boolean;
+  detached: boolean;
+  main: boolean;
+  current: boolean;
+  locked?: string;
+  prunable?: string;
+}
+
+export interface AddWorktreeOptions {
+  path: string;
+  branch?: string;
+  newBranch?: string;
+  startPoint?: string;
+  detach?: boolean;
+}
+
+const noRepoError = { success: false, error: 'No repository open' } as const;
+
+// Expand ~, resolve relative paths against the open repo, and normalize for comparisons
+function resolveWorktreePath(p: string): string {
+  let resolved = (p || '').trim();
+  if (resolved.startsWith('~')) {
+    resolved = path.join(os.homedir(), resolved.slice(1));
+  }
+  if (!path.isAbsolute(resolved) && currentRepoPath) {
+    resolved = path.join(currentRepoPath, resolved);
+  }
+  return path.resolve(resolved);
+}
+
+function isSameDir(a: string, b: string): boolean {
+  const norm = (p: string) => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  return norm(a) === norm(b);
+}
+
+export async function getWorktrees(): Promise<{ success: boolean; worktrees?: WorktreeInfo[]; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { ...noRepoError };
+    const { stdout } = await runGitCommand('worktree list --porcelain');
+
+    const worktrees: WorktreeInfo[] = [];
+    let entry: WorktreeInfo | null = null;
+    for (const rawLine of stdout.split('\n')) {
+      const line = rawLine.trim();
+      if (!line) {
+        if (entry) {
+          worktrees.push(entry);
+          entry = null;
+        }
+        continue;
+      }
+      const spaceIdx = line.indexOf(' ');
+      const key = spaceIdx === -1 ? line : line.slice(0, spaceIdx);
+      const value = spaceIdx === -1 ? '' : line.slice(spaceIdx + 1);
+
+      if (key === 'worktree') {
+        if (entry) worktrees.push(entry);
+        entry = {
+          path: resolveWorktreePath(value),
+          head: '',
+          bare: false,
+          detached: false,
+          main: worktrees.length === 0,
+          current: false,
+        };
+      } else if (entry) {
+        switch (key) {
+          case 'HEAD':
+            entry.head = value;
+            break;
+          case 'branch':
+            entry.branch = value.replace(/^refs\/heads\//, '');
+            break;
+          case 'detached':
+            entry.detached = true;
+            break;
+          case 'bare':
+            entry.bare = true;
+            break;
+          case 'locked':
+            entry.locked = value;
+            break;
+          case 'prunable':
+            entry.prunable = value;
+            break;
+        }
+      }
+    }
+    if (entry) worktrees.push(entry);
+
+    if (currentRepoPath) {
+      for (const wt of worktrees) {
+        wt.current = isSameDir(wt.path, currentRepoPath);
+      }
+    }
+
+    return { success: true, worktrees };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function addWorktree(options: AddWorktreeOptions): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { ...noRepoError };
+    const wtPath = resolveWorktreePath(options.path || '');
+    if (!wtPath || wtPath === path.parse(wtPath).root) {
+      return { success: false, error: 'A valid worktree path is required' };
+    }
+
+    const args = ['worktree', 'add'];
+    if (options.detach) {
+      args.push('--detach');
+    } else if (options.newBranch) {
+      args.push('-b', options.newBranch);
+    }
+    args.push(wtPath);
+    if (options.startPoint) {
+      args.push(options.startPoint);
+    } else if (options.branch) {
+      args.push(options.branch);
+    }
+
+    await runGitExecFile(args, { cwd: currentRepoPath, maxBuffer: 10 * 1024 * 1024 });
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function removeWorktree(wtPath: string, force: boolean = false): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { ...noRepoError };
+    const resolved = resolveWorktreePath(wtPath);
+    if (isSameDir(resolved, currentRepoPath)) {
+      return { success: false, error: 'Cannot remove the currently open worktree. Open a different worktree first.' };
+    }
+
+    const args = ['worktree', 'remove'];
+    if (force) args.push('--force');
+    args.push(resolved);
+    await runGitExecFile(args, { cwd: currentRepoPath, maxBuffer: 10 * 1024 * 1024 });
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function lockWorktree(wtPath: string, reason?: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { ...noRepoError };
+    const args = ['worktree', 'lock'];
+    if (reason && reason.trim()) args.push('--reason', reason.trim());
+    args.push(resolveWorktreePath(wtPath));
+    await runGitExecFile(args, { cwd: currentRepoPath });
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function unlockWorktree(wtPath: string): Promise<{ success: boolean; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { ...noRepoError };
+    await runGitExecFile(['worktree', 'unlock', resolveWorktreePath(wtPath)], { cwd: currentRepoPath });
+    return { success: true };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
+export async function pruneWorktrees(): Promise<{ success: boolean; output?: string; error?: string; errorType?: string }> {
+  try {
+    if (!currentRepoPath) return { ...noRepoError };
+    const { stdout } = await runGitCommand('worktree prune -v');
+    return { success: true, output: stdout.trim() };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
 function fixPath() {
   if (os.platform() === 'win32') return process.env;
 

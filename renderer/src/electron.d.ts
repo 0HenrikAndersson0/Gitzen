@@ -38,6 +38,18 @@ declare global {
     type: 'both-modified' | 'deleted-by-us' | 'deleted-by-them' | 'both-added' | 'both-deleted' | 'added-by-us' | 'added-by-them' | 'unknown';
   }
 
+  interface Worktree {
+    path: string;
+    head: string;
+    branch?: string;
+    bare: boolean;
+    detached: boolean;
+    main: boolean;
+    current: boolean;
+    locked?: string;
+    prunable?: string;
+  }
+
   interface Window {
     electronAPI: {
       gitClone: (url: string, path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -104,6 +116,12 @@ declare global {
       addSubmodule: (url: string, path: string, applyConfigs: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       updateSubmodules: () => Promise<{ success: boolean; error?: string; errorType?: string }>;
       removeSubmodule: (path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getWorktrees: () => Promise<{ success: boolean; worktrees?: Worktree[]; error?: string; errorType?: string }>;
+      addWorktree: (options: { path: string; branch?: string; newBranch?: string; startPoint?: string; detach?: boolean }) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      removeWorktree: (path: string, force?: boolean) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      lockWorktree: (path: string, reason?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      unlockWorktree: (path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      pruneWorktrees: () => Promise<{ success: boolean; output?: string; error?: string; errorType?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
       getSuperprojectPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string; errorType?: string }>;

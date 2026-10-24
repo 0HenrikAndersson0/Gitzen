@@ -66,6 +66,7 @@ export function useGitState({
   const [cherryPickStatus, setCherryPickStatus] = useState<{ inProgress: boolean }>({ inProgress: false });
   const [submodules, setSubmodules] = useState<any[]>([]);
   const [superprojectPath, setSuperprojectPath] = useState<string | null>(null);
+  const [worktrees, setWorktrees] = useState<Worktree[]>([]);
   const [historyFilters, setHistoryFiltersState] = useState<HistoryFilters>({});
   
   const historyFiltersRef = useRef(historyFilters);
@@ -166,6 +167,34 @@ export function useGitState({
   const refreshSuperprojectPath = useCallback((pathOverride?: string) => {
     return runQueued(() => refreshSuperprojectPathInternal(pathOverride));
   }, [refreshSuperprojectPathInternal, runQueued]);
+
+  const refreshWorktreesInternal = useCallback(async (pathOverride?: string) => {
+    const targetPath = pathOverride || repoPath;
+    if (!targetPath) return;
+    try {
+      const result = await window.electronAPI.getWorktrees();
+      if (!pathOverride && targetPath !== repoPathRef.current) return;
+      if (result.success && result.worktrees) {
+        setWorktrees(prev => {
+          if (prev.length !== result.worktrees!.length) return result.worktrees!;
+          for (let i = 0; i < prev.length; i++) {
+            const p = prev[i], n = result.worktrees![i];
+            if (p.path !== n.path || p.head !== n.head || p.branch !== n.branch ||
+                p.locked !== n.locked || p.prunable !== n.prunable) {
+              return result.worktrees!;
+            }
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh worktrees:', error);
+    }
+  }, [repoPath]);
+
+  const refreshWorktrees = useCallback((pathOverride?: string) => {
+    return runQueued(() => refreshWorktreesInternal(pathOverride));
+  }, [refreshWorktreesInternal, runQueued]);
 
   const refreshBranchInternal = useCallback(async (pathOverride?: string) => {
     const targetPath = pathOverride || repoPath;
@@ -440,6 +469,7 @@ export function useGitState({
       refreshBranchStatus();
       refreshSubmodules();
       refreshSuperprojectPath();
+      refreshWorktrees();
     });
 
     return () => {
@@ -457,7 +487,8 @@ export function useGitState({
     refreshRebaseStatus,
     refreshBranchStatus,
     refreshSubmodules,
-    refreshSuperprojectPath
+    refreshSuperprojectPath,
+    refreshWorktrees
   ]);
 
   // Fetch remote changes when the application regains focus
@@ -487,7 +518,8 @@ export function useGitState({
       refreshBranchStatusInternal(path),
       refreshRebaseStatusInternal(path),
       refreshSubmodulesInternal(path),
-      refreshSuperprojectPathInternal(path)
+      refreshSuperprojectPathInternal(path),
+      refreshWorktreesInternal(path)
     ]);
   }, [
     refreshStatusInternal,
@@ -498,7 +530,8 @@ export function useGitState({
     refreshBranchStatusInternal,
     refreshRebaseStatusInternal,
     refreshSubmodulesInternal,
-    refreshSuperprojectPathInternal
+    refreshSuperprojectPathInternal,
+    refreshWorktreesInternal
   ]);
 
   return {
@@ -519,6 +552,7 @@ export function useGitState({
     cherryPickStatus, setCherryPickStatus,
     submodules, setSubmodules,
     superprojectPath, setSuperprojectPath,
+    worktrees, setWorktrees,
 
     runQueued,
     refreshAllData,
@@ -542,6 +576,8 @@ export function useGitState({
     refreshSubmodules,
     refreshSuperprojectPathInternal,
     refreshSuperprojectPath,
+    refreshWorktreesInternal,
+    refreshWorktrees,
     refreshBranchesSilent,
     performFetchSilent,
     historyFilters,

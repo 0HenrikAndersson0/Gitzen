@@ -3,6 +3,7 @@ import { GitBranch, GitMerge, Trash2, Plus, CheckCircle2, ArrowUp, ArrowDown, Ch
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { StashList } from './StashList';
+import { WorktreesPanel } from './WorktreesPanel';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { RebaseModal } from './RebaseModal';
@@ -22,6 +23,7 @@ interface BranchesPanelProps {
   localBranches: Branch[];
   remoteBranches: Branch[];
   stashes: { name: string; message: string }[];
+  worktrees: Worktree[];
   loading?: boolean;
   onCheckout?: (branch: string) => void;
   onCreateBranch?: (name: string) => void;
@@ -36,6 +38,12 @@ interface BranchesPanelProps {
   onCloseCreateDialog?: () => void;
   onOpenCreateDialog?: () => void;
   onFinishGitFlow?: (type: 'feature' | 'bugfix' | 'release' | 'hotfix' | 'support', name: string) => void;
+  onCreateWorktree?: (options: { path: string; branch?: string; newBranch?: string; startPoint?: string; detach?: boolean }) => Promise<boolean>;
+  onRemoveWorktree?: (path: string, force?: boolean) => void;
+  onLockWorktree?: (path: string, reason?: string) => void;
+  onUnlockWorktree?: (path: string) => void;
+  onPruneWorktrees?: () => void;
+  onOpenWorktree?: (path: string) => void;
 }
 
 const extractBranchNameFromRemote = (remoteBranchName: string): string => {
@@ -90,6 +98,7 @@ export const BranchesPanel = memo(function BranchesPanel({
   localBranches,
   remoteBranches,
   stashes,
+  worktrees,
   loading,
   onCheckout,
   onCreateBranch,
@@ -103,7 +112,13 @@ export const BranchesPanel = memo(function BranchesPanel({
   isCreateDialogOpen,
   onCloseCreateDialog,
   onOpenCreateDialog,
-  onFinishGitFlow
+  onFinishGitFlow,
+  onCreateWorktree,
+  onRemoveWorktree,
+  onLockWorktree,
+  onUnlockWorktree,
+  onPruneWorktrees,
+  onOpenWorktree
 }: BranchesPanelProps) {
   const [internalShowCreateDialog, setInternalShowCreateDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
@@ -756,6 +771,20 @@ export const BranchesPanel = memo(function BranchesPanel({
             )}
           </div>
         )}
+      </div>
+
+      {/* Worktrees Panel - directly beneath Remote Branches */}
+      <div className="rounded-lg border border-border bg-card/50 flex flex-col">
+        <WorktreesPanel
+          worktrees={worktrees}
+          currentBranch={currentBranch}
+          onCreateWorktree={onCreateWorktree}
+          onRemoveWorktree={onRemoveWorktree}
+          onLockWorktree={onLockWorktree}
+          onUnlockWorktree={onUnlockWorktree}
+          onPruneWorktrees={onPruneWorktrees}
+          onOpenWorktree={onOpenWorktree}
+        />
       </div>
 
       {/* Stashes Panel */}

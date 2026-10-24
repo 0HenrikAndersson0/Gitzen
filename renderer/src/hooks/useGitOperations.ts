@@ -2,6 +2,10 @@ import { useCallback } from 'react';
 import { useGitState, FileChange } from './useGitState';
 import { useUIState } from './useUIState';
 
+const getPathBasename = (p: string) => (p.split(/[/\\]/).pop() || p);
+const samePath = (a?: string | null, b?: string | null) =>
+  !!(a && b && a.replace(/[/\\]+$/, '').toLowerCase() === b.replace(/[/\\]+$/, '').toLowerCase());
+
 export interface UseGitOperationsProps {
   gitState: ReturnType<typeof useGitState>;
   uiState: ReturnType<typeof useUIState> & { withLoading: (msg: string, fn: () => Promise<void>) => Promise<void> };
@@ -35,7 +39,8 @@ export function useGitOperations({
     refreshHistoryInternal,
     refreshStashesInternal,
     refreshRebaseStatusInternal,
-    refreshSubmodulesInternal
+    refreshSubmodulesInternal,
+    refreshWorktreesInternal
   } = gitState;
 
   const {
@@ -954,6 +959,133 @@ export function useGitOperations({
     });
   };
 
+  const handleCreateWorktree = async (options: { path: string; branch?: string; newBranch?: string; startPoint?: string; detach?: boolean }): Promise<boolean> => {
+    const label = options.newBranch ? options.newBranch : (options.branch || 'detached');
+    let success = false;
+    await withLoading(`Creating worktree ${label}...`, async () => {
+      try {
+        const result = await window.electronAPI.addWorktree(options);
+        if (result.success) {
+          success = true;
+          addLog('success', `Created worktree at ${options.path} (branch: ${label})`);
+          toast.success(`Worktree created at ${getPathBasename(options.path)}`);
+          await Promise.all([
+            refreshWorktreesInternal(),
+            refreshBranchesInternal()
+          ]);
+        } else {
+          addLog('error', result.error || 'Failed to create worktree');
+          toast.error(result.error || 'Failed to create worktree');
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Failed to create worktree: ${msg}`);
+        toast.error(`Failed to create worktree: ${msg}`);
+      }
+    });
+    return success;
+  };
+
+  const handleRemoveWorktree = async (wtPath: string, force: boolean = false) => {
+    await withLoading(`Removing worktree...`, async () => {
+      try {
+        const result = await window.electronAPI.removeWorktree(wtPath, force);
+        if (result.success) {
+          addLog('success', `Removed worktree ${wtPath}`);
+          toast.success(`Worktree removed: ${getPathBasename(wtPath)}`);
+          await refreshWorktreesInternal();
+        } else {
+          addLog('error', result.error || 'Failed to remove worktree');
+          const errMsg = result.error || 'Failed to remove worktree';
+          if (!force && /force|dirty|untracked/i.test(errMsg)) {
+            toast.error(errMsg, {
+              action: {
+                label: 'Force remove',
+                onClick: () => handleRemoveWorktree(wtPath, true)
+              }
+            });
+          } else {
+            toast.error(errMsg);
+          }
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        addLog('error', `Failed to remove worktree: ${msg}`);
+        toast.error(`Failed to remove worktree: ${msg}`);
+      }
+    });
+  };
+
+  const handleLockWorktree = async (wtPath: string, reason?: string) => {
+    await withLoading('Locking worktree...', async () => {
+      try {
+        const result = await window.electronAPI.lockWorktree(wtPath, reason);
+        if (result.success) {
+          addLog('success', `Locked worktree ${wtPath}`);
+          toast.success('Worktree locked');
+          await refreshWorktreesInternal();
+        } else {
+          toast.error(result.error || 'Failed to lock worktree');
+          addLog('error', result.error || 'Failed to lock worktree');
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        toast.error(`Failed to lock worktree: ${msg}`);
+        addLog('error', `Failed to lock worktree: ${msg}`);
+      }
+    });
+  };
+
+  const handleUnlockWorktree = async (wtPath: string) => {
+    await withLoading('Unlocking worktree...', async () => {
+      try {
+        const result = await window.electronAPI.unlockWorktree(wtPath);
+        if (result.success) {
+          addLog('success', `Unlocked worktree ${wtPath}`);
+          toast.success('Worktree unlocked');
+          await refreshWorktreesInternal();
+        } else {
+          toast.error(result.error || 'Failed to unlock worktree');
+          addLog('error', result.error || 'Failed to unlock worktree');
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        toast.error(`Failed to unlock worktree: ${msg}`);
+        addLog('error', `Failed to unlock worktree: ${msg}`);
+      }
+    });
+  };
+
+  const handlePruneWorktrees = async () => {
+    await withLoading('Pruning stale worktrees...', async () => {
+      try {
+        const result = await window.electronAPI.pruneWorktrees();
+        if (result.success) {
+          const pruned = result.output || '';
+          const count = pruned ? pruned.split('\n').filter(Boolean).length : 0;
+          addLog('success', `Pruned ${count} stale worktree(s)`);
+          toast.success(count > 0 ? `Pruned ${count} stale worktree(s)` : 'No stale worktrees to prune');
+          await refreshWorktreesInternal();
+        } else {
+          toast.error(result.error || 'Failed to prune worktrees');
+          addLog('error', result.error || 'Failed to prune worktrees');
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        toast.error(`Failed to prune worktrees: ${msg}`);
+        addLog('error', `Failed to prune worktrees: ${msg}`);
+      }
+    });
+  };
+
+  const handleOpenWorktree = async (wtPath: string) => {
+    if (samePath(repoPath, wtPath)) {
+      toast.info('This worktree is already open');
+      return;
+    }
+    await handleOpenRepo(wtPath);
+  };
+
   const handleBranchDropAction = useCallback(async (source: string, target: string, action: 'merge' | 'rebase') => {
     if (action === 'merge') {
       if (currentBranch !== target) {
@@ -1358,6 +1490,12 @@ export function useGitOperations({
     handleSyncSubmodules,
     handleAddSubmodule,
     handleRemoveSubmodule,
+    handleCreateWorktree,
+    handleRemoveWorktree,
+    handleLockWorktree,
+    handleUnlockWorktree,
+    handlePruneWorktrees,
+    handleOpenWorktree,
     handleGenerateConflictResolution,
     handleApplyConflictResolution
   };
