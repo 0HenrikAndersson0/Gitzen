@@ -727,7 +727,7 @@ ipcMain.handle('settings:getAIProvider', () => {
   }
 });
 
-ipcMain.handle('settings:setAIProvider', (_, provider: 'agy' | 'claude' | 'ollama' | 'copilot') => {
+ipcMain.handle('settings:setAIProvider', (_, provider: 'agy' | 'claude' | 'ollama' | 'copilot' | 'opencode') => {
   try {
     settingsService.setAIProvider(provider);
     return { success: true };
@@ -793,6 +793,32 @@ ipcMain.handle('settings:setHasSeenTour', (_, seen: boolean) => {
 ipcMain.handle('git:getOllamaModels', async () => {
   try {
     return await gitService.getOllamaModels();
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:getOpenCodeModel', () => {
+  try {
+    const model = settingsService.getOpenCodeModel();
+    return { success: true, model };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('settings:setOpenCodeModel', (_, model: string) => {
+  try {
+    settingsService.setOpenCodeModel(model);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+ipcMain.handle('git:getOpenCodeModels', async () => {
+  try {
+    return await gitService.getOpenCodeModels();
   } catch (error: any) {
     return { success: false, error: error.message || 'Unknown error' };
   }

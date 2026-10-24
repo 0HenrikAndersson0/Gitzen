@@ -45,7 +45,7 @@ export function VirtualTour({ run, onFinish }: VirtualTourProps) {
     },
     {
       target: '#tour-settings',
-      content: "Finally, access app settings here to configure AI providers (like Ollama, Claude, or Copilot), switch themes, or view the keyboard shortcuts cheat sheet. That's it for the tour! Enjoy Gitzen.",
+      content: "Finally, access app settings here to configure AI providers (like Ollama, Claude, Copilot, or OpenCode), switch themes, or view the keyboard shortcuts cheat sheet. That's it for the tour! Enjoy Gitzen.",
       placement: 'bottom',
     }
   ]);

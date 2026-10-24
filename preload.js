@@ -122,6 +122,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getHasSeenTour: () => ipcRenderer.invoke('settings:getHasSeenTour'),
   setHasSeenTour: (seen) => ipcRenderer.invoke('settings:setHasSeenTour', seen),
   gitGetOllamaModels: () => ipcRenderer.invoke('git:getOllamaModels'),
+  getOpenCodeModel: () => ipcRenderer.invoke('settings:getOpenCodeModel'),
+  setOpenCodeModel: (model) => ipcRenderer.invoke('settings:setOpenCodeModel', model),
+  gitGetOpenCodeModels: () => ipcRenderer.invoke('git:getOpenCodeModels'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   onShowShortcuts: (callback) => {

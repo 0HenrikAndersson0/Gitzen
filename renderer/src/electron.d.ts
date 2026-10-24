@@ -142,8 +142,8 @@ declare global {
       setMaxCommits: (maxCommits: number) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getTheme: () => Promise<{ success: boolean; theme?: string; error?: string; errorType?: string }>;
       setTheme: (theme: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
-      getAIProvider: () => Promise<{ success: boolean; provider?: 'agy' | 'claude' | 'ollama' | 'copilot'; error?: string; errorType?: string }>;
-      setAIProvider: (provider: 'agy' | 'claude' | 'ollama' | 'copilot') => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      getAIProvider: () => Promise<{ success: boolean; provider?: 'agy' | 'claude' | 'ollama' | 'copilot' | 'opencode'; error?: string; errorType?: string }>;
+      setAIProvider: (provider: 'agy' | 'claude' | 'ollama' | 'copilot' | 'opencode') => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getOllamaModel: () => Promise<{ success: boolean; model?: string; error?: string; errorType?: string }>;
       setOllamaModel: (model: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       getOllamaHost: () => Promise<{ success: boolean; host?: string; error?: string; errorType?: string }>;
@@ -151,6 +151,9 @@ declare global {
       getHasSeenTour: () => Promise<{ success: boolean; hasSeenTour?: boolean; error?: string }>;
       setHasSeenTour: (seen: boolean) => Promise<{ success: boolean; error?: string }>;
       gitGetOllamaModels: () => Promise<{ success: boolean; models?: string[]; error?: string; errorType?: string }>;
+      getOpenCodeModel: () => Promise<{ success: boolean; model?: string; error?: string; errorType?: string }>;
+      setOpenCodeModel: (model: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
+      gitGetOpenCodeModels: () => Promise<{ success: boolean; models?: string[]; error?: string; errorType?: string }>;
       checkForUpdates: () => Promise<any>;
       openExternal: (url: string) => Promise<{ success: boolean }>;
       onShowShortcuts: (callback: () => void) => void;
