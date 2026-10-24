@@ -1,11 +1,13 @@
-import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter, Terminal, Sparkles } from 'lucide-react';
+import { GitBranch, FolderGit, ChevronDown, Plus, FolderOpen, Settings, ArrowUp, ArrowDown, UploadCloud, DownloadCloud, RefreshCw, Trash2, Archive, BarChart2, Filter, Terminal, Sparkles, Search, Check } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { toast } from 'sonner';
 
 interface RepoHeaderProps {
   repoName: string | null;
+  currentRepoPath?: string | null;
   currentBranch: string;
   hasCredentials: boolean;
   branchStatus?: {
@@ -33,10 +35,22 @@ interface RepoHeaderProps {
   isShowingAgentSession?: boolean;
 }
 
-export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, isShowingAgentSession, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onFetch, onStash, onToggleGraphs, onToggleFilters, onToggleAgentSession, onStartGitFlow }: RepoHeaderProps) {
+export const RepoHeader = memo(function RepoHeader({ repoName, currentRepoPath, currentBranch, hasCredentials, branchStatus, isDisabled, canStash, isShowingGraphs, isShowingFilters, isShowingAgentSession, superprojectPath, onOpenSuperproject, onSwitchRepo, onOpenNew, onOpenSettings, onPush, onPull, onFetch, onStash, onToggleGraphs, onToggleFilters, onToggleAgentSession, onStartGitFlow }: RepoHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Array<{ name: string; path: string }>>([]);
+  const [repoFilter, setRepoFilter] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isCurrentRepo = (path: string) =>
+    !!(currentRepoPath &&
+      path.replace(/\\/g, '/').replace(/[/\\]+$/, '').toLowerCase() ===
+      currentRepoPath.replace(/\\/g, '/').replace(/[/\\]+$/, '').toLowerCase());
+
+  const filteredRepos = recentRepos.filter(repo =>
+    !repoFilter ||
+    repo.name.toLowerCase().includes(repoFilter.toLowerCase()) ||
+    repo.path.toLowerCase().includes(repoFilter.toLowerCase())
+  );
 
   const loadRecent = useCallback(async () => {
     try {
@@ -86,6 +100,12 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
 
   const handleToggleDropdown = () => {
     if (!isDisabled) {
+      // Always re-read recents when opening the dropdown so entries
+      // added elsewhere (e.g. by the folder scan) are visible
+      if (!isOpen) {
+        loadRecent();
+        setRepoFilter('');
+      }
       setIsOpen(!isOpen);
     }
   };
@@ -134,34 +154,66 @@ export const RepoHeader = memo(function RepoHeader({ repoName, currentBranch, ha
                       </div>
                     </button>
 
-                    {/* Recent Repositories */}
+                    {/* Repository List */}
                     {recentRepos.length > 0 && (
                       <div className="p-2">
-                        <div className="px-2 py-1 text-xs font-medium text-muted-foreground">Recent Repositories</div>
-                        {recentRepos.map((repo, index) => (
-                          <div
-                            key={index}
-                            className="group/item flex w-full items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-accent cursor-pointer"
-                            onClick={() => handleSwitchRepo(repo.name, repo.path)}
-                          >
-                            <FolderOpen className="size-4 text-foreground flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium text-foreground">
-                                {repo.name}
-                              </div>
-                              <div className="truncate text-xs text-muted-foreground" title={repo.path}>
-                                {repo.path}
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => handleRemoveRecent(e, repo.path)}
-                              className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-muted rounded transition-all flex-shrink-0"
-                              title="Remove from recent list"
-                            >
-                              <Trash2 className="size-3.5 text-muted-foreground hover:text-red-400" />
-                            </button>
+                        <div className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground">
+                          <span>Recent Repositories</span>
+                          <span>{repoFilter ? `${filteredRepos.length} / ${recentRepos.length}` : recentRepos.length}</span>
+                        </div>
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                          <Input
+                            value={repoFilter}
+                            onChange={(e) => setRepoFilter(e.target.value)}
+                            placeholder="Filter repositories..."
+                            className="h-8 pl-7 text-xs bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground"
+                            autoFocus
+                          />
+                        </div>
+                        {filteredRepos.length === 0 ? (
+                          <div className="py-4 text-center text-xs text-muted-foreground">
+                            No repositories match "{repoFilter}"
                           </div>
-                        ))}
+                        ) : (
+                          <div className="mt-1 max-h-[320px] overflow-y-auto">
+                            {filteredRepos.map((repo, index) => {
+                              const isCurrent = isCurrentRepo(repo.path);
+                              return (
+                                <div
+                                  key={index}
+                                  className={`group/item flex w-full items-center gap-2 rounded-md px-3 py-2 transition-colors cursor-pointer ${isCurrent ? 'bg-info/10 hover:bg-info/15' : 'hover:bg-accent'}`}
+                                  onClick={() => handleSwitchRepo(repo.name, repo.path)}
+                                >
+                                  <FolderOpen className={`size-4 flex-shrink-0 ${isCurrent ? 'text-info' : 'text-foreground'}`} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`truncate text-sm font-medium ${isCurrent ? 'text-info' : 'text-foreground'}`}>
+                                        {repo.name}
+                                      </span>
+                                      {isCurrent && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-info/15 text-info flex-shrink-0">Current</span>
+                                      )}
+                                    </div>
+                                    <div className="truncate text-xs text-muted-foreground" title={repo.path}>
+                                      {repo.path}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => handleRemoveRecent(e, repo.path)}
+                                    className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-muted rounded transition-all flex-shrink-0"
+                                    title="Remove from recent list"
+                                  >
+                                    <Trash2 className="size-3.5 text-muted-foreground hover:text-red-400" />
+                                  </button>
+                                  {isCurrent && (
+                                    <Check className="size-3.5 text-info flex-shrink-0" />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
