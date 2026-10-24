@@ -28,10 +28,12 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [isGlobalConfig, setIsGlobalConfig] = useState(true);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [aiProvider, setAIProvider] = useState<'agy' | 'claude' | 'ollama' | 'copilot'>('agy');
+  const [aiProvider, setAIProvider] = useState<'agy' | 'claude' | 'ollama' | 'copilot' | 'opencode'>('agy');
   const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
   const [ollamaModel, setOllamaModel] = useState('');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [opencodeModel, setOpenCodeModel] = useState('');
+  const [opencodeModels, setOpenCodeModels] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -64,6 +66,31 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     }
   }, [open, aiProvider]);
 
+  const loadOpenCodeModels = async () => {
+    try {
+      const result = await window.electronAPI.gitGetOpenCodeModels();
+      if (result.success && result.models) {
+        setOpenCodeModels(result.models);
+        if (result.models.length > 0 && !result.models.includes(opencodeModel)) {
+          if (!opencodeModel) {
+            setOpenCodeModel(result.models[0]);
+          }
+        }
+      } else {
+        setOpenCodeModels([]);
+      }
+    } catch (e) {
+      console.error('Failed to load opencode models:', e);
+      setOpenCodeModels([]);
+    }
+  };
+
+  useEffect(() => {
+    if (open && aiProvider === 'opencode') {
+      loadOpenCodeModels();
+    }
+  }, [open, aiProvider]);
+
   const loadSettings = async () => {
     setLoading(true);
     try {
@@ -74,7 +101,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         remoteResult,
         aiProviderResult,
         ollamaHostResult,
-        ollamaModelResult
+        ollamaModelResult,
+        opencodeModelResult
       ] = await Promise.all([
         window.electronAPI.getMergeToolPath(),
         window.electronAPI.getMaxCommits(),
@@ -83,6 +111,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         window.electronAPI.getAIProvider(),
         window.electronAPI.getOllamaHost(),
         window.electronAPI.getOllamaModel(),
+        window.electronAPI.getOpenCodeModel(),
       ]);
       if (mergeToolResult.success) {
         setMergeToolPath(mergeToolResult.mergeToolPath || '');
@@ -106,6 +135,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       }
       if (ollamaModelResult.success) {
         setOllamaModel(ollamaModelResult.model || '');
+      }
+      if (opencodeModelResult.success) {
+        setOpenCodeModel(opencodeModelResult.model || '');
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -141,7 +173,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         remoteResult,
         aiProviderResult,
         ollamaHostResult,
-        ollamaModelResult
+        ollamaModelResult,
+        opencodeModelResult
       ] = await Promise.all([
         window.electronAPI.setMergeToolPath(mergeToolPath),
         window.electronAPI.setMaxCommits(maxCommits),
@@ -150,6 +183,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         window.electronAPI.setAIProvider(aiProvider),
         window.electronAPI.setOllamaHost(ollamaHost),
         window.electronAPI.setOllamaModel(ollamaModel),
+        window.electronAPI.setOpenCodeModel(opencodeModel),
       ]);
 
       const errors: string[] = [];
@@ -160,6 +194,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       if (!aiProviderResult.success) errors.push(`AI Provider: ${aiProviderResult.error}`);
       if (!ollamaHostResult.success) errors.push(`Ollama Host: ${ollamaHostResult.error}`);
       if (!ollamaModelResult.success) errors.push(`Ollama Model: ${ollamaModelResult.error}`);
+      if (!opencodeModelResult.success) errors.push(`OpenCode Model: ${opencodeModelResult.error}`);
 
       if (errors.length === 0) {
         toast.success('Settings saved successfully');
@@ -333,6 +368,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 <option value="claude">Claude (claude CLI)</option>
                 <option value="ollama">Ollama (Local LLM)</option>
                 <option value="copilot">GitHub Copilot (gh CLI)</option>
+                <option value="opencode">OpenCode (opencode CLI)</option>
               </select>
               <p className="text-xs text-muted-foreground">
                 Choose the AI model provider to use for commit messages, conflict resolution, and code reviews.
@@ -389,6 +425,45 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Select the local model to run. Use 'Refresh' to reload pulled models from your Ollama server.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {aiProvider === 'opencode' && (
+              <div className="space-y-4 border-l-2 border-border pl-4 ml-1">
+                <div className="space-y-2">
+                  <Label htmlFor="opencodeModel">OpenCode Model</Label>
+                  <div className="flex gap-2">
+                    <select
+                      id="opencodeModel"
+                      value={opencodeModel}
+                      onChange={(e) => setOpenCodeModel(e.target.value)}
+                      className="flex h-9 flex-1 rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loading}
+                    >
+                      {opencodeModels.length === 0 ? (
+                        <option value="">No models found. Check that opencode is installed and authenticated.</option>
+                      ) : (
+                        opencodeModels.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <Button
+                      onClick={loadOpenCodeModels}
+                      variant="outline"
+                      type="button"
+                      className="bg-secondary border-border hover:bg-muted text-xs h-9"
+                      disabled={loading}
+                    >
+                      Refresh
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Select the model to use with the opencode CLI. Use 'Refresh' to reload the available models.
                   </p>
                 </div>
               </div>

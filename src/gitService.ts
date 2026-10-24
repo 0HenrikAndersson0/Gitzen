@@ -2992,8 +2992,13 @@ function fixPath() {
   };
 }
 
+function stripOpenCodeHeader(output: string): string {
+  return output.replace(/\u001b\[[0-9;]*m/g, '').replace(/^(?:\s*>\s*.*\n?)+/, '').trim();
+}
+
 export async function generateCommitMessage(): Promise<{ success: boolean; message?: string; error?: string }> {
   let tempDiffFile: string | null = null;
+  let provider = '';
   try {
     if (!currentRepoPath) return { success: false, error: 'No repository open' };
 
@@ -3008,7 +3013,7 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
     fs.writeFileSync(tempDiffFile, diff);
 
     const prompt = "Write a concise commit message for these changes. Output ONLY the raw commit message without any markdown formatting, prefixes like 'Subject:', or explanations.";
-    const provider = settingsService.getAIProvider();
+    provider = settingsService.getAIProvider();
     let finalMessage = '';
 
     if (provider === 'ollama') {
@@ -3028,13 +3033,15 @@ export async function generateCommitMessage(): Promise<{ success: boolean; messa
         // PowerShell script reading from temp file
         const escapedTempPath = tempDiffFile.replace(/'/g, "''");
         if (provider === 'agy') {
-          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }" < /dev/null`;
         } else if (provider === 'claude') {
-          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }" < /dev/null`;
         } else if (provider === 'copilot') {
-          command = `powershell.exe -Command "if (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'GitHub Copilot CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'GitHub Copilot CLI not found in PATH.' }" < /dev/null`;
+        } else if (provider === 'opencode') {
+          command = `powershell.exe -Command "if (Get-Command opencode -ErrorAction SilentlyContinue) { if ($env:GITZEN_OPENCODE_MODEL) { opencode run --agent gitzen --auto --model \"$env:GITZEN_OPENCODE_MODEL\" \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } else { opencode run --agent gitzen --auto \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } } else { Write-Error 'opencode CLI not found in PATH.' }" < /dev/null`;
         } else {
-          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'No supported AI CLI found.' }"`;
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command opencode -ErrorAction SilentlyContinue) { opencode run --agent gitzen --auto \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } else { Write-Error 'No supported AI CLI found.' }" < /dev/null`;
         }
       } else {
         // Bash script reading from temp file
@@ -3064,6 +3071,23 @@ else
   echo "Error: GitHub Copilot CLI not found in PATH." >&2
   exit 1
 fi`.trim();
+        } else if (provider === 'opencode') {
+          command = `
+if command -v opencode &> /dev/null; then
+  outfile="${tempDiffFile}.opencode.out"
+  if [ -n "$GITZEN_OPENCODE_MODEL" ]; then
+    opencode run --agent gitzen --auto --model "$GITZEN_OPENCODE_MODEL" "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" > "$outfile" 2>&1 < /dev/null
+  else
+    opencode run --agent gitzen --auto "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" > "$outfile" 2>&1 < /dev/null
+  fi
+  status=$?
+  cat "$outfile"
+  rm -f "$outfile"
+  exit $status
+else
+  echo "Error: opencode CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
         } else {
           command = `
 if command -v agy &> /dev/null; then
@@ -3074,20 +3098,25 @@ elif command -v copilot &> /dev/null; then
   copilot -p "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" -s --yolo
 elif command -v gh &> /dev/null; then
   gh copilot -p "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" -s --yolo
+elif command -v opencode &> /dev/null; then
+  opencode run --agent gitzen --auto "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" > "${tempDiffFile}.opencode.out" 2>&1 < /dev/null
+  cat "${tempDiffFile}.opencode.out"
+  rm -f "${tempDiffFile}.opencode.out"
 else
-  echo "Error: No supported AI CLI found (agy, claude, or copilot)." >&2
+  echo "Error: No supported AI CLI found (agy, claude, copilot, or opencode)." >&2
   exit 1
 fi`.trim();
         }
       }
 
       // Execute the constructed script with the prompt in an environment variable
-      const { stdout: aiOutput } = await execAsync(command, { 
-        cwd: currentRepoPath,
-        env: { ...env, GITZEN_PROMPT: prompt }
+      const { stdout: aiOutput } = await execAsync(command, {
+        cwd: provider === 'opencode' ? settingsService.getOpenCodeConfigDir() : currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt, GITZEN_OPENCODE_MODEL: settingsService.getOpenCodeModel() },
+        maxBuffer: 10 * 1024 * 1024
       });
       
-      finalMessage = aiOutput.trim();
+      finalMessage = stripOpenCodeHeader(aiOutput);
     }
     // Remove markdown code blocks if present
     finalMessage = finalMessage.replace(/^```[a-z]*\n([\s\S]*)\n```$/i, '$1').trim();
@@ -3100,7 +3129,9 @@ fi`.trim();
 
     return { success: true, message: finalMessage };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    let errorDetail = String(error.stderr || error.stdout || error.message || 'Unknown error');
+    if (provider === 'opencode') errorDetail = stripOpenCodeHeader(errorDetail) || errorDetail;
+    return { success: false, error: errorDetail };
   } finally {
     // Clean up temporary file
     if (tempDiffFile && fs.existsSync(tempDiffFile)) {
@@ -3115,6 +3146,7 @@ fi`.trim();
 
 export async function generateConflictResolution(filePath: string): Promise<{ success: boolean; explanation?: string; resolvedCode?: string; error?: string }> {
   let tempConflictFile: string | null = null;
+  let provider = '';
   try {
     if (!currentRepoPath) return { success: false, error: 'No repository open' };
 
@@ -3144,7 +3176,7 @@ CODE:
 <The full resolved file content without any conflict markers and without any markdown code blocks.>
 `.trim();
 
-    const provider = settingsService.getAIProvider();
+    provider = settingsService.getAIProvider();
     let aiOutput = '';
 
     if (provider === 'ollama') {
@@ -3162,13 +3194,15 @@ CODE:
       if (platform === 'win32') {
         const escapedTempPath = tempConflictFile.replace(/'/g, "''");
         if (provider === 'agy') {
-          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }" < /dev/null`;
         } else if (provider === 'claude') {
-          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }" < /dev/null`;
         } else if (provider === 'copilot') {
-          command = `powershell.exe -Command "if (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'GitHub Copilot CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'GitHub Copilot CLI not found in PATH.' }" < /dev/null`;
+        } else if (provider === 'opencode') {
+          command = `powershell.exe -Command "if (Get-Command opencode -ErrorAction SilentlyContinue) { if ($env:GITZEN_OPENCODE_MODEL) { opencode run --agent gitzen --auto --model \"$env:GITZEN_OPENCODE_MODEL\" \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } else { opencode run --agent gitzen --auto \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } } else { Write-Error 'opencode CLI not found in PATH.' }" < /dev/null`;
         } else {
-          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'No supported AI CLI found.' }"`;
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command opencode -ErrorAction SilentlyContinue) { opencode run --agent gitzen --auto \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } else { Write-Error 'No supported AI CLI found.' }" < /dev/null`;
         }
       } else {
         if (provider === 'agy') {
@@ -3197,24 +3231,46 @@ else
   echo "Error: GitHub Copilot CLI not found in PATH." >&2
   exit 1
 fi`.trim();
+        } else if (provider === 'opencode') {
+          command = `
+if command -v opencode &> /dev/null; then
+  outfile="${tempConflictFile}.opencode.out"
+  if [ -n "$GITZEN_OPENCODE_MODEL" ]; then
+    opencode run --agent gitzen --auto --model "$GITZEN_OPENCODE_MODEL" "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempConflictFile}")" > "$outfile" 2>&1 < /dev/null
+  else
+    opencode run --agent gitzen --auto "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempConflictFile}")" > "$outfile" 2>&1 < /dev/null
+  fi
+  status=$?
+  cat "$outfile"
+  rm -f "$outfile"
+  exit $status
+else
+  echo "Error: opencode CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
         } else {
           command = `
 if command -v agy &> /dev/null; then
   agy --prompt "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempConflictFile}")" --dangerously-skip-permissions
 elif command -v claude &> /dev/null; then
   cat "${tempConflictFile}" | claude "$GITZEN_PROMPT"
+elif command -v opencode &> /dev/null; then
+  opencode run --agent gitzen --auto "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempConflictFile}")" > "${tempConflictFile}.opencode.out" 2>&1 < /dev/null
+  cat "${tempConflictFile}.opencode.out"
+  rm -f "${tempConflictFile}.opencode.out"
 else
-  echo "Error: No supported AI CLI found (agy or claude)." >&2
+  echo "Error: No supported AI CLI found (agy, claude, or opencode)." >&2
   exit 1
 fi`.trim();
         }
       }
 
-      const { stdout } = await execAsync(command, { 
-        cwd: currentRepoPath,
-        env: { ...env, GITZEN_PROMPT: prompt }
+      const { stdout } = await execAsync(command, {
+        cwd: provider === 'opencode' ? settingsService.getOpenCodeConfigDir() : currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt, GITZEN_OPENCODE_MODEL: settingsService.getOpenCodeModel() },
+        maxBuffer: 10 * 1024 * 1024
       });
-      aiOutput = stdout;
+      aiOutput = stripOpenCodeHeader(stdout);
     }
 
     const explanationMarker = 'EXPLANATION:';
@@ -3245,7 +3301,9 @@ fi`.trim();
 
     return { success: true, explanation, resolvedCode };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error' };
+    let errorDetail = String(error.stderr || error.stdout || error.message || 'Unknown error');
+    if (provider === 'opencode') errorDetail = stripOpenCodeHeader(errorDetail) || errorDetail;
+    return { success: false, error: errorDetail };
   } finally {
     if (tempConflictFile && fs.existsSync(tempConflictFile)) {
       try {
@@ -3386,6 +3444,7 @@ export async function getBranchDiffFiles(branchName: string): Promise<{ success:
 
 export async function getAIBranchReview(branchName: string): Promise<{ success: boolean; summary?: string; explanation?: string; error?: string }> {
   let tempDiffFile: string | null = null;
+  let provider = '';
   try {
     if (!currentRepoPath) {
       return { success: false, error: 'No repository open' };
@@ -3425,7 +3484,7 @@ Your output must be formatted exactly as follows:
 === EXPLANATION ===
 [Provide a detailed explanation of the changes, what they do, and how they work. Write it in clear Markdown.]`;
 
-    const provider = settingsService.getAIProvider();
+    provider = settingsService.getAIProvider();
     let aiOutput = '';
 
     if (provider === 'ollama') {
@@ -3444,13 +3503,15 @@ Your output must be formatted exactly as follows:
       if (platform === 'win32') {
         const escapedTempPath = tempDiffFile.replace(/'/g, "''");
         if (provider === 'agy') {
-          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } else { Write-Error 'agy CLI not found in PATH.' }" < /dev/null`;
         } else if (provider === 'claude') {
-          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } else { Write-Error 'claude CLI not found in PATH.' }" < /dev/null`;
         } else if (provider === 'copilot') {
-          command = `powershell.exe -Command "if (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'GitHub Copilot CLI not found in PATH.' }"`;
+          command = `powershell.exe -Command "if (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'GitHub Copilot CLI not found in PATH.' }" < /dev/null`;
+        } else if (provider === 'opencode') {
+          command = `powershell.exe -Command "if (Get-Command opencode -ErrorAction SilentlyContinue) { if ($env:GITZEN_OPENCODE_MODEL) { opencode run --agent gitzen --auto --model \"$env:GITZEN_OPENCODE_MODEL\" \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } else { opencode run --agent gitzen --auto \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } } else { Write-Error 'opencode CLI not found in PATH.' }" < /dev/null`;
         } else {
-          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } else { Write-Error 'No supported AI CLI found.' }"`;
+          command = `powershell.exe -Command "if (Get-Command agy -ErrorAction SilentlyContinue) { $content = Get-Content -Raw -Path '${escapedTempPath}'; agy --prompt \\"$env:GITZEN_PROMPT\`n\`n$content\\" --dangerously-skip-permissions } elseif (Get-Command claude -ErrorAction SilentlyContinue) { Get-Content -Raw -Path '${escapedTempPath}' | claude $env:GITZEN_PROMPT } elseif (Get-Command copilot -ErrorAction SilentlyContinue) { copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command gh -ErrorAction SilentlyContinue) { gh copilot -p \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" -s --yolo } elseif (Get-Command opencode -ErrorAction SilentlyContinue) { opencode run --agent gitzen --auto \"$env:GITZEN_PROMPT\`n\`n$(Get-Content -Raw -Path '${escapedTempPath}')\" } else { Write-Error 'No supported AI CLI found.' }" < /dev/null`;
         }
       } else {
         if (provider === 'agy') {
@@ -3479,6 +3540,23 @@ else
   echo "Error: GitHub Copilot CLI not found in PATH." >&2
   exit 1
 fi`.trim();
+        } else if (provider === 'opencode') {
+          command = `
+if command -v opencode &> /dev/null; then
+  outfile="${tempDiffFile}.opencode.out"
+  if [ -n "$GITZEN_OPENCODE_MODEL" ]; then
+    opencode run --agent gitzen --auto --model "$GITZEN_OPENCODE_MODEL" "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" > "$outfile" 2>&1 < /dev/null
+  else
+    opencode run --agent gitzen --auto "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" > "$outfile" 2>&1 < /dev/null
+  fi
+  status=$?
+  cat "$outfile"
+  rm -f "$outfile"
+  exit $status
+else
+  echo "Error: opencode CLI not found in PATH." >&2
+  exit 1
+fi`.trim();
         } else {
           command = `
 if command -v agy &> /dev/null; then
@@ -3489,18 +3567,23 @@ elif command -v copilot &> /dev/null; then
   copilot -p "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" -s --yolo
 elif command -v gh &> /dev/null; then
   gh copilot -p "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" -s --yolo
+elif command -v opencode &> /dev/null; then
+  opencode run --agent gitzen --auto "$GITZEN_PROMPT"$'\n\n'"$(cat "${tempDiffFile}")" > "${tempDiffFile}.opencode.out" 2>&1 < /dev/null
+  cat "${tempDiffFile}.opencode.out"
+  rm -f "${tempDiffFile}.opencode.out"
 else
-  echo "Error: No supported AI CLI found (agy, claude, or copilot)." >&2
+  echo "Error: No supported AI CLI found (agy, claude, copilot, or opencode)." >&2
   exit 1
 fi`.trim();
         }
       }
- 
-      const { stdout } = await execAsync(command, { 
-        cwd: currentRepoPath,
-        env: { ...env, GITZEN_PROMPT: prompt }
+
+      const { stdout } = await execAsync(command, {
+        cwd: provider === 'opencode' ? settingsService.getOpenCodeConfigDir() : currentRepoPath,
+        env: { ...env, GITZEN_PROMPT: prompt, GITZEN_OPENCODE_MODEL: settingsService.getOpenCodeModel() },
+        maxBuffer: 10 * 1024 * 1024
       });
-      aiOutput = stdout;
+      aiOutput = stripOpenCodeHeader(stdout);
     }
 
     const summaryMarker = '=== SUMMARY ===';
@@ -3527,7 +3610,9 @@ fi`.trim();
 
     return { success: true, summary, explanation };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Unknown error during AI generation' };
+    let errorDetail = String(error.stderr || error.stdout || error.message || 'Unknown error during AI generation');
+    if (provider === 'opencode') errorDetail = stripOpenCodeHeader(errorDetail) || errorDetail;
+    return { success: false, error: errorDetail };
   } finally {
     if (tempDiffFile && fs.existsSync(tempDiffFile)) {
       try {
@@ -3588,6 +3673,18 @@ export async function getOllamaModels(): Promise<{ success: boolean; models?: st
     return { success: true, models };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to connect to Ollama. Make sure Ollama is running.' };
+  }
+}
+
+export async function getOpenCodeModels(): Promise<{ success: boolean; models?: string[]; error?: string }> {
+  try {
+    const models = settingsService.getOpenCodeAvailableModels();
+    if (models.length === 0) {
+      return { success: false, error: 'No OpenCode models configured. Gitzen uses the Ollama provider (ensure Ollama is running at http://127.0.0.1:11434).' };
+    }
+    return { success: true, models };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to list OpenCode models.' };
   }
 }
 

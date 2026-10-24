@@ -89,6 +89,7 @@ export const AgentSessionView: React.FC<AgentSessionViewProps> = ({
     switch (provider) {
       case 'agy': return 'agy\r';
       case 'claude': return 'claude\r';
+      case 'opencode': return 'opencode\r';
       case 'ollama': return 'ollama run llama3\r';
       default: return '';
     }
@@ -154,6 +155,7 @@ export const AgentSessionView: React.FC<AgentSessionViewProps> = ({
               <SelectGroup>
                 <SelectItem value="agy">Agy (CLI)</SelectItem>
                 <SelectItem value="claude">Claude (CLI)</SelectItem>
+                <SelectItem value="opencode">OpenCode (CLI)</SelectItem>
               </SelectGroup>
               
               <SelectSeparator />
