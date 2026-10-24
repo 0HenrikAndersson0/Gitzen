@@ -25,7 +25,7 @@
   "author": "Henrik <henrik@localhost>",
   "license": "MIT",
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
+    "@electron/rebuild": "^4.2.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/diff": "^7.0.2",
     "@types/node": "^25.9.1",
