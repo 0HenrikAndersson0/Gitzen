@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   lockWorktree: (path, reason) => ipcRenderer.invoke('git:lockWorktree', path, reason),
   unlockWorktree: (path) => ipcRenderer.invoke('git:unlockWorktree', path),
   pruneWorktrees: () => ipcRenderer.invoke('git:pruneWorktrees'),
+  scanDirectoryForRepos: (rootPath, maxDepth) => ipcRenderer.invoke('git:scanDirectoryForRepos', rootPath, maxDepth),
   showOpenDialog: (options) => ipcRenderer.invoke('dialog:showOpenDialog', options),
   getRecentRepos: () => ipcRenderer.invoke('repos:getRecent'),
   addRecentRepo: (path) => ipcRenderer.invoke('repos:addRecent', path),

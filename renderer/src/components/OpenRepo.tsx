@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, Clock, ChevronRight, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { FolderOpen, FolderSearch, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
+import { ScanForReposDialog } from './ScanForReposDialog';
 
 interface OpenRepoProps {
   onOpen: (path: string) => void;
@@ -15,6 +17,7 @@ interface RecentRepo {
 export function OpenRepo({ onOpen }: OpenRepoProps) {
   const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showScanDialog, setShowScanDialog] = useState(false);
 
   // Load recent repos on mount
   useEffect(() => {
@@ -53,6 +56,23 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
       console.error('Failed to browse folder:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleScanConfirm = async (repos: ScannedRepo[]): Promise<boolean> => {
+    try {
+      // Add all selected repos to the recent repositories list
+      await Promise.all(repos.map(repo => window.electronAPI.addRecentRepo(repo.path)));
+
+      // Open the first selected repository right away
+      await handleOpenRepository(repos[0].path);
+
+      toast.success(`Added ${repos.length} ${repos.length === 1 ? 'repository' : 'repositories'} to recent repositories`);
+      return true;
+    } catch (error) {
+      console.error('Failed to add scanned repositories:', error);
+      toast.error('Failed to add the selected repositories');
+      return false;
     }
   };
 
@@ -132,6 +152,20 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </div>
           </Button>
+          <Button
+            onClick={() => setShowScanDialog(true)}
+            disabled={isLoading}
+            variant="outline"
+            className="w-full justify-start mt-2 bg-transparent hover:bg-accent border-border text-foreground"
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <FolderSearch className="h-5 w-5 text-muted-foreground" />
+                <span>Scan folder for repositories</span>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </Button>
         </div>
 
         {/* Recent Paths */}
@@ -196,6 +230,12 @@ export function OpenRepo({ onOpen }: OpenRepoProps) {
           </div>
         )}
       </div>
+
+      <ScanForReposDialog
+        open={showScanDialog}
+        onOpenChange={setShowScanDialog}
+        onConfirm={handleScanConfirm}
+      />
     </div>
   );
 }

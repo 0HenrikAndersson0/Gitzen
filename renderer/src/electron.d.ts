@@ -50,6 +50,12 @@ declare global {
     prunable?: string;
   }
 
+  interface ScannedRepo {
+    path: string;
+    name: string;
+    isWorktree: boolean;
+  }
+
   interface Window {
     electronAPI: {
       gitClone: (url: string, path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
@@ -122,6 +128,7 @@ declare global {
       lockWorktree: (path: string, reason?: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       unlockWorktree: (path: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
       pruneWorktrees: () => Promise<{ success: boolean; output?: string; error?: string; errorType?: string }>;
+      scanDirectoryForRepos: (rootPath: string, maxDepth?: number) => Promise<{ success: boolean; repos?: ScannedRepo[]; error?: string; errorType?: string }>;
       getRepoPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
       getSuperprojectPath: () => Promise<{ success: boolean; path?: string; error?: string; errorType?: string }>;
       getRepoName: () => Promise<{ success: boolean; name?: string; error?: string; errorType?: string }>;

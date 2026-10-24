@@ -624,6 +624,10 @@ ipcMain.handle('git:pruneWorktrees', async () => {
   return await gitService.pruneWorktrees();
 });
 
+ipcMain.handle('git:scanDirectoryForRepos', async (_, rootPath: string, maxDepth?: number) => {
+  return await gitService.scanDirectoryForRepos(rootPath, maxDepth);
+});
+
 // Update handlers
 ipcMain.handle('update:check', async () => {
   return await updateService.checkForUpdates();
