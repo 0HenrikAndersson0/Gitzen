@@ -5,7 +5,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    
+    ignore:
+      # react-window 2.x is a breaking major; CommitGraph still uses the v1 API
+      - dependency-name: "react-window"
+        versions: [">= 2.0"]
+      - dependency-name: "@types/react-window"
+        versions: [">= 2.0"]
   # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
