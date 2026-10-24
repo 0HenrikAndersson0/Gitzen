@@ -7,7 +7,9 @@ interface RecentRepo {
   lastOpened: number;
 }
 
-const MAX_RECENT_REPOS = 10;
+// The recents list doubles as the user's repository library (populated e.g.
+// by the folder scan), so allow plenty of entries instead of 10
+const MAX_RECENT_REPOS = 50;
 
 let userDataPath: string | null = null;
 

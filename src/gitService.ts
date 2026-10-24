@@ -3153,6 +3153,72 @@ export async function pruneWorktrees(): Promise<{ success: boolean; output?: str
   }
 }
 
+export interface ScannedRepo {
+  path: string;
+  name: string;
+  isWorktree: boolean;
+}
+
+const SCAN_SKIP_DIRS = new Set(['node_modules', '.cache', 'venv', '.venv', '__pycache__']);
+const SCAN_MAX_DIRS = 5000;
+
+export async function scanDirectoryForRepos(rootPath: string, maxDepth: number = 3): Promise<{ success: boolean; repos?: ScannedRepo[]; error?: string; errorType?: string }> {
+  try {
+    const root = resolveWorktreePath(rootPath || '');
+    if (!fs.existsSync(root)) {
+      return { success: false, error: 'Folder not found' };
+    }
+    if (!fs.statSync(root).isDirectory()) {
+      return { success: false, error: 'Selected path is not a folder' };
+    }
+
+    const repos: ScannedRepo[] = [];
+    const seen = new Set<string>([root]);
+    const queue: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
+    let visited = 0;
+
+    while (queue.length > 0 && visited < SCAN_MAX_DIRS) {
+      const { dir, depth } = queue.shift()!;
+      if (depth > maxDepth) continue;
+      visited++;
+
+      const gitPath = path.join(dir, '.git');
+      if (fs.existsSync(gitPath)) {
+        repos.push({
+          path: dir,
+          name: path.basename(dir) || dir,
+          isWorktree: fs.statSync(gitPath).isFile()
+        });
+        // A repository directory is not scanned deeper - nested repos inside a repo
+        // are unusual and slow the scan down
+        continue;
+      }
+
+      if (depth >= maxDepth) continue;
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+        if (entry.name.startsWith('.') || SCAN_SKIP_DIRS.has(entry.name)) continue;
+        const child = path.join(dir, entry.name);
+        if (seen.has(child)) continue;
+        seen.add(child);
+        queue.push({ dir: child, depth: depth + 1 });
+      }
+    }
+
+    repos.sort((a, b) => a.name.localeCompare(b.name));
+    return { success: true, repos };
+  } catch (error: any) {
+    const parsed = parseGitError(error);
+    return { success: false, error: parsed.message || 'Unknown error', errorType: parsed.type };
+  }
+}
+
 function fixPath() {
   if (os.platform() === 'win32') return process.env;
 

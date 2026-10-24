@@ -408,6 +408,7 @@ export default function App() {
       <div className="flex-none" id="tour-repo-header">
         <RepoHeader
           repoName={repoName}
+          currentRepoPath={repoPath}
           currentBranch={currentBranch}
           hasCredentials={hasCredentials}
           branchStatus={branchStatus}
