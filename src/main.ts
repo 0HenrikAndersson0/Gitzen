@@ -599,6 +599,31 @@ ipcMain.handle('git:removeSubmodule', async (_, path) => {
   return await gitService.removeSubmodule(path);
 });
 
+// Git Worktrees handlers
+ipcMain.handle('git:getWorktrees', async () => {
+  return await gitService.getWorktrees();
+});
+
+ipcMain.handle('git:addWorktree', async (_, options) => {
+  return await gitService.addWorktree(options);
+});
+
+ipcMain.handle('git:removeWorktree', async (_, path, force) => {
+  return await gitService.removeWorktree(path, force);
+});
+
+ipcMain.handle('git:lockWorktree', async (_, path, reason) => {
+  return await gitService.lockWorktree(path, reason);
+});
+
+ipcMain.handle('git:unlockWorktree', async (_, path) => {
+  return await gitService.unlockWorktree(path);
+});
+
+ipcMain.handle('git:pruneWorktrees', async () => {
+  return await gitService.pruneWorktrees();
+});
+
 // Update handlers
 ipcMain.handle('update:check', async () => {
   return await updateService.checkForUpdates();

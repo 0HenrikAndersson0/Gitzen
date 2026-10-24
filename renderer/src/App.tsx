@@ -87,6 +87,7 @@ export default function App() {
     rebaseStatus,
     cherryPickStatus,
     submodules,
+    worktrees,
     runQueued,
     refreshAllData,
     refreshStatusInternal,
@@ -227,7 +228,13 @@ export default function App() {
     handleUndoCommit,
     handleCancelOperation,
     handleGenerateConflictResolution,
-    handleApplyConflictResolution
+    handleApplyConflictResolution,
+    handleCreateWorktree,
+    handleRemoveWorktree,
+    handleLockWorktree,
+    handleUnlockWorktree,
+    handlePruneWorktrees,
+    handleOpenWorktree
   } = gitOps;
 
   const handleCheckout = async (branch: string) => {
@@ -519,6 +526,7 @@ export default function App() {
                     localBranches={localBranches}
                     remoteBranches={remoteBranches}
                     stashes={stashes}
+                    worktrees={worktrees}
                     loading={isRefreshingBranches}
                     onCheckout={handleCheckout}
                     onCreateBranch={handleCreateBranch}
@@ -536,6 +544,12 @@ export default function App() {
                     isCreateDialogOpen={showCreateBranchDialog}
                     onCloseCreateDialog={() => setShowCreateBranchDialog(false)}
                     onOpenCreateDialog={() => setShowCreateBranchDialog(true)}
+                    onCreateWorktree={handleCreateWorktree}
+                    onRemoveWorktree={handleRemoveWorktree}
+                    onLockWorktree={handleLockWorktree}
+                    onUnlockWorktree={handleUnlockWorktree}
+                    onPruneWorktrees={handlePruneWorktrees}
+                    onOpenWorktree={handleOpenWorktree}
                   />
                   <div className="mt-4 pb-4">
                     <TagsPanel
